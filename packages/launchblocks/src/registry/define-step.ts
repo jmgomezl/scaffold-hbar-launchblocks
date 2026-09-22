@@ -29,6 +29,10 @@ export function defineStep<In, Out extends Record<string, unknown>>(
   if (duplicateField) {
     throw new Error(`Step "${definition.type}": ui.fields declares "${duplicateField}" twice`);
   }
+  const badKey = fieldKeys.find(key => !/^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)*$/.test(key));
+  if (badKey) {
+    throw new Error(`Step "${definition.type}": ui.fields key "${badKey}" must be a camelCase path like keys.admin`);
+  }
   for (const field of definition.ui.fields) {
     if (field.kind === "select" && !field.options?.length) {
       throw new Error(`Step "${definition.type}": select field "${field.key}" needs options`);

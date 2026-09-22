@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "hts-launch-basic",
+  "name": "HTS token launch with HCS log",
+  "description": "Create a fungible token with a 1% fractional fee, open a public launch log on HCS, record the launch, and airdrop to early supporters.",
+  "network": "testnet",
+  "steps": [
+    {
+      "id": "createToken",
+      "type": "hts.createToken",
+      "label": "Create the token",
+      "params": {
+        "name": "LaunchBlocks Demo",
+        "symbol": "LBD",
+        "decimals": 8,
+        "initialSupply": "1000000",
+        "supplyType": "finite",
+        "maxSupply": "10000000",
+        "memo": "Launched with LaunchBlocks",
+        "keys": { "admin": true, "supply": true, "freeze": false, "wipe": false, "pause": true, "kyc": false, "feeSchedule": true },
+        "fractionalFee": { "numerator": 1, "denominator": 100, "assessment": "inclusive" }
+      }
+    },
+    {
+      "id": "createLog",
+      "type": "hcs.createTopic",
+      "label": "Open the launch log",
+      "params": { "memo": "{{steps.createToken.symbol}} launch log", "adminKey": true, "submitKey": true }
+    },
+    {
+      "id": "recordLaunch",
+      "type": "hcs.submitMessage",
+      "label": "Record the launch",
+      "params": {
+        "topicId": "{{steps.createLog.topicId}}",
+        "message": {
+          "event": "token.launched",
+          "tokenId": "{{steps.createToken.tokenId}}",
+          "symbol": "{{steps.createToken.symbol}}",
+          "treasury": "{{steps.createToken.treasuryAccountId}}",
+          "initialSupply": "{{steps.createToken.initialSupply}}",
+          "createTx": "{{steps.createToken.transactionId}}"
+        }
+      }
+    },
+    {
+      "id": "mintReserve",
+      "type": "hts.mint",
+      "label": "Mint the community reserve",
+      "params": { "tokenId": "{{steps.createToken.tokenId}}", "amount": "250000" }
+    },
+    {
+      "id": "recordMint",
+      "type": "hcs.submitMessage",
+      "label": "Record the mint",
+      "params": {
+        "topicId": "{{steps.createLog.topicId}}",
+        "message": {
+          "event": "supply.minted",
+          "tokenId": "{{steps.mintReserve.tokenId}}",
+          "newTotalSupply": "{{steps.mintReserve.newTotalSupply}}",
+          "mintTx": "{{steps.mintReserve.transactionId}}"
+        }
+      }
+    }
+  ]
+}

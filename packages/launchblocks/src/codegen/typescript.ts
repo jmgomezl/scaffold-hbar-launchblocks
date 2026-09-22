@@ -36,6 +36,7 @@ export function generateLaunchScript(document: unknown, registry: StepRegistry, 
     exampleOutputs[step.id] = definition.outputExample;
     const ctx: CodegenContext = {
       stepId: step.id,
+      coreModule,
       expr: key => renderExpr(params[key]),
       addImport: (specifier, ...names) => imports.add(specifier, ...names),
     };

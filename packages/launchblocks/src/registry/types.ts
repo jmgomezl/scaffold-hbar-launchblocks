@@ -23,7 +23,7 @@ export type FieldKind =
   | "json";
 
 export type FieldSpec = {
-  /** Param key in `step.params`. */
+  /** Param key in `step.params`; dotted for nested params, e.g. `keys.admin`. */
   key: string;
   label: string;
   kind: FieldKind;
@@ -78,6 +78,8 @@ export type RunContext = {
 /** What a step's `codegen` receives: symbolic access to its params. */
 export type CodegenContext = {
   stepId: string;
+  /** Module specifier that resolves to this package in the generated file. */
+  coreModule: string;
   /**
    * TypeScript expression for a param. Literals become JSON literals;
    * references become `<stepId>.<key>`; interpolated strings become
