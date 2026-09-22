@@ -15,7 +15,11 @@ const nextConfig: NextConfig = {
   },
   webpack: (config, { dev }) => {
     config.resolve.fallback = { fs: false, net: false, tls: false };
-    config.externals.push("pino-pretty", "lokijs", "encoding");
+    // @coinbase/cdp-sdk (pulled in transitively by RainbowKit -> wagmi ->
+    // @base-org/account) imports optional @x402 entrypoints that are not
+    // installed. Yarn's hoisting hides this; an npm install surfaces it as a
+    // build-breaking "Module not found". These paths are never executed here.
+    config.externals.push("pino-pretty", "lokijs", "encoding", "@x402/evm/upto/client", "@x402/evm/exact/client");
     if (dev) {
       config.watchOptions = {
         followSymlinks: true,
