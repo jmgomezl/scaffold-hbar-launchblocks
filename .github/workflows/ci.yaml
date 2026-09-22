@@ -51,6 +51,9 @@ jobs:
       - name: Hardhat lint
         run: yarn hardhat:lint --max-warnings=0
 
+      - name: Hardhat type check
+        run: yarn hardhat:check-types
+
       - name: Hardhat compile
         run: yarn hardhat:compile
 
