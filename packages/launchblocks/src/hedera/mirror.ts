@@ -14,6 +14,8 @@ export type MirrorAccount = {
   balanceTinybar: bigint;
   /** Whether the account key is ECDSA (EVM-compatible) or ED25519. */
   keyType: string | null;
+  /** Hex-encoded public key on the account, for verifying an operator key. */
+  publicKey: string | null;
   deleted: boolean;
 };
 
@@ -30,13 +32,14 @@ export async function fetchAccount(
     evm_address?: string | null;
     deleted?: boolean;
     balance?: { balance?: number | string };
-    key?: { _type?: string } | null;
+    key?: { _type?: string; key?: string } | null;
   };
   return {
     accountId: data.account ?? accountId,
     evmAddress: data.evm_address ?? null,
     balanceTinybar: BigInt(data.balance?.balance ?? 0),
     keyType: data.key?._type ?? null,
+    publicKey: data.key?.key ?? null,
     deleted: data.deleted === true,
   };
 }

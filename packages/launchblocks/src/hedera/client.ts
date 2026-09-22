@@ -32,8 +32,12 @@ export function createHederaContext(options: HederaContextOptions): HederaContex
     client,
     operatorId,
     operatorKey,
-    mirrorBaseUrl: (options.mirrorBaseUrl ?? MIRROR_BASE_URL[options.network]).replace(/\/+$/, ""),
+    mirrorBaseUrl: (blankToUndefined(options.mirrorBaseUrl) ?? MIRROR_BASE_URL[options.network]).replace(/\/+$/, ""),
   };
+}
+
+function blankToUndefined(value: string | undefined): string | undefined {
+  return value === undefined || value.trim() === "" ? undefined : value.trim();
 }
 
 export const ENV_VARS = {
@@ -52,9 +56,9 @@ export function hederaContextFromEnv(
   env: Record<string, string | undefined> = process.env,
   overrides: Partial<HederaContextOptions> = {},
 ): HederaContext {
-  const network = overrides.network ?? parseNetwork(env[ENV_VARS.network]);
-  const operatorId = overrides.operatorId ?? env[ENV_VARS.operatorId];
-  const operatorKey = overrides.operatorKey ?? env[ENV_VARS.operatorKey];
+  const network = overrides.network ?? parseNetwork(read(env, ENV_VARS.network));
+  const operatorId = overrides.operatorId ?? read(env, ENV_VARS.operatorId);
+  const operatorKey = overrides.operatorKey ?? read(env, ENV_VARS.operatorKey);
   if (!operatorId || !operatorKey) {
     throw new LaunchBlocksError(
       "OPERATOR_MISSING",
@@ -65,9 +69,19 @@ export function hederaContextFromEnv(
     network,
     operatorId,
     operatorKey,
-    operatorKeyType: overrides.operatorKeyType ?? parseKeyType(env[ENV_VARS.operatorKeyType]),
-    mirrorBaseUrl: overrides.mirrorBaseUrl ?? env[ENV_VARS.mirrorBaseUrl],
+    operatorKeyType: overrides.operatorKeyType ?? parseKeyType(read(env, ENV_VARS.operatorKeyType)),
+    mirrorBaseUrl: overrides.mirrorBaseUrl ?? read(env, ENV_VARS.mirrorBaseUrl),
   });
+}
+
+/**
+ * Read an environment variable, treating blank values as unset.
+ * `.env.example` ships keys with empty values, so a copied file would
+ * otherwise override defaults with "".
+ */
+function read(env: Record<string, string | undefined>, key: string): string | undefined {
+  const value = env[key];
+  return value === undefined || value.trim() === "" ? undefined : value.trim();
 }
 
 export function parseNetwork(value: string | undefined): Network {

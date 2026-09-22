@@ -77,11 +77,7 @@ async function main(): Promise<void> {
   let hedera;
   try {
     hedera = hederaContextFromEnv(process.env, { network });
-    checks.push({
-      label: "operator key",
-      ok: true,
-      detail: `parsed, matches ${hedera.operatorId.toString()}`,
-    });
+    checks.push({ label: "operator key", ok: true, detail: "parsed" });
   } catch (error) {
     checks.push({
       label: "operator key",
@@ -111,6 +107,20 @@ async function main(): Promise<void> {
         hint: `The id and key may belong to a different network. Create a ${network} account at https://portal.hedera.com`,
       });
     } else {
+      const derived = hedera.operatorKey.publicKey.toStringRaw().toLowerCase();
+      const onChain = account.publicKey?.toLowerCase().replace(/^0x/, "") ?? null;
+      checks.push({
+        label: "key matches account",
+        ok: onChain === null || onChain === derived,
+        detail:
+          onChain === null
+            ? "account key not exposed by the mirror node; skipped"
+            : onChain === derived
+              ? `yes (${account.keyType ?? "unknown curve"})`
+              : "no — this key does not control this account",
+        hint: `The key derives a different public key than ${account.accountId} holds. Check ${ENV_VARS.operatorKeyType} (ed25519 vs ecdsa) and that both values come from the same account.`,
+      });
+
       const hbar = formatHbar(account.balanceTinybar);
       checks.push({
         label: "account",
@@ -127,7 +137,8 @@ async function main(): Promise<void> {
       console.log("");
       report(checks);
       console.log(`\naccount: ${hashscanUrl(network, "account", account.accountId)}`);
-      const blocking = checks.filter(check => !check.ok && check.label !== "balance" && check.label !== "network");
+      const advisory = new Set(["balance", "network"]);
+      const blocking = checks.filter(check => !check.ok && !advisory.has(check.label));
       console.log(
         blocking.length === 0
           ? "\nReady. Run a flow with: yarn core:run hts-launch-basic"

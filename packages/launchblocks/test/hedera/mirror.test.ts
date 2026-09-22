@@ -21,7 +21,7 @@ describe("fetchAccount()", () => {
       evm_address: "0x0000000000000000000000000000000000001092",
       deleted: false,
       balance: { balance: 1234500000 },
-      key: { _type: "ECDSA_SECP256K1" },
+      key: { _type: "ECDSA_SECP256K1", key: "02aabb" },
     });
     const account = await fetchAccount(hedera, "0.0.4242");
     expect(account).toEqual({
@@ -29,6 +29,7 @@ describe("fetchAccount()", () => {
       evmAddress: "0x0000000000000000000000000000000000001092",
       balanceTinybar: 1234500000n,
       keyType: "ECDSA_SECP256K1",
+      publicKey: "02aabb",
       deleted: false,
     });
   });

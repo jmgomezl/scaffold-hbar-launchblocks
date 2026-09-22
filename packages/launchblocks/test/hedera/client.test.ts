@@ -107,3 +107,54 @@ describe("hederaContextFromEnv()", () => {
     ).toThrow(/ed25519 or ecdsa/);
   });
 });
+
+describe("blank environment values", () => {
+  const ed25519Der = PrivateKey.generateED25519().toStringDer();
+
+  it("treats an empty HEDERA_MIRROR_URL as unset (as shipped in .env.example)", () => {
+    const ctx = hederaContextFromEnv({
+      HEDERA_OPERATOR_ID: "0.0.1",
+      HEDERA_OPERATOR_KEY: ed25519Der,
+      HEDERA_MIRROR_URL: "",
+    });
+    try {
+      expect(ctx.mirrorBaseUrl).toBe("https://testnet.mirrornode.hedera.com");
+    } finally {
+      ctx.client.close();
+    }
+  });
+
+  it("treats blank network and key type as unset", () => {
+    const ctx = hederaContextFromEnv({
+      HEDERA_OPERATOR_ID: "0.0.1",
+      HEDERA_OPERATOR_KEY: ed25519Der,
+      HEDERA_NETWORK: "  ",
+      HEDERA_OPERATOR_KEY_TYPE: "",
+    });
+    try {
+      expect(ctx.network).toBe("testnet");
+    } finally {
+      ctx.client.close();
+    }
+  });
+
+  it("treats a blank operator id as missing rather than invalid", () => {
+    expect(() => hederaContextFromEnv({ HEDERA_OPERATOR_ID: "  ", HEDERA_OPERATOR_KEY: ed25519Der })).toThrow(
+      /HEDERA_OPERATOR_ID and HEDERA_OPERATOR_KEY/,
+    );
+  });
+
+  it("trims surrounding whitespace from values", () => {
+    const ctx = hederaContextFromEnv({
+      HEDERA_OPERATOR_ID: " 0.0.42 ",
+      HEDERA_OPERATOR_KEY: ` ${ed25519Der} `,
+      HEDERA_MIRROR_URL: " https://example.test/ ",
+    });
+    try {
+      expect(ctx.operatorId.toString()).toBe("0.0.42");
+      expect(ctx.mirrorBaseUrl).toBe("https://example.test");
+    } finally {
+      ctx.client.close();
+    }
+  });
+});
