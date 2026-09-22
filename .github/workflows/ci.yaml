@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, types, tests, build (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 20 is the minimum the template supports; 22 is current LTS.
+        node: ["20", "22"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Core lint
+        run: yarn core:lint --max-warnings=0
+
+      - name: Core type check
+        run: yarn core:check-types
+
+      - name: Core tests
+        run: yarn core:test:coverage
+
+      - name: Next.js lint
+        run: yarn next:lint --max-warnings=0
+
+      - name: Next.js type check
+        run: yarn next:check-types
+
+      - name: Hardhat lint
+        run: yarn hardhat:lint --max-warnings=0
+
+      - name: Hardhat compile
+        run: yarn hardhat:compile
+
+      - name: Next.js build
+        run: yarn next:build
+
+      - name: Upload coverage
+        if: matrix.node == '20'
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-coverage
+          path: packages/launchblocks/coverage/lcov.info
+          if-no-files-found: error
+
+  contracts:
+    name: Contracts on Hedera fork
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Run Hardhat node and deploy contracts
+        run: |
+          yarn hardhat:chain &
+          timeout 60s bash -c 'until curl -s -X POST http://127.0.0.1:8545 -H "Content-Type: application/json" --data "{\"jsonrpc\":\"2.0\",\"method\":\"web3_clientVersion\",\"params\":[],\"id\":1}" >/dev/null; do sleep 2; done'
+          yarn hardhat:deploy --network localhost
+
+      - name: Hardhat tests
+        run: yarn hardhat:test
