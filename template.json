@@ -1,4 +1,7 @@
 {
+  "name": "scaffold-hbar-launchblocks",
+  "description": "Visual, block-based token launchpad on Hedera: compose a launch as JSON steps, run it on testnet, and seed a SaucerSwap pool so the token is tradeable.",
+  "version": "0.1.0",
   "create-scaffold-hbar": {
     "capabilities": {
       "frontend": ["nextjs-app"],
@@ -15,21 +18,23 @@
         {
           "title": "Fund a testnet operator",
           "steps": [
-            { "label": "Create a testnet account and grab HBAR from the faucet", "url": "https://portal.hedera.com/faucet" },
-            { "label": "Copy the env example and paste your operator ID + key", "command": "cp packages/nextjs/.env.example packages/nextjs/.env" }
+            { "label": "Create a testnet account and top it up", "url": "https://portal.hedera.com/faucet" },
+            { "label": "Copy the env example", "command": "cp packages/nextjs/.env.example packages/nextjs/.env" },
+            { "text": "Paste HEDERA_OPERATOR_ID and HEDERA_OPERATOR_KEY into that file. A full launch costs about 30 HBAR on testnet, most of it the SaucerSwap pool creation fee." }
+          ]
+        },
+        {
+          "title": "Check the setup before spending anything",
+          "steps": [
+            { "label": "Verify the operator, network and balance", "command": "{run:core:doctor}" }
           ]
         },
         {
           "title": "Launch a token",
           "steps": [
-            { "label": "Start the app", "command": "{run:next:dev}" },
-            { "label": "Open the block editor, pick the 'HTS launch → SaucerSwap' gallery flow, and press Run", "url": "http://localhost:3000" }
-          ]
-        },
-        {
-          "title": "Optional: AI-driven build with Hedera Harness",
-          "steps": [
-            { "label": "Run the harness recipe (see .harness/spec.yaml)", "command": "{run:harness:run}" }
+            { "label": "Run the gallery flow from the terminal", "command": "{run:core:run} hts-launch-saucerswap" },
+            { "label": "Or start the app and use the block editor", "command": "{run:next:dev}" },
+            { "url": "http://localhost:3000" }
           ]
         }
       ]
