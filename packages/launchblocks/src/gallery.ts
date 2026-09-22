@@ -1,4 +1,5 @@
 import htsLaunchBasic from "../flows/hts-launch-basic.json";
+import htsLaunchSaucerSwap from "../flows/hts-launch-saucerswap.json";
 import type { FlowInput } from "./flow/schema";
 
 export type GalleryEntry = {
@@ -12,6 +13,13 @@ export type GalleryEntry = {
 
 /** Ready-to-run flows shipped with the template, in the order the UI lists them. */
 export const GALLERY: readonly GalleryEntry[] = [
+  {
+    id: "hts-launch-saucerswap",
+    title: "Token launch with a SaucerSwap market",
+    blurb:
+      "The full launchpad: create the token, log the launch on HCS, seed its first SaucerSwap V1 pool against HBAR so it is tradeable immediately, and record the market.",
+    flow: htsLaunchSaucerSwap as FlowInput,
+  },
   {
     id: "hts-launch-basic",
     title: "HTS token launch with HCS log",

@@ -101,6 +101,8 @@ export type CreatePoolParams = {
   slippageBps: number;
   /** Seconds from now the router will still accept the call. */
   deadlineSeconds: number;
+  /** Override the gas limit when a token's association path needs more. */
+  gasLimit?: number | undefined;
 };
 
 export type CreatePoolResult = {
@@ -115,6 +117,7 @@ export type CreatePoolResult = {
   hbarAmountTinybar: string;
   liquidityUnits: string;
   creationFeeHbar: string;
+  gasUsed: number;
   /** HBAR per whole token implied by the deposits. */
   openingPriceHbar: string;
   poolUrl: string;
@@ -165,7 +168,7 @@ export async function createPoolWithHbar(
   try {
     const response = await new ContractExecuteTransaction()
       .setContractId(routerId)
-      .setGas(CREATE_POOL_GAS)
+      .setGas(params.gasLimit ?? CREATE_POOL_GAS)
       .setPayableAmount(payable)
       .setFunction("addLiquidityETHNewPool", args)
       .execute(hedera.client);
@@ -192,6 +195,7 @@ export async function createPoolWithHbar(
       hbarAmountTinybar: amountHbar.toString(),
       liquidityUnits: liquidity.toString(),
       creationFeeHbar: quote.creationFeeHbar,
+      gasUsed: Number(result.gasUsed ?? 0),
       openingPriceHbar: openingPrice(amountHbar, amountToken, decimals),
       pairEvmAddress: pair?.evmAddress ?? null,
       poolUrl: pairId ? `${deployment.appBaseUrl}/liquidity/${pairId}` : deployment.appBaseUrl,

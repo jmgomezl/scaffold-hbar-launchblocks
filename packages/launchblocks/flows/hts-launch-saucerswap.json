@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "id": "hts-launch-saucerswap",
+  "name": "Token launch with a SaucerSwap market",
+  "description": "The full launchpad: create a fungible token, open a public HCS launch log, seed its first SaucerSwap V1 pool against HBAR so it is immediately tradeable, and record the market on the log.",
+  "network": "testnet",
+  "steps": [
+    {
+      "id": "createToken",
+      "type": "hts.createToken",
+      "label": "Create the token",
+      "params": {
+        "name": "LaunchBlocks Market Demo",
+        "symbol": "LBM",
+        "decimals": 8,
+        "initialSupply": "1000000",
+        "supplyType": "finite",
+        "maxSupply": "1000000",
+        "memo": "Launched with LaunchBlocks",
+        "keys": { "admin": true, "supply": false, "freeze": false, "wipe": false, "pause": false, "kyc": false, "feeSchedule": false }
+      }
+    },
+    {
+      "id": "createLog",
+      "type": "hcs.createTopic",
+      "label": "Open the launch log",
+      "params": { "memo": "{{steps.createToken.symbol}} launch log", "adminKey": true, "submitKey": true }
+    },
+    {
+      "id": "recordLaunch",
+      "type": "hcs.submitMessage",
+      "label": "Record the token",
+      "params": {
+        "topicId": "{{steps.createLog.topicId}}",
+        "message": {
+          "event": "token.launched",
+          "tokenId": "{{steps.createToken.tokenId}}",
+          "symbol": "{{steps.createToken.symbol}}",
+          "supply": "{{steps.createToken.initialSupply}}",
+          "createTx": "{{steps.createToken.transactionId}}"
+        }
+      }
+    },
+    {
+      "id": "seedPool",
+      "type": "saucerswap.createPool",
+      "label": "Seed the SaucerSwap pool",
+      "params": {
+        "tokenId": "{{steps.createToken.tokenId}}",
+        "tokenAmount": "50000",
+        "hbarAmount": "10",
+        "slippageBps": 100,
+        "deadlineSeconds": 180
+      }
+    },
+    {
+      "id": "recordMarket",
+      "type": "hcs.submitMessage",
+      "label": "Record the market",
+      "params": {
+        "topicId": "{{steps.createLog.topicId}}",
+        "message": {
+          "event": "market.opened",
+          "dex": "SaucerSwap V1",
+          "tokenId": "{{steps.createToken.tokenId}}",
+          "pairId": "{{steps.seedPool.pairId}}",
+          "openingPriceHbar": "{{steps.seedPool.openingPriceHbar}}",
+          "poolTx": "{{steps.seedPool.transactionId}}",
+          "poolUrl": "{{steps.seedPool.poolUrl}}"
+        }
+      }
+    }
+  ]
+}

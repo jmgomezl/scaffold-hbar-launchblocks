@@ -12,6 +12,7 @@ export const saucerswapCreatePool = defineStep({
     hbarAmount: PositiveAmountSchema,
     slippageBps: z.number().int().min(0).max(9999).default(100),
     deadlineSeconds: z.number().int().min(30).max(3600).default(120),
+    gasLimit: z.number().int().min(1_000_000).max(15_000_000).optional(),
   }),
   output: z.object({
     tokenId: z.string(),
@@ -57,6 +58,12 @@ export const saucerswapCreatePool = defineStep({
       },
       { key: "slippageBps", label: "Slippage (bps)", kind: "number", help: "100 = 1% tolerated shortfall" },
       { key: "deadlineSeconds", label: "Deadline (s)", kind: "number" },
+      {
+        key: "gasLimit",
+        label: "Gas limit",
+        kind: "number",
+        help: "Defaults to 5,000,000; the association path is gas-hungry",
+      },
     ],
     outputs: [
       { key: "pairId", label: "Pool", kind: "contractId" },
@@ -96,6 +103,7 @@ export const saucerswapCreatePool = defineStep({
         `  hbarAmount: ${ctx.expr("hbarAmount")},`,
         `  slippageBps: ${ctx.expr("slippageBps")},`,
         `  deadlineSeconds: ${ctx.expr("deadlineSeconds")},`,
+        `  gasLimit: ${ctx.expr("gasLimit")},`,
         `});`,
       ].join("\n"),
     };

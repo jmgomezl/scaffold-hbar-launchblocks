@@ -69,5 +69,15 @@ export const SELECTORS = {
   getPair: "0xe6a43905",
 } as const;
 
-/** Gas the router needs to create a pool, per the SaucerSwap docs. */
-export const CREATE_POOL_GAS = 3_200_000;
+/**
+ * Gas for `addLiquidityETHNewPool`.
+ *
+ * The SaucerSwap docs quote 3,200,000, but that is not enough in practice:
+ * the router associates the freshly deployed pair with both tokens through
+ * the HTS precompile, and a run measured on testnet consumed 3,138,305 gas
+ * before reverting with "Safe multiple associations failed!" — the router's
+ * own guard reporting that its association sub-call ran out of gas. The
+ * default below leaves headroom for that path; Hedera allows up to
+ * 15,000,000 per transaction.
+ */
+export const CREATE_POOL_GAS = 5_000_000;
