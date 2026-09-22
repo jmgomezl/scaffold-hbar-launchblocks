@@ -63,8 +63,6 @@ export function saucerswapFor(network: Network): SaucerSwapDeployment {
 
 /** Function selectors used by the read and write calls below. */
 export const SELECTORS = {
-  /** SaucerSwapV1Factory.createPair(address,address) → address */
-  createPair: "0xc9c65396",
   /** SaucerSwapV1Factory.pairCreateFee() → uint256 tinycents */
   pairCreateFee: "0x881a075a",
   /** SaucerSwapV1Factory.getPair(address,address) → address */
@@ -74,26 +72,15 @@ export const SELECTORS = {
 /**
  * Gas for `addLiquidityETHNewPool`.
  *
- * The SaucerSwap docs quote 3,200,000, but that is not enough in practice:
- * the router associates the freshly deployed pair with both tokens through
- * the HTS precompile, and a run measured on testnet consumed 3,138,305 gas
- * before reverting with "Safe multiple associations failed!" — the router's
- * own guard reporting that its association sub-call ran out of gas. The
- * default below leaves headroom for that path; Hedera allows up to
+ * The SaucerSwap docs quote 3,200,000, which is not enough: the call deploys
+ * the pair, creates its LP token and associates the pair with both sides
+ * through the HTS precompile. Measured on testnet (2026-09-22) it used
+ * 6,788,255. Below the need it reverts with the router's own guard messages,
+ * "Safe multiple associations failed!" at 3.2M and "Safe single association
+ * failed!" at 5M, each after consuming ~98% of the limit. Hedera allows up to
  * 15,000,000 per transaction.
  */
-export const CREATE_POOL_GAS = 5_000_000;
-
-/**
- * Gas for `SaucerSwapV1Factory.createPair`, which deploys the pair, creates
- * its LP token and associates the pair with both sides. Measured at 5,849,994
- * on testnet; at 3,000,000 it reverts with "Safe multiple associations
- * failed!" after consuming 2,991,757.
- */
-export const CREATE_PAIR_GAS = 8_000_000;
-
-/** Gas for `addLiquidityETH`. A successful testnet run used well under this. */
-export const ADD_LIQUIDITY_GAS = 4_000_000;
+export const CREATE_POOL_GAS = 8_000_000;
 
 /** Gas for an ERC-20 facade `approve` on an HTS token. */
 export const APPROVE_GAS = 1_000_000;

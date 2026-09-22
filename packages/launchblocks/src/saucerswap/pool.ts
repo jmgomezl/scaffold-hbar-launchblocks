@@ -22,38 +22,27 @@ import {
   tinycentsToTinybars,
 } from "../hedera/mirror";
 import { getTokenInfo } from "../hedera/ops/tokens";
-import { ADD_LIQUIDITY_GAS, APPROVE_GAS, CREATE_PAIR_GAS, SELECTORS, saucerswapFor } from "./config";
+import { APPROVE_GAS, CREATE_POOL_GAS, SELECTORS, saucerswapFor } from "./config";
 
 /**
- * Seeding a SaucerSwap V1 pool from a freshly created HTS token.
+ * Seeding a SaucerSwap V1 pool from a freshly created HTS token, with the
+ * router's `addLiquidityETHNewPool`: one call deploys the pair, mints its LP
+ * token, deposits both sides and sends the LP tokens to the recipient.
  *
- * The router exposes a one-call `addLiquidityETHNewPool`, but it is unusable
- * on the deployed V1 router: it derives the pair address with
- * `UniswapV2Library.pairFor`, whose init-code-hash constant no longer matches
- * the factory's deployed pair bytecode, so it transfers the deposit to an
- * address that does not exist and reverts with "Safe token transfer failed!".
- * Verified by deriving the address for an existing testnet pair
- * (SAUCE/WHBAR 0xfe7cc3ce…) with both hashes in the published source — neither
- * reproduces it.
+ * What makes it awkward by hand, and what this handles:
  *
- * So this creates the pool in two calls, taking the path that reads the pair
- * address from the factory instead of deriving it:
- *
- * 1. `factory.createPair` — deploys the pair, mints its LP token and
- *    associates the pair with both sides. `msg.value` must carry the creation
- *    fee, which the factory quotes in tinycents and which is converted with
- *    the network's live exchange rate exactly as the 0x168 precompile does.
- * 2. `router.addLiquidityETH` — resolves the pair through `factory.getPair`
- *    (the real address) and deposits both sides.
- *
- * Two further things it gets right that are easy to get wrong:
- *
- * - The LP recipient must be the account's **EVM alias**, not the long-zero
- *   form of its id. Alias-created ECDSA accounts reject the long-zero form
- *   with INVALID_ALIAS_KEY on the final transfer, after every other child
- *   transaction has already succeeded.
- * - The router pulls the token through an allowance, granted here on the
- *   token's ERC-20 facade.
+ * - **The LP recipient must be the account's EVM alias**, not the long-zero
+ *   form of its id (`AccountId.toSolidityAddress()`). Alias-created ECDSA
+ *   accounts reject the long-zero form with INVALID_ALIAS_KEY on the final
+ *   transfer, after the pair has been created and funded. The router only
+ *   reports "Safe token transfer failed!"; the real status is visible only in
+ *   the transaction's child records on the mirror node.
+ * - **The creation fee is priced in tinycents.** It is read from the factory
+ *   and converted with the network's live exchange rate exactly as the 0x168
+ *   precompile does, then added to `msg.value` on top of the HBAR deposited.
+ * - **The documented gas is too low** (see CREATE_POOL_GAS).
+ * - **The router pulls the token through an allowance**, granted here on the
+ *   token's ERC-20 facade, the approval SaucerSwap's own front end requests.
  */
 
 export type PoolQuote = {
@@ -136,10 +125,8 @@ export type CreatePoolParams = {
   slippageBps: number;
   /** Seconds from now the router will still accept the call. */
   deadlineSeconds: number;
-  /** Override the gas limit for the addLiquidityETH call. */
+  /** Override the gas limit when a token's path needs more than CREATE_POOL_GAS. */
   gasLimit?: number | undefined;
-  /** Override the gas limit for the factory's createPair call. */
-  createPairGasLimit?: number | undefined;
 };
 
 export type CreatePoolResult = {
@@ -148,7 +135,6 @@ export type CreatePoolResult = {
   pairEvmAddress: string | null;
   lpTokenId: string | null;
   transactionId: string;
-  createPairTransactionId: string;
   allowanceTransactionId: string;
   /** Actually deposited, which can be below the desired amount. */
   tokenAmountUnits: string;
@@ -184,43 +170,21 @@ export async function createPoolWithHbar(
   }
 
   const quote = await quotePoolCreation(hedera, signal);
-  const routerId = ContractId.fromString(deployment.v1Router);
-  const tokenEvm = entityIdToEvmAddress(params.tokenId);
   // Alias-created accounts must be addressed by their EVM alias, not long-zero.
   const recipient = await resolveEvmAddress(hedera, hedera.operatorId.toString(), signal);
+  const allowanceTransactionId = await approveRouterAllowance(hedera, params.tokenId, deployment.v1Router, tokenUnits);
 
   try {
-    // 1. Create the pair on the factory, paying the creation fee.
-    const createResponse = await new ContractExecuteTransaction()
-      .setContractId(ContractId.fromString(deployment.v1Factory))
-      .setGas(params.createPairGasLimit ?? CREATE_PAIR_GAS)
-      .setPayableAmount(Hbar.fromTinybars(toLong(quote.creationFeeTinybar)))
-      .setFunction(
-        "createPair",
-        new ContractFunctionParameters().addAddress(tokenEvm).addAddress(entityIdToEvmAddress(deployment.whbarToken)),
-      )
-      .execute(hedera.client);
-    await createResponse.getReceipt(hedera.client);
-    const createPairTransactionId = createResponse.transactionId.toString();
-
-    // 2. Let the router pull the tokens it is about to deposit.
-    const allowanceTransactionId = await approveRouterAllowance(
-      hedera,
-      params.tokenId,
-      deployment.v1Router,
-      tokenUnits,
-    );
-
-    // 3. Deposit both sides through the path that reads the pair from the factory.
     const deadline = Math.floor(Date.now() / 1000) + params.deadlineSeconds;
-    const addResponse = await new ContractExecuteTransaction()
-      .setContractId(routerId)
-      .setGas(params.gasLimit ?? ADD_LIQUIDITY_GAS)
-      .setPayableAmount(Hbar.fromTinybars(toLong(hbarTinybar)))
+    const response = await new ContractExecuteTransaction()
+      .setContractId(ContractId.fromString(deployment.v1Router))
+      .setGas(params.gasLimit ?? CREATE_POOL_GAS)
+      // msg.value carries the deposited HBAR and the pool creation fee.
+      .setPayableAmount(Hbar.fromTinybars(toLong(hbarTinybar + quote.creationFeeTinybar)))
       .setFunction(
-        "addLiquidityETH",
+        "addLiquidityETHNewPool",
         new ContractFunctionParameters()
-          .addAddress(tokenEvm)
+          .addAddress(entityIdToEvmAddress(params.tokenId))
           .addUint256(toLong(tokenUnits))
           .addUint256(toLong(applySlippage(tokenUnits, params.slippageBps)))
           .addUint256(toLong(applySlippage(hbarTinybar, params.slippageBps)))
@@ -228,7 +192,7 @@ export async function createPoolWithHbar(
           .addUint256(deadline),
       )
       .execute(hedera.client);
-    const record = await addResponse.getRecord(hedera.client);
+    const record = await response.getRecord(hedera.client);
     const result = record.contractFunctionResult;
     if (!result) {
       throw new LaunchBlocksError("CONTRACT_NO_RESULT", "The router call produced no contract result");
@@ -245,8 +209,7 @@ export async function createPoolWithHbar(
       pairId,
       pairEvmAddress: pair?.evmAddress ?? null,
       lpTokenId: pairId,
-      transactionId: addResponse.transactionId.toString(),
-      createPairTransactionId,
+      transactionId: response.transactionId.toString(),
       allowanceTransactionId,
       tokenAmountUnits: amountToken.toString(),
       hbarAmountTinybar: amountHbar.toString(),
