@@ -8,12 +8,13 @@
   "sideEffects": false,
   "scripts": {
     "check-types": "tsc --noEmit",
+    "doctor": "tsx scripts/doctor.ts",
     "format": "prettier --write './**/*.ts'",
     "lint": "eslint",
+    "run-flow": "tsx scripts/run-flow.ts",
     "test": "vitest run",
-    "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "run-flow": "tsx scripts/run-flow.ts"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@hiero-ledger/sdk": "^2.80.0",
