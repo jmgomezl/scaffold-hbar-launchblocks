@@ -18,7 +18,7 @@ const base: StepDefinition<{ a: string }, { b: number }> = {
   },
   docs: { summary: "ok", hederaServices: [] },
   execute: async () => ({ b: 1 }),
-  codegen: ctx => ({ body: `const ${ctx.stepId} = { b: 1 };` }),
+  codegen: () => ({ body: "return { b: 1 };" }),
 };
 
 describe("defineStep()", () => {

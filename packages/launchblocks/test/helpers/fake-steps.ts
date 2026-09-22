@@ -40,9 +40,10 @@ export const makeToken = defineStep({
     ctx.log("info", `making ${input.symbol}`);
     return { tokenId: `0.0.${1000 + input.symbol.length}`, decimals: input.decimals, transactionId: "0.0.2@1.0" };
   },
-  codegen: ctx => ({
-    body: `const ${ctx.stepId} = await fakeMakeToken(${ctx.expr("symbol")}, ${ctx.expr("decimals")});`,
-  }),
+  codegen: ctx => {
+    ctx.addImport("./fake-sdk", "fakeMakeToken");
+    return { body: `return await fakeMakeToken(${ctx.expr("symbol")}, ${ctx.expr("decimals")});` };
+  },
 });
 
 export const useToken = defineStep({
@@ -69,9 +70,10 @@ export const useToken = defineStep({
   async execute(input) {
     return { ok: true as const, memo: input.memo ?? `${input.amount} of ${input.tokenId}` };
   },
-  codegen: ctx => ({
-    body: `const ${ctx.stepId} = await fakeUseToken(${ctx.expr("tokenId")}, ${ctx.expr("amount")}, ${ctx.expr("memo")});`,
-  }),
+  codegen: ctx => {
+    ctx.addImport("./fake-sdk", "fakeUseToken");
+    return { body: `return await fakeUseToken(${ctx.expr("tokenId")}, ${ctx.expr("amount")}, ${ctx.expr("memo")});` };
+  },
 });
 
 export const explode = defineStep({
@@ -84,7 +86,7 @@ export const explode = defineStep({
   async execute(input): Promise<{ never: string }> {
     throw new Error(input.reason);
   },
-  codegen: ctx => ({ body: `const ${ctx.stepId} = await explode();` }),
+  codegen: () => ({ body: "return await explode();" }),
 });
 
 export const FAKE_STEPS = [makeToken, useToken, explode] as const;

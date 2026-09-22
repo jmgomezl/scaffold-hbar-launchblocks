@@ -62,7 +62,18 @@ const JS_RESERVED_WORDS = new Set([
 ]);
 
 /** Identifiers the runner and codegen use themselves; a step cannot shadow them. */
-const LAUNCHBLOCKS_RESERVED_IDS = new Set(["steps", "outputs", "ctx", "client", "flow", "operator"]);
+const LAUNCHBLOCKS_RESERVED_IDS = new Set([
+  "steps",
+  "outputs",
+  "ctx",
+  "client",
+  "flow",
+  "operator",
+  "operatorId",
+  "operatorKey",
+  "step",
+  "main",
+]);
 
 export const NetworkSchema = z.enum(["testnet", "mainnet", "localnet"]);
 export type Network = z.infer<typeof NetworkSchema>;

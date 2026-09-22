@@ -90,8 +90,11 @@ export type CodegenContext = {
 
 export type CodegenFragment = {
   /**
-   * Statements that end by declaring `const <stepId> = { ...outputs }`.
-   * The generator wraps them in a labelled section and adds the imports.
+   * Body of an async function that performs the step with the SDK and
+   * `return`s its outputs object. The generator wraps it as
+   * `const <stepId> = await step("<stepId>", async () => { ...body })`,
+   * so `ctx`, `client`, `operatorId` and `operatorKey` are in scope and
+   * earlier steps are reachable as `<stepId>.<key>`.
    */
   body: string;
 };
