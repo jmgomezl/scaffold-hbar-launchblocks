@@ -1,79 +1,20 @@
 import { z } from "zod";
 
+import {
+  FLOW_ID_PATTERN,
+  JS_RESERVED_WORDS,
+  LAUNCHBLOCKS_RESERVED_IDS,
+  STEP_ID_PATTERN,
+  STEP_TYPE_PATTERN,
+} from "./ids";
+
+export { FLOW_ID_PATTERN, STEP_ID_PATTERN, STEP_TYPE_PATTERN } from "./ids";
+
 /**
  * A flow is an ordered list of steps. Steps run strictly in sequence; a step
  * may reference outputs of any step before it via `{{steps.<id>.<key>}}`.
- *
- * Step ids double as variable names in the generated launch script, so they
- * are constrained to camelCase identifiers that are not JavaScript keywords.
+ * Identifier rules live in ./ids.
  */
-
-export const STEP_ID_PATTERN = /^[a-z][a-zA-Z0-9]*$/;
-export const STEP_TYPE_PATTERN = /^[a-z][a-z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$/;
-export const FLOW_ID_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
-
-const JS_RESERVED_WORDS = new Set([
-  "await",
-  "break",
-  "case",
-  "catch",
-  "class",
-  "const",
-  "continue",
-  "debugger",
-  "default",
-  "delete",
-  "do",
-  "else",
-  "enum",
-  "export",
-  "extends",
-  "false",
-  "finally",
-  "for",
-  "function",
-  "if",
-  "implements",
-  "import",
-  "in",
-  "instanceof",
-  "interface",
-  "let",
-  "new",
-  "null",
-  "package",
-  "private",
-  "protected",
-  "public",
-  "return",
-  "static",
-  "super",
-  "switch",
-  "this",
-  "throw",
-  "true",
-  "try",
-  "typeof",
-  "var",
-  "void",
-  "while",
-  "with",
-  "yield",
-]);
-
-/** Identifiers the runner and codegen use themselves; a step cannot shadow them. */
-const LAUNCHBLOCKS_RESERVED_IDS = new Set([
-  "steps",
-  "outputs",
-  "ctx",
-  "client",
-  "flow",
-  "operator",
-  "operatorId",
-  "operatorKey",
-  "step",
-  "main",
-]);
 
 export const NetworkSchema = z.enum(["testnet", "mainnet", "localnet"]);
 export type Network = z.infer<typeof NetworkSchema>;

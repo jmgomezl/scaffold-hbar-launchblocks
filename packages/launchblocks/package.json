@@ -5,6 +5,10 @@
   "description": "LaunchBlocks core: flow schema, step registry, runner and codegen for Hedera token launches",
   "main": "src/index.ts",
   "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./editor": "./src/editor/index.ts"
+  },
   "sideEffects": false,
   "scripts": {
     "check-types": "tsc --noEmit",
