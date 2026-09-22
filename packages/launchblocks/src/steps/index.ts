@@ -9,6 +9,7 @@ import { htsCreateToken } from "./hts/create-token";
 import { htsMint } from "./hts/mint";
 import { htsTransfer } from "./hts/transfer";
 import { saucerswapCreatePool } from "./saucerswap/create-pool";
+import { saucerswapSwap } from "./saucerswap/swap";
 
 /** Every step type this template ships, in palette order. */
 export const BUILT_IN_STEPS: readonly AnyStepDefinition[] = [
@@ -20,6 +21,7 @@ export const BUILT_IN_STEPS: readonly AnyStepDefinition[] = [
   hcsCreateTopic,
   hcsSubmitMessage,
   saucerswapCreatePool,
+  saucerswapSwap,
 ];
 
 export function createDefaultRegistry(extra: readonly AnyStepDefinition[] = []): StepRegistry {
@@ -35,5 +37,6 @@ export {
   htsMint,
   htsTransfer,
   saucerswapCreatePool,
+  saucerswapSwap,
 };
 export * from "./shared";

@@ -67,20 +67,35 @@ export const SELECTORS = {
   pairCreateFee: "0x881a075a",
   /** SaucerSwapV1Factory.getPair(address,address) → address */
   getPair: "0xe6a43905",
+  /** SaucerSwapV1RouterV3.getAmountsOut(uint256,address[]) → uint256[] */
+  getAmountsOut: "0xd06ca61f",
 } as const;
 
 /**
- * Gas for `addLiquidityETHNewPool`.
- *
- * The SaucerSwap docs quote 3,200,000, which is not enough: the call deploys
- * the pair, creates its LP token and associates the pair with both sides
- * through the HTS precompile. Measured on testnet (2026-09-22) it used
- * 6,788,255. Below the need it reverts with the router's own guard messages,
- * "Safe multiple associations failed!" at 3.2M and "Safe single association
- * failed!" at 5M, each after consuming ~98% of the limit. Hedera allows up to
- * 15,000,000 per transaction.
+ * Gas for `SaucerSwapV1Factory.createPair`, which deploys the pair, creates
+ * its LP token and associates it. Measured at 5,849,994 on testnet; at
+ * 3,000,000 it reverts with "Safe multiple associations failed!" after
+ * consuming 2,991,757. (The docs quote 3,200,000 for the router's one-call
+ * pool creation, which does the same work and more; measured at 6,788,255.)
  */
-export const CREATE_POOL_GAS = 8_000_000;
+export const CREATE_PAIR_GAS = 8_000_000;
+
+/** Gas for `addLiquidityETH` into a freshly created pair; measured at 974,522 on testnet. */
+export const ADD_LIQUIDITY_GAS = 2_000_000;
+
+/**
+ * Margin added to the quoted creation fee, in basis points. Overpayment is
+ * forwarded by the factory to SaucerSwap's rent payer, so it never touches
+ * the pool; underpayment reverts createPair before any liquidity moves.
+ */
+export const DEFAULT_FEE_BUFFER_BPS = 200;
+
+/**
+ * Gas for a single-hop `swapExactETHForTokens`: wrap HBAR, pay the pair,
+ * swap. Measured well under this on testnet; the headroom covers tokens that
+ * need an automatic association on receipt.
+ */
+export const SWAP_GAS = 2_000_000;
 
 /** Gas for an ERC-20 facade `approve` on an HTS token. */
 export const APPROVE_GAS = 1_000_000;

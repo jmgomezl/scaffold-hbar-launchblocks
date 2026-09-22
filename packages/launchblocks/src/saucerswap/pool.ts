@@ -13,61 +13,91 @@ import type { DecimalAmount } from "../hedera/amounts";
 import { fromUnits, toLong, toUnits } from "../hedera/amounts";
 import type { HederaContext } from "../hedera/context";
 import { translateHederaError } from "../hedera/errors";
+import type { ExchangeRate } from "../hedera/mirror";
 import {
   TINYBAR_PER_HBAR,
-  fetchExchangeRate,
+  fetchExchangeRates,
   readContract,
   resolveContractId,
   resolveEvmAddress,
   tinycentsToTinybars,
 } from "../hedera/mirror";
 import { getTokenInfo } from "../hedera/ops/tokens";
-import { APPROVE_GAS, CREATE_POOL_GAS, SELECTORS, saucerswapFor } from "./config";
+import {
+  ADD_LIQUIDITY_GAS,
+  APPROVE_GAS,
+  CREATE_PAIR_GAS,
+  DEFAULT_FEE_BUFFER_BPS,
+  SELECTORS,
+  saucerswapFor,
+} from "./config";
 
 /**
- * Seeding a SaucerSwap V1 pool from a freshly created HTS token, with the
- * router's `addLiquidityETHNewPool`: one call deploys the pair, mints its LP
- * token, deposits both sides and sends the LP tokens to the recipient.
+ * Seeding a SaucerSwap V1 pool from a freshly created HTS token.
  *
- * What makes it awkward by hand, and what this handles:
+ * A launch has one number that must come out exactly as specified: the
+ * opening price, set by the ratio of the two deposits. That drives the
+ * design here.
  *
- * - **The LP recipient must be the account's EVM alias**, not the long-zero
- *   form of its id (`AccountId.toSolidityAddress()`). Alias-created ECDSA
- *   accounts reject the long-zero form with INVALID_ALIAS_KEY on the final
- *   transfer, after the pair has been created and funded. The router only
- *   reports "Safe token transfer failed!"; the real status is visible only in
- *   the transaction's child records on the mirror node.
- * - **The creation fee is priced in tinycents.** It is read from the factory
- *   and converted with the network's live exchange rate exactly as the 0x168
- *   precompile does, then added to `msg.value` on top of the HBAR deposited.
- * - **The documented gas is too low** (see CREATE_POOL_GAS).
- * - **The router pulls the token through an allowance**, granted here on the
- *   token's ERC-20 facade, the approval SaucerSwap's own front end requests.
+ * The router offers a one-call `addLiquidityETHNewPool`, but it deposits
+ * everything in `msg.value` beyond the creation fee it computes at consensus.
+ * The fee is priced in tinycents and converted with the exchange rate in
+ * effect at that moment, which the caller can only estimate — on testnet the
+ * mirror node's `current_rate` had expired and consensus used its
+ * `next_rate`. Any estimate error lands in the pool: one run asked for 10 HBAR
+ * and deposited 10.32, opening 3.2% high.
+ *
+ * So the pool is created in two calls:
+ *
+ * 1. `factory.createPair`, paying the quoted fee plus a small buffer. The
+ *    factory forwards whatever exceeds the LP-token cost to SaucerSwap's rent
+ *    payer, so overpaying never touches the pool; underpaying reverts here,
+ *    before any liquidity moves.
+ * 2. `router.addLiquidityETH`, sending exactly the HBAR to deposit. Into an
+ *    empty pair the router takes both amounts as given, so the opening price
+ *    is exact.
+ *
+ * Between the two calls someone could fund the empty pair first, but only a
+ * holder of the new token can, and at launch the operator holds the supply.
+ *
+ * Also handled: the LP recipient must be the account's EVM alias — alias-
+ * created ECDSA accounts reject the long-zero address with INVALID_ALIAS_KEY
+ * on the final transfer, reported only as "Safe token transfer failed!" — and
+ * the router pulls the token through an allowance granted on its ERC-20
+ * facade, the approval SaucerSwap's own front end requests.
  */
 
 export type PoolQuote = {
-  /** Pool creation fee in tinybars, converted at the current rate. */
+  /** Fee in tinybars at whichever listed rate makes it larger. */
   creationFeeTinybar: bigint;
   creationFeeHbar: string;
   /** Tinycents as the factory reports it, before conversion. */
   creationFeeTinycents: string;
-  exchangeRate: { hbarEquivalent: number; centEquivalent: number };
+  exchangeRate: ExchangeRate;
 };
 
-/** What creating this pool will cost, without spending anything. */
+/**
+ * What creating a pool will cost, without spending anything. The mirror
+ * node lists a current and a next rate and consensus may be using either,
+ * so this quotes the larger of the two conversions.
+ */
 export async function quotePoolCreation(hedera: HederaContext, signal?: AbortSignal): Promise<PoolQuote> {
   const { v1Factory } = saucerswapFor(hedera.network);
-  const [raw, rate] = await Promise.all([
+  const [raw, rates] = await Promise.all([
     readContract(hedera, { to: entityIdToEvmAddress(v1Factory), data: SELECTORS.pairCreateFee }, signal),
-    fetchExchangeRate(hedera, signal),
+    fetchExchangeRates(hedera, signal),
   ]);
   const tinycents = decodeUint(raw);
-  const tinybar = tinycentsToTinybars(tinycents, rate);
+  const candidates = [rates.current, ...(rates.next ? [rates.next] : [])].map(rate => ({
+    rate,
+    tinybar: tinycentsToTinybars(tinycents, rate),
+  }));
+  const chosen = candidates.reduce((max, candidate) => (candidate.tinybar > max.tinybar ? candidate : max));
   return {
-    creationFeeTinybar: tinybar,
-    creationFeeHbar: fromUnits(tinybar, 8),
+    creationFeeTinybar: chosen.tinybar,
+    creationFeeHbar: fromUnits(chosen.tinybar, 8),
     creationFeeTinycents: tinycents.toString(),
-    exchangeRate: rate,
+    exchangeRate: chosen.rate,
   };
 }
 
@@ -123,10 +153,14 @@ export type CreatePoolParams = {
   hbarAmount: DecimalAmount;
   /** Tolerated shortfall on either side, in basis points (100 = 1%). */
   slippageBps: number;
-  /** Seconds from now the router will still accept the call. */
+  /** Seconds from now the router will still accept the deposit. */
   deadlineSeconds: number;
-  /** Override the gas limit when a token's path needs more than CREATE_POOL_GAS. */
+  /** Margin on the creation fee, in basis points; the excess goes to SaucerSwap's rent payer. */
+  feeBufferBps?: number | undefined;
+  /** Override the gas limit for the deposit (addLiquidityETH). */
   gasLimit?: number | undefined;
+  /** Override the gas limit for createPair. */
+  createPairGasLimit?: number | undefined;
 };
 
 export type CreatePoolResult = {
@@ -134,13 +168,17 @@ export type CreatePoolResult = {
   pairId: string | null;
   pairEvmAddress: string | null;
   lpTokenId: string | null;
+  /** The deposit (addLiquidityETH). */
   transactionId: string;
+  createPairTransactionId: string;
   allowanceTransactionId: string;
-  /** Actually deposited, which can be below the desired amount. */
+  /** Deposited exactly as requested, in smallest units. */
   tokenAmountUnits: string;
   hbarAmountTinybar: string;
   liquidityUnits: string;
+  /** Quoted fee, and what was actually sent to createPair including the buffer. */
   creationFeeHbar: string;
+  creationFeePaidHbar: string;
   gasUsed: number;
   /** HBAR per whole token implied by the deposits. */
   openingPriceHbar: string;
@@ -170,21 +208,49 @@ export async function createPoolWithHbar(
   }
 
   const quote = await quotePoolCreation(hedera, signal);
+  const feePaid = withBuffer(quote.creationFeeTinybar, params.feeBufferBps ?? DEFAULT_FEE_BUFFER_BPS);
+  const tokenEvm = entityIdToEvmAddress(params.tokenId);
   // Alias-created accounts must be addressed by their EVM alias, not long-zero.
   const recipient = await resolveEvmAddress(hedera, hedera.operatorId.toString(), signal);
+
+  // 1. Create the pair, paying the fee. Nothing is deposited yet.
+  let createPairTransactionId: string;
+  try {
+    const response = await new ContractExecuteTransaction()
+      .setContractId(ContractId.fromString(deployment.v1Factory))
+      .setGas(params.createPairGasLimit ?? CREATE_PAIR_GAS)
+      .setPayableAmount(Hbar.fromTinybars(toLong(feePaid)))
+      .setFunction(
+        "createPair",
+        new ContractFunctionParameters().addAddress(tokenEvm).addAddress(entityIdToEvmAddress(deployment.whbarToken)),
+      )
+      .execute(hedera.client);
+    await response.getReceipt(hedera.client);
+    createPairTransactionId = response.transactionId.toString();
+  } catch (error) {
+    const translated = translateHederaError(error, `Creating the SaucerSwap pair for ${params.tokenId}`);
+    throw new LaunchBlocksError(translated.code, translated.message, {
+      cause: error,
+      hint:
+        translated.hint ??
+        "If the exchange rate moved since the quote, the fee was short: retry, or raise feeBufferBps. Nothing was deposited.",
+    });
+  }
+
+  // 2. Let the router pull exactly the tokens it is about to deposit.
   const allowanceTransactionId = await approveRouterAllowance(hedera, params.tokenId, deployment.v1Router, tokenUnits);
 
+  // 3. Deposit both sides; into an empty pair the router takes them as given.
   try {
     const deadline = Math.floor(Date.now() / 1000) + params.deadlineSeconds;
     const response = await new ContractExecuteTransaction()
       .setContractId(ContractId.fromString(deployment.v1Router))
-      .setGas(params.gasLimit ?? CREATE_POOL_GAS)
-      // msg.value carries the deposited HBAR and the pool creation fee.
-      .setPayableAmount(Hbar.fromTinybars(toLong(hbarTinybar + quote.creationFeeTinybar)))
+      .setGas(params.gasLimit ?? ADD_LIQUIDITY_GAS)
+      .setPayableAmount(Hbar.fromTinybars(toLong(hbarTinybar)))
       .setFunction(
-        "addLiquidityETHNewPool",
+        "addLiquidityETH",
         new ContractFunctionParameters()
-          .addAddress(entityIdToEvmAddress(params.tokenId))
+          .addAddress(tokenEvm)
           .addUint256(toLong(tokenUnits))
           .addUint256(toLong(applySlippage(tokenUnits, params.slippageBps)))
           .addUint256(toLong(applySlippage(hbarTinybar, params.slippageBps)))
@@ -195,7 +261,7 @@ export async function createPoolWithHbar(
     const record = await response.getRecord(hedera.client);
     const result = record.contractFunctionResult;
     if (!result) {
-      throw new LaunchBlocksError("CONTRACT_NO_RESULT", "The router call produced no contract result");
+      throw new LaunchBlocksError("CONTRACT_NO_RESULT", "The deposit produced no contract result");
     }
 
     const amountToken = BigInt(result.getUint256(0).toString());
@@ -208,25 +274,29 @@ export async function createPoolWithHbar(
       tokenId: params.tokenId,
       pairId,
       pairEvmAddress: pair?.evmAddress ?? null,
+      // On V1 the LP token is an HTS token created alongside the pair.
       lpTokenId: pairId,
       transactionId: response.transactionId.toString(),
+      createPairTransactionId,
       allowanceTransactionId,
       tokenAmountUnits: amountToken.toString(),
       hbarAmountTinybar: amountHbar.toString(),
       liquidityUnits: liquidity.toString(),
       creationFeeHbar: quote.creationFeeHbar,
+      creationFeePaidHbar: fromUnits(feePaid, 8),
       gasUsed: Number(result.gasUsed ?? 0),
       openingPriceHbar: openingPrice(amountHbar, amountToken, decimals),
       poolUrl: pairId ? `${deployment.appBaseUrl}/liquidity/${pairId}` : deployment.appBaseUrl,
     };
   } catch (error) {
-    throw translateHederaError(error, `Creating a SaucerSwap pool for ${params.tokenId}`);
+    throw translateHederaError(error, `Depositing into the new SaucerSwap pool for ${params.tokenId}`);
   }
 }
 
 /**
- * Grant the router an allowance over the token through its ERC-20 facade.
- * This is the approval SaucerSwap's own front end asks users to sign.
+ * Grant the router an allowance over the token through its ERC-20 facade,
+ * which lives at the contract id matching the token id. This is the approval
+ * SaucerSwap's own front end asks users to sign.
  */
 async function approveRouterAllowance(
   hedera: HederaContext,
@@ -235,7 +305,6 @@ async function approveRouterAllowance(
   units: bigint,
 ): Promise<string> {
   try {
-    // An HTS token's ERC-20 facade lives at the contract id matching its token id.
     const response = await new ContractExecuteTransaction()
       .setContractId(ContractId.fromString(tokenId))
       .setGas(APPROVE_GAS)
@@ -249,6 +318,14 @@ async function approveRouterAllowance(
   } catch (error) {
     throw translateHederaError(error, `Approving the SaucerSwap router to spend ${tokenId}`);
   }
+}
+
+/** `amount` increased by `bps` basis points, rounded up. */
+export function withBuffer(amount: bigint, bps: number): bigint {
+  if (!Number.isInteger(bps) || bps < 0 || bps > 10_000) {
+    throw new LaunchBlocksError("FEE_BUFFER_INVALID", "Fee buffer must be an integer between 0 and 10000 basis points");
+  }
+  return (amount * BigInt(10_000 + bps) + 9_999n) / 10_000n;
 }
 
 /** Minimum acceptable amount after tolerating `bps` basis points of shortfall. */

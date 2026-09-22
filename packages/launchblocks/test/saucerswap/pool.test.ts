@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { entityIdToEvmAddress } from "../../src/hedera/abi";
 import { tinycentsToTinybars } from "../../src/hedera/mirror";
 import { SAUCERSWAP_DEPLOYMENTS, saucerswapFor } from "../../src/saucerswap/config";
-import { applySlippage, findPool, openingPrice, quotePoolCreation } from "../../src/saucerswap/pool";
+import { applySlippage, findPool, openingPrice, quotePoolCreation, withBuffer } from "../../src/saucerswap/pool";
 import { offlineHederaContext } from "../helpers/hedera";
 
 afterEach(() => vi.restoreAllMocks());
@@ -62,6 +62,25 @@ describe("quotePoolCreation()", () => {
         tinycentsToTinybars(20_000_000_000n, { hbarEquivalent: 30000, centEquivalent: 231199 }),
       );
       expect(quote.creationFeeHbar).toBe("25.95166934");
+    } finally {
+      hedera.client.close();
+    }
+  });
+
+  it("quotes at whichever listed rate gives the larger fee", async () => {
+    // Observed on testnet: consensus charged at next_rate while current_rate had expired.
+    mockMirror({
+      contractCall: `0x${(20_000_000_000).toString(16).padStart(64, "0")}`,
+      exchangeRate: {
+        current_rate: { hbar_equivalent: 30000, cent_equivalent: 234084 },
+        next_rate: { hbar_equivalent: 30000, cent_equivalent: 231199 },
+      },
+    });
+    const hedera = offlineHederaContext();
+    try {
+      const quote = await quotePoolCreation(hedera);
+      expect(quote.creationFeeHbar).toBe("25.95166934");
+      expect(quote.exchangeRate.centEquivalent).toBe(231199);
     } finally {
       hedera.client.close();
     }
@@ -128,6 +147,19 @@ describe("applySlippage()", () => {
   it("rejects out-of-range slippage", () => {
     expect(() => applySlippage(100n, -1)).toThrow(/between 0 and 9999/);
     expect(() => applySlippage(100n, 10_000)).toThrow(/between 0 and 9999/);
+  });
+});
+
+describe("withBuffer()", () => {
+  it("adds basis points and rounds up so the fee is never short", () => {
+    expect(withBuffer(10_000n, 200)).toBe(10_200n);
+    expect(withBuffer(1n, 1)).toBe(2n);
+    expect(withBuffer(2_595_166_934n, 0)).toBe(2_595_166_934n);
+  });
+
+  it("rejects out-of-range buffers", () => {
+    expect(() => withBuffer(1n, -1)).toThrow(/between 0 and 10000/);
+    expect(() => withBuffer(1n, 10_001)).toThrow(/between 0 and 10000/);
   });
 });
 

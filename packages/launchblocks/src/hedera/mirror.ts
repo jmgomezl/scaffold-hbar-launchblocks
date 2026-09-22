@@ -85,21 +85,38 @@ async function mirrorFetch(url: string, signal?: AbortSignal): Promise<unknown> 
 export type ExchangeRate = { hbarEquivalent: number; centEquivalent: number };
 
 /**
- * The network's current HBAR/USD rate, the same one the exchange rate
- * precompile at 0x168 uses. Contracts that price fees in tinycents (such as
- * SaucerSwap's pool creation fee) convert with it.
+ * The network's HBAR/USD rates as the mirror node reports them: the rate it
+ * lists as current and the one it lists as next. Contracts that price fees in
+ * tinycents (such as SaucerSwap's pool creation fee) convert with the rate in
+ * effect at consensus through the 0x168 precompile, and on testnet that has
+ * been observed to match the mirror's `next_rate` while its `current_rate`
+ * had already expired — so callers should budget for either.
  */
+export async function fetchExchangeRates(
+  hedera: Pick<HederaContext, "mirrorBaseUrl">,
+  signal?: AbortSignal,
+): Promise<{ current: ExchangeRate; next: ExchangeRate | null }> {
+  const response = (await mirrorFetch(`${hedera.mirrorBaseUrl}/api/v1/network/exchangerate`, signal)) as {
+    current_rate?: { hbar_equivalent?: number; cent_equivalent?: number };
+    next_rate?: { hbar_equivalent?: number; cent_equivalent?: number };
+  } | null;
+  const toRate = (raw?: { hbar_equivalent?: number; cent_equivalent?: number }): ExchangeRate | null =>
+    raw?.hbar_equivalent && raw.cent_equivalent
+      ? { hbarEquivalent: raw.hbar_equivalent, centEquivalent: raw.cent_equivalent }
+      : null;
+  const current = toRate(response?.current_rate);
+  if (!current) {
+    throw new LaunchBlocksError("EXCHANGE_RATE_UNAVAILABLE", "Mirror node did not return a current exchange rate");
+  }
+  return { current, next: toRate(response?.next_rate) };
+}
+
+/** The current rate only; see fetchExchangeRates for why that is not always the rate in effect. */
 export async function fetchExchangeRate(
   hedera: Pick<HederaContext, "mirrorBaseUrl">,
   signal?: AbortSignal,
 ): Promise<ExchangeRate> {
-  const response = await mirrorFetch(`${hedera.mirrorBaseUrl}/api/v1/network/exchangerate`, signal);
-  const rate = (response as { current_rate?: { hbar_equivalent?: number; cent_equivalent?: number } } | null)
-    ?.current_rate;
-  if (!rate?.hbar_equivalent || !rate.cent_equivalent) {
-    throw new LaunchBlocksError("EXCHANGE_RATE_UNAVAILABLE", "Mirror node did not return a current exchange rate");
-  }
-  return { hbarEquivalent: rate.hbar_equivalent, centEquivalent: rate.cent_equivalent };
+  return (await fetchExchangeRates(hedera, signal)).current;
 }
 
 /** Convert tinycents to tinybars exactly as the 0x168 precompile does. */

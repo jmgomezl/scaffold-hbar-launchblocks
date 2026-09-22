@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hts-launch-saucerswap",
   "name": "Token launch with a SaucerSwap market",
-  "description": "The full launchpad: create a fungible token, open a public HCS launch log, seed its first SaucerSwap V1 pool against HBAR so it is immediately tradeable, and record the market on the log.",
+  "description": "The full launchpad: create a fungible token, open a public HCS launch log, seed its first SaucerSwap V1 pool against HBAR, make the first trade to prove the market is live, and record it all on the log.",
   "network": "testnet",
   "steps": [
     {
@@ -17,14 +17,26 @@
         "supplyType": "finite",
         "maxSupply": "1000000",
         "memo": "Launched with LaunchBlocks",
-        "keys": { "admin": true, "supply": false, "freeze": false, "wipe": false, "pause": false, "kyc": false, "feeSchedule": false }
+        "keys": {
+          "admin": true,
+          "supply": false,
+          "freeze": false,
+          "wipe": false,
+          "pause": false,
+          "kyc": false,
+          "feeSchedule": false
+        }
       }
     },
     {
       "id": "createLog",
       "type": "hcs.createTopic",
       "label": "Open the launch log",
-      "params": { "memo": "{{steps.createToken.symbol}} launch log", "adminKey": true, "submitKey": true }
+      "params": {
+        "memo": "{{steps.createToken.symbol}} launch log",
+        "adminKey": true,
+        "submitKey": true
+      }
     },
     {
       "id": "recordLaunch",
@@ -54,6 +66,17 @@
       }
     },
     {
+      "id": "firstTrade",
+      "type": "saucerswap.swap",
+      "label": "Make the first trade",
+      "params": {
+        "tokenId": "{{steps.createToken.tokenId}}",
+        "hbarAmount": "1",
+        "slippageBps": 100,
+        "deadlineSeconds": 120
+      }
+    },
+    {
       "id": "recordMarket",
       "type": "hcs.submitMessage",
       "label": "Record the market",
@@ -66,7 +89,10 @@
           "pairId": "{{steps.seedPool.pairId}}",
           "openingPriceHbar": "{{steps.seedPool.openingPriceHbar}}",
           "poolTx": "{{steps.seedPool.transactionId}}",
-          "poolUrl": "{{steps.seedPool.poolUrl}}"
+          "poolUrl": "{{steps.seedPool.poolUrl}}",
+          "firstTradeTx": "{{steps.firstTrade.transactionId}}",
+          "firstTradeTokens": "{{steps.firstTrade.tokensOut}}",
+          "firstTradePriceHbar": "{{steps.firstTrade.effectivePriceHbar}}"
         }
       }
     }

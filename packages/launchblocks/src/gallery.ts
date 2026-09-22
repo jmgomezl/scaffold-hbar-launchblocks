@@ -17,7 +17,7 @@ export const GALLERY: readonly GalleryEntry[] = [
     id: "hts-launch-saucerswap",
     title: "Token launch with a SaucerSwap market",
     blurb:
-      "The full launchpad: create the token, log the launch on HCS, seed its first SaucerSwap V1 pool against HBAR so it is tradeable immediately, and record the market.",
+      "The full launchpad: create the token, log the launch on HCS, seed its first SaucerSwap V1 pool against HBAR, make the first trade to prove the market is live, and record it.",
     flow: htsLaunchSaucerSwap as FlowInput,
   },
   {
