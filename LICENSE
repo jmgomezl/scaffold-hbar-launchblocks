@@ -19,3 +19,15 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+Portions of this repository (monorepo layout, Next.js/Hardhat scaffolding,
+scaffold-hbar hooks and components) are derived from the Scaffold-HBAR
+"blank" starter generated with create-scaffold-hbar 0.4.0, itself derived
+from Scaffold-ETH 2. Those portions carry the following notices:
+
+Copyright (c) 2023 BuidlGuidl
+Copyright (c) 2026 hedera-dev
+
+and are licensed under the same MIT License reproduced above.

@@ -1,0 +1,38 @@
+{
+  "create-scaffold-hbar": {
+    "capabilities": {
+      "frontend": ["nextjs-app"],
+      "solidityFramework": ["hardhat"],
+      "packageManager": ["yarn", "npm"]
+    },
+    "defaults": {
+      "frontend": "nextjs-app",
+      "solidityFramework": "hardhat",
+      "packageManager": "yarn"
+    },
+    "outro": {
+      "sections": [
+        {
+          "title": "Fund a testnet operator",
+          "steps": [
+            { "label": "Create a testnet account and grab HBAR from the faucet", "url": "https://portal.hedera.com/faucet" },
+            { "label": "Copy the env example and paste your operator ID + key", "command": "cp packages/nextjs/.env.example packages/nextjs/.env" }
+          ]
+        },
+        {
+          "title": "Launch a token",
+          "steps": [
+            { "label": "Start the app", "command": "{run:next:dev}" },
+            { "label": "Open the block editor, pick the 'HTS launch → SaucerSwap' gallery flow, and press Run", "url": "http://localhost:3000" }
+          ]
+        },
+        {
+          "title": "Optional: AI-driven build with Hedera Harness",
+          "steps": [
+            { "label": "Run the harness recipe (see .harness/spec.yaml)", "command": "{run:harness:run}" }
+          ]
+        }
+      ]
+    }
+  }
+}
