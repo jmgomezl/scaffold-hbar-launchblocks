@@ -63,6 +63,8 @@ export function saucerswapFor(network: Network): SaucerSwapDeployment {
 
 /** Function selectors used by the read and write calls below. */
 export const SELECTORS = {
+  /** SaucerSwapV1Factory.createPair(address,address) → address */
+  createPair: "0xc9c65396",
   /** SaucerSwapV1Factory.pairCreateFee() → uint256 tinycents */
   pairCreateFee: "0x881a075a",
   /** SaucerSwapV1Factory.getPair(address,address) → address */
@@ -81,3 +83,17 @@ export const SELECTORS = {
  * 15,000,000 per transaction.
  */
 export const CREATE_POOL_GAS = 5_000_000;
+
+/**
+ * Gas for `SaucerSwapV1Factory.createPair`, which deploys the pair, creates
+ * its LP token and associates the pair with both sides. Measured at 5,849,994
+ * on testnet; at 3,000,000 it reverts with "Safe multiple associations
+ * failed!" after consuming 2,991,757.
+ */
+export const CREATE_PAIR_GAS = 8_000_000;
+
+/** Gas for `addLiquidityETH`. A successful testnet run used well under this. */
+export const ADD_LIQUIDITY_GAS = 4_000_000;
+
+/** Gas for an ERC-20 facade `approve` on an HTS token. */
+export const APPROVE_GAS = 1_000_000;

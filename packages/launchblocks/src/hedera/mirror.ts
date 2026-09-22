@@ -163,6 +163,32 @@ export async function resolveContractId(
   return (response as { contract_id?: string }).contract_id ?? null;
 }
 
+/**
+ * The EVM address an account is actually addressed by.
+ *
+ * Accounts created from an ECDSA alias are addressed by a keccak-derived
+ * address, not by the long-zero form of their account id. Passing the
+ * long-zero form as a transfer recipient inside a contract call fails with
+ * INVALID_ALIAS_KEY, so anything handing an account to the EVM must resolve
+ * it here first rather than calling `AccountId.toSolidityAddress()`.
+ */
+export async function resolveEvmAddress(
+  hedera: Pick<HederaContext, "mirrorBaseUrl">,
+  accountId: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const account = await fetchAccount(hedera, accountId, signal);
+  if (!account) {
+    throw new LaunchBlocksError("ACCOUNT_NOT_FOUND", `Account ${accountId} does not exist on this network`);
+  }
+  if (account.evmAddress) return account.evmAddress;
+  // Accounts without an alias are addressed by the long-zero form of their id.
+  const num = accountId.trim().split(".")[2];
+  return `0x${BigInt(num ?? "0")
+    .toString(16)
+    .padStart(40, "0")}`;
+}
+
 export const TINYBAR_PER_HBAR = 100_000_000n;
 
 export function formatHbar(tinybar: bigint): string {
