@@ -2,17 +2,22 @@
 
 Briefing for coding agents in this app (Cursor, Claude Code, Codex). Claude Code loads it through `CLAUDE.md`.
 
-This is a Scaffold-HBAR dApp: Next.js App Router, wallet connect, Debug Contracts, and Hedera networks (testnet, mainnet, local fork). The CLI may have left only Hardhat or only Foundry.
+This is **LaunchBlocks**, a Scaffold-HBAR template: a visual, block-based HTS token launchpad on Hedera. A launch is a *flow* (ordered JSON steps) that the app renders as Blockly blocks, runs from Next.js API routes with an operator key, and exports as a standalone `launch.ts`. Next.js App Router, wallet connect, Debug Contracts, and Hedera networks (testnet, mainnet, local fork). The CLI may have left only Hardhat or only Foundry.
 
 Use the package manager this project was created with (`packageManager` in the root `package.json`, or the lockfile). Examples use `yarn`; if the app was created with npm, swap `yarn <script>` for `npm run <script>`.
 
-## Which Solidity package
+## Packages
 
-- `packages/hardhat` exists → Hardhat (`hardhat-deploy`)
-- `packages/foundry` exists → Foundry (Forge scripts)
-- `packages/nextjs` is always the frontend (App Router, RainbowKit, Wagmi, Viem, DaisyUI)
+- `packages/launchblocks` (`@sh/launchblocks`) — framework-agnostic core: flow schema, step registry, runner, codegen, Hedera client factory. No React, no Next. Unit-tested with vitest.
+- `packages/nextjs` — the frontend (App Router, RainbowKit, Wagmi, Viem, DaisyUI) plus the API routes that run flows.
+- `packages/hardhat` exists → Hardhat (`hardhat-deploy`); `packages/foundry` exists → Foundry (Forge scripts). Follow only the flavor that is present.
 
-Follow only the flavor that is present.
+Product rules that shape every change:
+
+1. **Flows are JSON, the editor is optional.** Anything the block editor can do must work from a flow JSON file through the runner and the API. Never put logic in the editor that the runner does not have.
+2. **No general-purpose blocks.** No if/loop/variable blocks. Every block is exactly one step type in the registry.
+3. **One hero use case.** The HTS launch → SaucerSwap pool flow is the headline; other steps and gallery flows are "also included".
+4. **Never log or return an operator key.** `HederaContext` holds it; nothing serializes it.
 
 ## Commands
 
@@ -30,11 +35,19 @@ yarn next:start       # http://localhost:3000
 yarn next:dev
 
 # Quality / build
-yarn lint
+yarn lint             # next + hardhat + core
+yarn check-types      # next + hardhat + core
+yarn test             # core (vitest) + hardhat
 yarn format
 yarn next:build
 yarn hardhat:compile
 yarn foundry:compile
+
+# Core package only
+yarn core:test
+yarn core:test:coverage
+yarn core:lint
+yarn core:check-types
 
 # Live networks
 yarn hardhat:deploy --network hederaTestnet   # or hederaMainnet
@@ -51,6 +64,44 @@ yarn hardhat:account
 `yarn hardhat:deploy` without `--network localhost` targets the in-process `hardhat` network, not the long-running fork.
 
 ## Layout
+
+### LaunchBlocks core (`packages/launchblocks`)
+
+```
+src/
+  flow/       schema.ts (FlowSchema, step ids/types), refs.ts ({{steps.<id>.<key>}} resolution)
+  registry/   types.ts (StepDefinition contract), define-step.ts, registry.ts (createRegistry, validateFlow)
+  runner/     runner.ts (runFlow → RunResult with per-step records, links, events)
+  codegen/    typescript.ts (generateLaunchScript, renderExpr)
+  hedera/     context.ts (HederaContext, hashscanUrl), client.ts (createHederaContext, hederaContextFromEnv)
+  steps/      one folder per namespace (hts/, hcs/, hss/, saucerswap/, …), one file per step type
+  errors.ts   LaunchBlocksError subclasses with stable `code`s
+test/         mirrors src/; test/helpers/fake-steps.ts has network-free steps for runner/registry tests
+```
+
+A **flow** is `{ schemaVersion: 1, id, name, network, steps: [{ id, type, params }] }`. Step ids are camelCase and become variable names in generated code. Params may reference earlier outputs with `{{steps.<id>.<key>}}` — a whole-string reference keeps the output's type; inside longer strings it interpolates.
+
+A **step definition** (`defineStep({...})`) bundles, in one object:
+
+| Field | Purpose |
+| --- | --- |
+| `type` | `namespace.action`, e.g. `hts.createToken` |
+| `input` / `output` | zod schemas; `input` is parsed after references resolve |
+| `outputExample` | a complete, realistic output — used to type-check wiring before running and as the docs example |
+| `ui` | label, category, colour, `fields` (param → editor field) and `outputs` (what later steps may reference) |
+| `docs` | one-line summary, markdown details, Hedera services and integrations touched |
+| `execute(input, ctx)` | the SDK calls; throw `StepExecutionError` with a `hint` for user-fixable failures |
+| `codegen(ctx)` | body of an async function that does the same with the SDK and `return`s the outputs; use `ctx.expr(key)` for params and `ctx.addImport()` for imports |
+
+#### Adding a step type
+
+1. Create `packages/launchblocks/src/steps/<namespace>/<action>.ts` exporting `defineStep({...})`. Reuse the field kinds in `registry/types.ts` (`tokenId`, `accountId`, `topicId`, `amount`, …) — kinds drive which earlier outputs the editor offers to an input.
+2. Register it in `packages/launchblocks/src/steps/index.ts` (the built-in registry).
+3. Add `test/steps/<namespace>/<action>.test.ts`: validate `input`/`outputExample`, run `codegen` and assert the body, and test `execute` against a stubbed `HederaContext` — no network in unit tests.
+4. If it produces on-chain entities, list them in `ui.outputs` with the right kind so the runner emits Hashscan links.
+5. Run `yarn core:test && yarn core:lint --max-warnings=0 && yarn core:check-types`.
+
+The editor and API discover steps through the registry; there is nothing to register in `packages/nextjs`.
 
 ### Hardhat
 
@@ -136,3 +187,9 @@ import { useTargetNetwork } from "~~/hooks/scaffold-hbar";
 App Router pages live under `packages/nextjs/app/`. Add `"use client"` when the page uses hooks.
 
 Prefer `type` over `interface`. No `T` prefix on types. Let TypeScript infer when it can. Comments should add information.
+
+Core package specifics: `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess` are on — spread conditionally (`...(x ? { x } : {})`) instead of assigning `undefined`, and narrow array reads. Use `import type` for types (lint enforces it).
+
+Commits follow Conventional Commits (`feat(core): …`, `fix(nextjs): …`, `docs: …`, `ci: …`) and are GPG-signed. Keep each commit green: tests, lint with `--max-warnings=0`, and type checks.
+
+When writing prose (README, comments, docs), write `yarn <script>` only where a command is meant: the CLI rewrites that word to `npm run` in projects scaffolded with npm.
