@@ -14,6 +14,7 @@
     "core:check-types": "yarn workspace @sh/launchblocks check-types",
     "core:format": "yarn workspace @sh/launchblocks format",
     "core:lint": "yarn workspace @sh/launchblocks lint",
+    "core:run": "yarn workspace @sh/launchblocks run-flow",
     "core:test": "yarn workspace @sh/launchblocks test",
     "core:test:coverage": "yarn workspace @sh/launchblocks test:coverage",
     "format": "yarn next:format && yarn hardhat:format && yarn core:format",

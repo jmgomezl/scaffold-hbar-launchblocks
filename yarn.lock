@@ -3670,11 +3670,13 @@ __metadata:
     "@typescript-eslint/eslint-plugin": ~8.27.0
     "@typescript-eslint/parser": ~8.27.0
     "@vitest/coverage-v8": ^3.2.0
+    dotenv: ~16.4.5
     eslint: ~9.23.0
     eslint-config-prettier: ~10.1.1
     eslint-plugin-prettier: ~5.2.4
     globals: ^16.0.0
     prettier: ^3.5.3
+    tsx: ^4.19.0
     typescript: ^5.8.2
     vitest: ^3.2.0
     zod: ^4.1.0
@@ -8348,7 +8350,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"esbuild@npm:^0.27.0 || ^0.28.0":
+"esbuild@npm:^0.27.0 || ^0.28.0, esbuild@npm:~0.28.0":
   version: 0.28.2
   resolution: "esbuild@npm:0.28.2"
   dependencies:
@@ -15216,6 +15218,21 @@ __metadata:
   version: 0.0.1
   resolution: "tsort@npm:0.0.1"
   checksum: 581566c248690b9ea7e431e1545affb3d2cab0f5dcd0e45ddef815dfaec4864cb5f0cfd8072924dedbc0de9585ff07e3e65db60f14fab4123737b9bb6e72eacc
+  languageName: node
+  linkType: hard
+
+"tsx@npm:^4.19.0":
+  version: 4.23.15
+  resolution: "tsx@npm:4.23.15"
+  dependencies:
+    esbuild: ~0.28.0
+    fsevents: ~2.3.3
+  dependenciesMeta:
+    fsevents:
+      optional: true
+  bin:
+    tsx: dist/cli.mjs
+  checksum: beed01968736c08d8097880cac4a744cdefe6bce3cb8f8c46074fc85bfcb5f915795218c135441fa552f12df202810c9e788da2afdc91b8620d52cebc6285173
   languageName: node
   linkType: hard
 
