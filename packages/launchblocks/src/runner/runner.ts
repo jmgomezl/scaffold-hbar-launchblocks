@@ -11,7 +11,7 @@ export type StepStatus = "pending" | "running" | "succeeded" | "failed" | "skipp
 
 export type StepLink = { label: string; url: string };
 
-export type StepError = { code: string; message: string; hint?: string };
+export type StepError = { code: string; message: string; hint?: string; causeCode?: string };
 
 export type StepRecord = {
   id: string;
@@ -103,6 +103,7 @@ export async function runFlow(document: unknown, options: RunOptions): Promise<R
         code: stepError.code,
         message: stepError.message,
         ...(stepError.hint ? { hint: stepError.hint } : {}),
+        ...(stepError.causeCode ? { causeCode: stepError.causeCode } : {}),
       };
       finish(record, startedMs);
       failure = { ...record.error, stepId: step.id };
@@ -168,7 +169,14 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
 function toStepError(step: StepEnvelope, error: unknown): StepExecutionError {
   if (error instanceof StepExecutionError) return error;
   if (error instanceof LaunchBlocksError) {
-    return new StepExecutionError({ stepId: step.id, stepType: step.type, message: error.message, cause: error });
+    return new StepExecutionError({
+      stepId: step.id,
+      stepType: step.type,
+      message: error.message,
+      causeCode: error.code,
+      ...(error.hint ? { hint: error.hint } : {}),
+      cause: error,
+    });
   }
   const message = error instanceof Error ? error.message : String(error);
   return new StepExecutionError({ stepId: step.id, stepType: step.type, message, cause: error });

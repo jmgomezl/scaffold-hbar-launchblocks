@@ -14,11 +14,14 @@ export type FlowIssue = {
 
 export class LaunchBlocksError extends Error {
   readonly code: string;
+  /** Human-oriented remediation, surfaced verbatim in the UI and harness logs. */
+  readonly hint: string | undefined;
 
-  constructor(code: string, message: string, options?: ErrorOptions) {
+  constructor(code: string, message: string, options?: ErrorOptions & { hint?: string }) {
     super(message, options);
     this.name = new.target.name;
     this.code = code;
+    this.hint = options?.hint;
   }
 }
 
@@ -53,13 +56,23 @@ export class UnknownStepTypeError extends LaunchBlocksError {
 export class StepExecutionError extends LaunchBlocksError {
   readonly stepId: string;
   readonly stepType: string;
-  /** Human-oriented remediation, surfaced verbatim in the UI and harness logs. */
-  readonly hint: string | undefined;
+  /** Code of the underlying failure (e.g. HEDERA_INSUFFICIENT_PAYER_BALANCE) when there is one. */
+  readonly causeCode: string | undefined;
 
-  constructor(args: { stepId: string; stepType: string; message: string; hint?: string; cause?: unknown }) {
-    super("STEP_FAILED", `Step "${args.stepId}" (${args.stepType}) failed: ${args.message}`, { cause: args.cause });
+  constructor(args: {
+    stepId: string;
+    stepType: string;
+    message: string;
+    hint?: string;
+    causeCode?: string;
+    cause?: unknown;
+  }) {
+    super("STEP_FAILED", `Step "${args.stepId}" (${args.stepType}) failed: ${args.message}`, {
+      cause: args.cause,
+      ...(args.hint ? { hint: args.hint } : {}),
+    });
     this.stepId = args.stepId;
     this.stepType = args.stepType;
-    this.hint = args.hint;
+    this.causeCode = args.causeCode;
   }
 }
