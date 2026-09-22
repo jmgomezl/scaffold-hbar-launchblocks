@@ -12,10 +12,21 @@ const buildHardhatEslintCommand = (filenames) =>
     .map((f) => path.relative(path.join("packages", "hardhat"), f))
     .join(" ")}`;
 
+const buildCoreEslintCommand = (filenames) =>
+  `yarn core:lint --fix ${filenames
+    .map((f) => path.relative(path.join("packages", "launchblocks"), f))
+    .join(" ")}`;
+
+const checkTypesCoreCommand = () => "yarn core:check-types";
+
 module.exports = {
   "packages/nextjs/**/*.{ts,tsx}": [
     buildNextEslintCommand,
     checkTypesNextCommand,
   ],
   "packages/hardhat/**/*.{ts,tsx}": [buildHardhatEslintCommand],
+  "packages/launchblocks/**/*.ts": [
+    buildCoreEslintCommand,
+    checkTypesCoreCommand,
+  ],
 };

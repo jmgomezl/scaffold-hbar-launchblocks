@@ -5,11 +5,18 @@
   "workspaces": {
     "packages": [
       "packages/hardhat",
-      "packages/nextjs"
+      "packages/nextjs",
+      "packages/launchblocks"
     ]
   },
   "scripts": {
-    "format": "yarn next:format && yarn hardhat:format",
+    "check-types": "yarn next:check-types && yarn hardhat:check-types && yarn core:check-types",
+    "core:check-types": "yarn workspace @sh/launchblocks check-types",
+    "core:format": "yarn workspace @sh/launchblocks format",
+    "core:lint": "yarn workspace @sh/launchblocks lint",
+    "core:test": "yarn workspace @sh/launchblocks test",
+    "core:test:coverage": "yarn workspace @sh/launchblocks test:coverage",
+    "format": "yarn next:format && yarn hardhat:format && yarn core:format",
     "hardhat:account": "yarn workspace @sh/hardhat account",
     "hardhat:account:generate": "yarn workspace @sh/hardhat account:generate",
     "hardhat:account:import": "yarn workspace @sh/hardhat account:import",
@@ -26,9 +33,9 @@
     "hardhat:lint-staged": "yarn workspace @sh/hardhat lint-staged",
     "hardhat:test": "yarn workspace @sh/hardhat test",
     "hardhat:verify": "yarn workspace @sh/hardhat verify",
-    "hardhat:verify:testnet": "yarn workspace @sh/hardhat verify:testnet",
     "hardhat:verify:mainnet": "yarn workspace @sh/hardhat verify:mainnet",
-    "lint": "yarn next:lint && yarn hardhat:lint",
+    "hardhat:verify:testnet": "yarn workspace @sh/hardhat verify:testnet",
+    "lint": "yarn next:lint && yarn hardhat:lint && yarn core:lint",
     "next:build": "yarn workspace @sh/nextjs build",
     "next:check-types": "yarn workspace @sh/nextjs check-types",
     "next:dev": "yarn workspace @sh/nextjs dev",
@@ -36,6 +43,7 @@
     "next:lint": "yarn workspace @sh/nextjs lint",
     "next:serve": "yarn workspace @sh/nextjs serve",
     "next:start": "yarn workspace @sh/nextjs start",
+    "test": "yarn core:test && yarn hardhat:test",
     "postinstall": "husky",
     "precommit": "lint-staged",
     "lint-staged": "lint-staged"
