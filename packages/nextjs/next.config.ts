@@ -19,7 +19,9 @@ const nextConfig: NextConfig = {
     // @base-org/account) imports optional @x402 entrypoints that are not
     // installed. Yarn's hoisting hides this; an npm install surfaces it as a
     // build-breaking "Module not found". These paths are never executed here.
-    config.externals.push("pino-pretty", "lokijs", "encoding", "@x402/evm/upto/client", "@x402/evm/exact/client");
+    // The whole @x402 scope is externalised rather than individual
+    // entrypoints, because the SDK reaches several of them (core, evm, svm).
+    config.externals.push("pino-pretty", "lokijs", "encoding", /^@x402\//);
     if (dev) {
       config.watchOptions = {
         followSymlinks: true,
