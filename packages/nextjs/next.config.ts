@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(__dirname, "../.."),
   reactStrictMode: true,
   devIndicators: false,
+  // The core package ships TypeScript source; Next compiles it with the app.
+  transpilePackages: ["@sh/launchblocks"],
   typescript: {
     ignoreBuildErrors: process.env.NEXT_PUBLIC_IGNORE_BUILD_ERROR === "true",
   },
