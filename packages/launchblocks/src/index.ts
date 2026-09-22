@@ -13,5 +13,6 @@ export * from "./flow";
 export * from "./gallery";
 export * from "./hedera";
 export * from "./registry";
+export * from "./saucerswap";
 export * from "./runner";
 export * from "./steps";

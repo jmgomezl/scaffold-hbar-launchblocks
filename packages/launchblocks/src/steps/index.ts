@@ -8,6 +8,7 @@ import { htsAssociate } from "./hts/associate";
 import { htsCreateToken } from "./hts/create-token";
 import { htsMint } from "./hts/mint";
 import { htsTransfer } from "./hts/transfer";
+import { saucerswapCreatePool } from "./saucerswap/create-pool";
 
 /** Every step type this template ships, in palette order. */
 export const BUILT_IN_STEPS: readonly AnyStepDefinition[] = [
@@ -18,11 +19,21 @@ export const BUILT_IN_STEPS: readonly AnyStepDefinition[] = [
   htsAssociate,
   hcsCreateTopic,
   hcsSubmitMessage,
+  saucerswapCreatePool,
 ];
 
 export function createDefaultRegistry(extra: readonly AnyStepDefinition[] = []): StepRegistry {
   return createRegistry([...BUILT_IN_STEPS, ...extra]);
 }
 
-export { hcsCreateTopic, hcsSubmitMessage, htsAirdrop, htsAssociate, htsCreateToken, htsMint, htsTransfer };
+export {
+  hcsCreateTopic,
+  hcsSubmitMessage,
+  htsAirdrop,
+  htsAssociate,
+  htsCreateToken,
+  htsMint,
+  htsTransfer,
+  saucerswapCreatePool,
+};
 export * from "./shared";
