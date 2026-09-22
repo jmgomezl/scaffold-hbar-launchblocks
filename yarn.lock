@@ -248,6 +248,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@blockly/field-multilineinput@npm:^13.3.0":
+  version: 13.3.0
+  resolution: "@blockly/field-multilineinput@npm:13.3.0"
+  peerDependencies:
+    blockly: ^13.2.0
+  checksum: 6beea2abfdb0926d480552c4e0e633d161f4beedc520823b704b62a9fa7e39a5decc6f572b40c13acd4d3b798d5ec99f20fbe2dc46b0243b2b056d63df837a7e
+  languageName: node
+  linkType: hard
+
 "@coinbase/cdp-sdk@npm:^1.0.0":
   version: 1.44.1
   resolution: "@coinbase/cdp-sdk@npm:1.44.1"
@@ -3687,6 +3696,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@sh/nextjs@workspace:packages/nextjs"
   dependencies:
+    "@blockly/field-multilineinput": ^13.3.0
     "@heroicons/react": ^2.1.5
     "@hiero-ledger/sdk": ^2.80.0
     "@rainbow-me/rainbowkit": 2.2.9
@@ -3702,6 +3712,7 @@ __metadata:
     "@types/react": ^19.0.7
     abitype: 1.0.6
     blo: ^1.2.0
+    blockly: ^13.3.0
     burner-connector: 0.0.20
     daisyui: ^5.0.9
     eslint: ^9.23.0
@@ -6783,6 +6794,15 @@ __metadata:
   version: 1.2.0
   resolution: "blo@npm:1.2.0"
   checksum: be7dc5f3047d538c0038b469c309440e5b7de872ee811cc7ca97005b6b534a01dbf461150145f2f09524aeda6923197ea31290fbe9865cb8cb32152b3caf3dc7
+  languageName: node
+  linkType: hard
+
+"blockly@npm:^13.3.0":
+  version: 13.3.0
+  resolution: "blockly@npm:13.3.0"
+  peerDependencies:
+    jsdom: ">=27.4.0 <30.0.0"
+  checksum: 7f5ce39f774307fa26c9f2fa3e76f9d4c1aa0b6f1677f61cad61f1d919524da5b82f75e4b42abd27abd07129daced8b1360a646244d2e411b1ed39655c229ad2
   languageName: node
   linkType: hard
 

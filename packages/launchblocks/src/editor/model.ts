@@ -358,11 +358,16 @@ export function referenceOptions(
   return steps.slice(0, index).flatMap(step => outputsOf(step, catalog).filter(output => output.kind === kind));
 }
 
+/** Rewrite references to step `oldId` inside one string, e.g. a memo or JSON message. */
+export function renameReferencesInText(text: string, oldId: string, newId: string): string {
+  const pattern = new RegExp(`(\\{\\{\\s*steps\\.)${escapeRegExp(oldId)}(\\.[a-z][a-zA-Z0-9]*\\s*\\}\\})`, "g");
+  return text.replace(pattern, `$1${newId}$2`);
+}
+
 /** Rewrite every reference to `oldId` (in values and extra) after a step is renamed. */
 export function renameStepReferences(steps: readonly EditorStep[], oldId: string, newId: string): EditorStep[] {
-  const pattern = new RegExp(`(\\{\\{\\s*steps\\.)${escapeRegExp(oldId)}(\\.[a-z][a-zA-Z0-9]*\\s*\\}\\})`, "g");
   const rewrite = (value: unknown): unknown => {
-    if (typeof value === "string") return value.replace(pattern, `$1${newId}$2`);
+    if (typeof value === "string") return renameReferencesInText(value, oldId, newId);
     if (Array.isArray(value)) return value.map(rewrite);
     if (isPlainObject(value)) return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, rewrite(v)]));
     return value;

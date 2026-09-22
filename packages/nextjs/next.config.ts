@@ -22,6 +22,10 @@ const nextConfig: NextConfig = {
     // The whole @x402 scope is externalised rather than individual
     // entrypoints, because the SDK reaches several of them (core, evm, svm).
     config.externals.push("pino-pretty", "lokijs", "encoding", /^@x402\//);
+    // Blockly resolves to its jsdom-backed build under the server's "node"
+    // condition. The editor is client-only (next/dynamic, ssr: false), so the
+    // server compiles that module but never runs it.
+    config.externals.push("jsdom");
     if (dev) {
       config.watchOptions = {
         followSymlinks: true,

@@ -11,6 +11,7 @@ import {
   nextStepId,
   outputsOf,
   referenceOptions,
+  renameReferencesInText,
   renameStepReferences,
   schemaDefault,
   setPath,
@@ -258,6 +259,12 @@ describe("wiring helpers", () => {
     expect(renamed[0]?.id).toBe("launchToken");
     expect(renamed[2]?.values.tokenId).toBe("{{ steps.launchToken.tokenId }}");
     expect(renamed[1]?.values.memo).toBe("log for {{steps.launchToken.symbol}}");
+  });
+
+  it("renames references inside a single string", () => {
+    expect(renameReferencesInText('{"t":"{{steps.a.tokenId}}","u":"{{steps.ab.tokenId}}"}', "a", "b")).toBe(
+      '{"t":"{{steps.b.tokenId}}","u":"{{steps.ab.tokenId}}"}',
+    );
   });
 
   it("does not rename ids that merely share a prefix", () => {
