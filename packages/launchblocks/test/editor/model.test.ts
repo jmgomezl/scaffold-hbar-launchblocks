@@ -251,6 +251,17 @@ describe("wiring helpers", () => {
     expect(referenceOptions(document.steps, 2, "topicId", catalog).map(o => o.stepId)).toEqual(["createTopic"]);
   });
 
+  it("offers amount outputs to amount sockets, and every socket output to a value socket", () => {
+    expect(referenceOptions(document.steps, 2, "amount", catalog).map(o => o.reference)).toContain(
+      "{{steps.createToken.initialSupply}}",
+    );
+    const anything = referenceOptions(document.steps, 2, "value", catalog).map(o => o.reference);
+    expect(anything).toEqual(
+      expect.arrayContaining(["{{steps.createToken.tokenId}}", "{{steps.createTopic.topicId}}"]),
+    );
+    expect(anything).toContain("{{steps.createToken.initialSupply}}");
+  });
+
   it("renames a step and every reference to it", () => {
     const steps = document.steps.map(step => ({ ...step, values: { ...step.values } }));
     (steps[2] as (typeof steps)[number]).values.tokenId = "{{ steps.createToken.tokenId }}";

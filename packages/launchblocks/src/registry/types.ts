@@ -20,7 +20,9 @@ export type FieldKind =
   | "scheduleId"
   | "transactionId"
   | "amount"
-  | "json";
+  | "json"
+  /** Any earlier output or a typed literal; for generic inputs such as contract arguments. */
+  | "value";
 
 export type FieldSpec = {
   /** Param key in `step.params`; dotted for nested params, e.g. `keys.admin`. */

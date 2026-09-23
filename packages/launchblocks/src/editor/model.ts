@@ -12,13 +12,18 @@ import type { FieldKind, FieldSpec } from "../registry/types";
  * express is missing from it.
  */
 
-/** Field kinds that name an on-chain entity and can take an earlier step's output. */
+/**
+ * Field kinds drawn as sockets, which take either a typed literal or an
+ * earlier step's output of the same kind. A `value` socket takes any output.
+ */
 export const REFERENCE_KINDS: ReadonlySet<FieldKind> = new Set([
   "accountId",
   "tokenId",
   "topicId",
   "contractId",
   "scheduleId",
+  "amount",
+  "value",
 ]);
 
 export function isReferenceKind(kind: FieldKind): boolean {
@@ -355,7 +360,13 @@ export function referenceOptions(
   kind: FieldKind,
   catalog: Catalog,
 ): StepOutputRef[] {
-  return steps.slice(0, index).flatMap(step => outputsOf(step, catalog).filter(output => output.kind === kind));
+  return steps
+    .slice(0, index)
+    .flatMap(step =>
+      outputsOf(step, catalog).filter(output =>
+        kind === "value" ? isReferenceKind(output.kind) : output.kind === kind,
+      ),
+    );
 }
 
 /** Rewrite references to step `oldId` inside one string, e.g. a memo or JSON message. */

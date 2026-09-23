@@ -174,7 +174,7 @@ function stepDefinition(entry: StepCatalogEntry) {
           }
         } else if (isReferenceKind(row.field.kind)) {
           this.appendValueInput(row.field.key)
-            .setCheck(row.field.kind)
+            .setCheck(row.field.kind === "value" ? null : row.field.kind)
             .setAlign(Blockly.inputs.Align.RIGHT)
             .appendField(row.field.label);
         } else {
