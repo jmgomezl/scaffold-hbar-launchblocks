@@ -223,7 +223,7 @@ describe("estimateFlowFees", () => {
 });
 
 describe("package managers", () => {
-  it("puts -- before script arguments for npm only", () => {
+  it("puts -- before script arguments only with npm", () => {
     expect(scriptCommands("npm").run("core:run", "a --dry-run")).toBe("npm run core:run -- a --dry-run");
     expect(scriptCommands("pnpm@9.1.0").run("core:run", "a --dry-run")).toBe("pnpm core:run a --dry-run");
     expect(scriptCommands("pnpm").install).toBe("pnpm install");

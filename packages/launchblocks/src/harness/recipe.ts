@@ -107,7 +107,7 @@ export function scriptCommands(packageManager: string) {
   return {
     name,
     install: `${name} install`,
-    /** npm needs `--` before arguments meant for the script. */
+    /** With npm, `--` must separate the arguments meant for the script. */
     run: (script: string, args = "") =>
       npm ? `npm run ${script}${args ? ` -- ${args}` : ""}` : `${name} ${script}${args ? ` ${args}` : ""}`,
     /** Other managers' commands, which would write a second lockfile. */

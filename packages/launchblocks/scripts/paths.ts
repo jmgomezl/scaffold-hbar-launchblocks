@@ -6,7 +6,7 @@ export const PROJECT_ROOT = path.resolve(__dirname, "..", "..", "..");
 
 /**
  * Find a file named on the command line. Workspace scripts run inside the
- * package: npm passes the directory the command was typed in as INIT_CWD,
+ * package. Under npm, INIT_CWD is the directory the command was typed in;
  * other managers set it to the package, so the project root is tried next.
  */
 export function findCallerFile(file: string): { found?: string; tried: string[] } {
