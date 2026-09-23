@@ -19,6 +19,7 @@ import type { RunContext } from "../src/registry/types";
 import type { RunEvent, RunResult } from "../src/runner/runner";
 import { runFlow } from "../src/runner/runner";
 import { createDefaultRegistry } from "../src/steps";
+import { findCallerFile } from "./paths";
 
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
 const RUNS_DIR = path.join(PACKAGE_ROOT, "runs");
@@ -55,9 +56,9 @@ function parseArgs(argv: string[]): Args {
 function loadFlowDocument(source: string): unknown {
   const entry = galleryFlow(source);
   if (entry) return entry.flow;
-  const file = path.resolve(source);
-  if (!existsSync(file)) throw new Error(`No gallery flow or file named "${source}"`);
-  return JSON.parse(readFileSync(file, "utf8"));
+  const { found, tried } = findCallerFile(source);
+  if (!found) throw new Error(`No gallery flow or file named "${source}" (looked at ${tried.join(" and ")})`);
+  return JSON.parse(readFileSync(found, "utf8"));
 }
 
 function loadEnvironment(explicit: string | undefined): void {
