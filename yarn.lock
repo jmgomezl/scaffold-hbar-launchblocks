@@ -3806,6 +3806,7 @@ __metadata:
     tsx: ^4.19.0
     typescript: ^5.8.2
     vitest: ^3.2.0
+    yaml: ^2.8.2
     zod: ^4.1.0
   languageName: unknown
   linkType: soft
@@ -16665,7 +16666,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"yaml@npm:^2.9.0":
+"yaml@npm:^2.8.2, yaml@npm:^2.9.0":
   version: 2.9.1
   resolution: "yaml@npm:2.9.1"
   bin:

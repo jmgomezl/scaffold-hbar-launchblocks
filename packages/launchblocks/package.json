@@ -15,6 +15,7 @@
     "docs": "tsx scripts/docs.ts",
     "doctor": "tsx scripts/doctor.ts",
     "format": "prettier --write './**/*.ts'",
+    "harness-recipe": "tsx scripts/harness-recipe.ts",
     "lint": "eslint",
     "run-flow": "tsx scripts/run-flow.ts",
     "test": "vitest run",
@@ -39,6 +40,7 @@
     "prettier": "^3.5.3",
     "tsx": "^4.19.0",
     "typescript": "^5.8.2",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.0",
+    "yaml": "^2.8.2"
   }
 }

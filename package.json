@@ -15,6 +15,7 @@
     "core:docs": "yarn workspace @sh/launchblocks docs",
     "core:doctor": "yarn workspace @sh/launchblocks doctor",
     "core:format": "yarn workspace @sh/launchblocks format",
+    "core:harness": "yarn workspace @sh/launchblocks harness-recipe",
     "core:lint": "yarn workspace @sh/launchblocks lint",
     "core:run": "yarn workspace @sh/launchblocks run-flow",
     "core:test": "yarn workspace @sh/launchblocks test",

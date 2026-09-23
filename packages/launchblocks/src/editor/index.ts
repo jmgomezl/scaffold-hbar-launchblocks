@@ -12,4 +12,5 @@ export type { StepRef } from "../flow/refs";
 export { FLOW_ID_PATTERN, STEP_ID_PATTERN, isValidStepId } from "../flow/ids";
 export type { FlowInput, Network } from "../flow/schema";
 export type { StepCatalogEntry } from "../registry/catalog";
+export type { FeeEstimate, HarnessRecipe, HarnessRecipeFile } from "../harness/recipe";
 export type { FieldKind, FieldSpec, OutputSpec, StepCategory, StepDocs, StepUi } from "../registry/types";
