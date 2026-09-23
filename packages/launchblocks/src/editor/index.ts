@@ -5,6 +5,8 @@
  * in the Hedera SDK and zod; this module depends on neither.
  */
 export * from "./model";
+export { GALLERY, galleryFlow } from "../gallery";
+export type { GalleryEntry } from "../gallery";
 export { findRefs, parseRef, ref } from "../flow/refs";
 export type { StepRef } from "../flow/refs";
 export { FLOW_ID_PATTERN, STEP_ID_PATTERN, isValidStepId } from "../flow/ids";

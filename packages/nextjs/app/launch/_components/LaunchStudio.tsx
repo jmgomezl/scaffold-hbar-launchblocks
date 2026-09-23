@@ -85,6 +85,9 @@ export function LaunchStudio() {
   const [load, setLoad] = useState<LoadRequest | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceState>({ name: "", steps: [], detachedIds: [] });
   const [description, setDescription] = useState<string | undefined>(undefined);
+  // The loaded flow's id is kept until the user renames it, so an example
+  // (and its export) stays "hts-launch-saucerswap" rather than a slug of its name.
+  const [loaded, setLoaded] = useState<{ id: string; name: string } | null>(null);
   const [issues, setIssues] = useState<FlowIssue[]>([]);
   const [validating, setValidating] = useState(false);
   const [run, setRun] = useState<RunState>({ phase: "idle" });
@@ -101,13 +104,13 @@ export function LaunchStudio() {
 
   const document: EditorDocument = useMemo(
     () => ({
-      id: flowIdFromName(workspace.name),
+      id: loaded && workspace.name === loaded.name ? loaded.id : flowIdFromName(workspace.name),
       name: workspace.name || "My token launch",
       ...(description ? { description } : {}),
       network: "testnet",
       steps: workspace.steps,
     }),
-    [workspace, description],
+    [workspace, description, loaded],
   );
   const flow: FlowInput | null = useMemo(() => (catalog ? editorToFlow(document, catalog) : null), [document, catalog]);
   const flowJson = useMemo(() => (flow ? JSON.stringify(flow) : ""), [flow]);
@@ -117,6 +120,7 @@ export function LaunchStudio() {
       const { document: next, problems } = flowToEditor(source, cat);
       problems.forEach(problem => notification.error(`${problem.stepId}: ${problem.message}`));
       setDescription(next.description);
+      setLoaded({ id: next.id, name: next.name });
       setRun({ phase: "idle" });
       nonce.current += 1;
       setLoad({ document: next, nonce: nonce.current });
@@ -124,23 +128,43 @@ export function LaunchStudio() {
     [setLoad],
   );
 
-  // Catalog and gallery, then the saved flow or the hero example.
+  // Catalog and gallery, then: an example requested with ?example=<id>, else
+  // the saved flow, else the hero example.
   useEffect(() => {
     Promise.all([fetchCatalog(), fetchGallery()]).then(
       ([steps, flows]) => {
         const cat = indexCatalog(steps);
         setEntries(steps);
         setGallery(flows);
-        const saved = readStorage(STORAGE_KEY, () => window.localStorage);
-        let initial: FlowInput | undefined;
-        if (saved) {
-          try {
-            initial = JSON.parse(saved) as FlowInput;
-          } catch {
-            initial = undefined;
-          }
+
+        let saved: FlowInput | undefined;
+        try {
+          const raw = readStorage(STORAGE_KEY, () => window.localStorage);
+          saved = raw ? (JSON.parse(raw) as FlowInput) : undefined;
+        } catch {
+          saved = undefined;
         }
-        initial ??= (flows.find(entry => entry.id === HERO_FLOW) ?? flows[0])?.flow;
+
+        // Read the query directly rather than through useSearchParams, which
+        // would force a Suspense boundary around the whole studio.
+        const requested = new URLSearchParams(window.location.search).get("example");
+        const example = requested ? flows.find(entry => entry.id === requested) : undefined;
+        if (requested) window.history.replaceState(null, "", window.location.pathname);
+
+        // The saved flow is the user's own work unless it is exactly an example as
+        // the studio would save it (same normalisation, same id).
+        const canonical = (flow: FlowInput) => JSON.stringify(editorToFlow(flowToEditor(flow, cat).document, cat));
+        const savedJson = saved ? JSON.stringify(saved) : "";
+        const savedIsOwnWork = !!saved?.steps?.length && !flows.some(entry => canonical(entry.flow) === savedJson);
+        if (
+          example &&
+          (!savedIsOwnWork || window.confirm(`Open the example "${example.title}"? It replaces your current launch.`))
+        ) {
+          openFlow(example.flow, cat);
+          return;
+        }
+
+        const initial = saved ?? (flows.find(entry => entry.id === HERO_FLOW) ?? flows[0])?.flow;
         if (initial) openFlow(initial, cat);
       },
       (error: ApiError) => setLoadError(error.message ?? "Could not load the step catalog"),
