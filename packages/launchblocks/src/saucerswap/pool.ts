@@ -8,6 +8,7 @@ import {
   encodeAddress,
   encodeCall,
   entityIdToEvmAddress,
+  evmAddressToEntityId,
 } from "../hedera/abi";
 import type { DecimalAmount } from "../hedera/amounts";
 import { fromUnits, toLong, toUnits } from "../hedera/amounts";
@@ -28,6 +29,7 @@ import {
   APPROVE_GAS,
   CREATE_PAIR_GAS,
   DEFAULT_FEE_BUFFER_BPS,
+  LP_TOKEN_DECIMALS,
   SELECTORS,
   saucerswapFor,
 } from "./config";
@@ -145,6 +147,19 @@ export async function findPoolAfterWrite(
   return findPool(hedera, tokenId, options.signal);
 }
 
+/**
+ * The pool's LP token. On V1 it is an HTS token the pair creates, a separate
+ * entity from the pair contract, so it comes from the pair's `lpToken()`.
+ */
+export async function readLpToken(
+  hedera: HederaContext,
+  pairEvmAddress: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const raw = await readContract(hedera, { to: pairEvmAddress, data: SELECTORS.lpToken }, signal);
+  return evmAddressToEntityId(decodeAddress(raw));
+}
+
 export type CreatePoolParams = {
   tokenId: string;
   /** Whole tokens to deposit. Together with hbarAmount this sets the opening price. */
@@ -168,6 +183,8 @@ export type CreatePoolResult = {
   pairId: string | null;
   pairEvmAddress: string | null;
   lpTokenId: string | null;
+  /** LP tokens received, in whole tokens. */
+  liquidity: string;
   /** The deposit (addLiquidityETH). */
   transactionId: string;
   createPairTransactionId: string;
@@ -269,13 +286,14 @@ export async function createPoolWithHbar(
     const liquidity = BigInt(result.getUint256(2).toString());
     const pair = await findPoolAfterWrite(hedera, params.tokenId, signal ? { signal } : {});
     const pairId = pair?.contractId ?? null;
+    const lpTokenId = pair ? await readLpToken(hedera, pair.evmAddress, signal) : null;
 
     return {
       tokenId: params.tokenId,
       pairId,
       pairEvmAddress: pair?.evmAddress ?? null,
-      // On V1 the LP token is an HTS token created alongside the pair.
-      lpTokenId: pairId,
+      lpTokenId,
+      liquidity: fromUnits(liquidity, LP_TOKEN_DECIMALS),
       transactionId: response.transactionId.toString(),
       createPairTransactionId,
       allowanceTransactionId,

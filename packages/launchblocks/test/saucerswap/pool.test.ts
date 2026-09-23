@@ -3,7 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { entityIdToEvmAddress } from "../../src/hedera/abi";
 import { tinycentsToTinybars } from "../../src/hedera/mirror";
 import { SAUCERSWAP_DEPLOYMENTS, saucerswapFor } from "../../src/saucerswap/config";
-import { applySlippage, findPool, openingPrice, quotePoolCreation, withBuffer } from "../../src/saucerswap/pool";
+import {
+  applySlippage,
+  findPool,
+  openingPrice,
+  quotePoolCreation,
+  readLpToken,
+  withBuffer,
+} from "../../src/saucerswap/pool";
 import { offlineHederaContext } from "../helpers/hedera";
 
 afterEach(() => vi.restoreAllMocks());
@@ -134,6 +141,15 @@ describe("findPool()", () => {
     } finally {
       hedera.client.close();
     }
+  });
+});
+
+describe("readLpToken()", () => {
+  it("reads the pair's HTS LP token, a separate entity from the pair", async () => {
+    // Testnet pool 0.0.10674241 reports LP token 0.0.10674242.
+    mockMirror({ contractCall: `0x${"a2e042".padStart(64, "0")}` });
+    const hedera = offlineHederaContext();
+    await expect(readLpToken(hedera, "0xf58d203408449148a7411055ead69e0c68f1f129")).resolves.toBe("0.0.10674242");
   });
 });
 

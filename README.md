@@ -160,7 +160,7 @@ Generated from the step definitions with `yarn core:docs`; CI fails if this tabl
 | `hts.associate` | Associate the operator with an existing token; a no-op if already associated. | HTS | `tokenId` | `accountId`, `transactionId` |
 | `hcs.createTopic` | Create an HCS topic as the launch's public, ordered, timestamped log. | HCS | `memo`, `adminKey`, `submitKey` | `topicId`, `transactionId` |
 | `hcs.submitMessage` | Append a text or JSON message to a topic, with consensus timestamp and sequence number. | HCS | `topicId`, `message`, `maxChunks` | `topicId`, `sequenceNumber`, `transactionId` |
-| `saucerswap.createPool` | Create the token's first SaucerSwap V1 liquidity pool against HBAR, making it tradeable. | HTS, SmartContract, MirrorNode, SaucerSwap | `tokenId`, `tokenAmount`, `hbarAmount`, `slippageBps`, `deadlineSeconds`, `gasLimit` | `pairId`, `lpTokenId`, `createPairTransactionId`, `transactionId`, `openingPriceHbar`, `creationFeeHbar` |
+| `saucerswap.createPool` | Create the token's first SaucerSwap V1 liquidity pool against HBAR, making it tradeable. | HTS, SmartContract, MirrorNode, SaucerSwap | `tokenId`, `tokenAmount`, `hbarAmount`, `slippageBps`, `deadlineSeconds`, `gasLimit` | `pairId`, `lpTokenId`, `liquidity`, `createPairTransactionId`, `transactionId`, `openingPriceHbar`, `creationFeeHbar` |
 | `saucerswap.swap` | Buy the token with HBAR through its SaucerSwap V1 pool, proving the market is live. | HTS, SmartContract, MirrorNode, SaucerSwap | `tokenId`, `hbarAmount`, `slippageBps`, `deadlineSeconds`, `gasLimit` | `transactionId`, `tokensOut`, `effectivePriceHbar` |
 <!-- launchblocks:steps:end -->
 

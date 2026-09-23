@@ -69,7 +69,12 @@ export const SELECTORS = {
   getPair: "0xe6a43905",
   /** SaucerSwapV1RouterV3.getAmountsOut(uint256,address[]) → uint256[] */
   getAmountsOut: "0xd06ca61f",
+  /** SaucerSwapV1Pair.lpToken() → address of the pool's HTS LP token */
+  lpToken: "0x5fcbd285",
 } as const;
+
+/** SaucerSwap V1 LP tokens have 8 decimals (checked on the mirror node for a testnet pool). */
+export const LP_TOKEN_DECIMALS = 8;
 
 /**
  * Gas for `SaucerSwapV1Factory.createPair`, which deploys the pair, creates
