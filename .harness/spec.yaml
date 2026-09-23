@@ -1,0 +1,59 @@
+schemaVersion: 2
+
+name: launchblocks-hts-burn
+description: >-
+  Add an hts.burn step to LaunchBlocks by following AGENTS.md: the step and its
+  operation in the core package, unit tests, a gallery flow that uses it, and
+  the regenerated README step table. The Launch Studio must pick the block up
+  with no frontend changes, and the new flow must burn supply on testnet.
+
+agent: claude
+maxAttempts: 3
+
+# Is the template healthy before the agent touches it?
+baseline:
+  commands:
+    - name: install
+      command: yarn install
+      timeoutMs: 600000
+    - name: core-test
+      command: yarn core:test
+      timeoutMs: 300000
+    - name: build
+      command: yarn next:build
+      timeoutMs: 600000
+
+# Tier 0–1 use the default paths: validators/static.json and validators/yarn.json.
+validators:
+  playwright: .harness/validators/playwright-smoke.yaml
+
+# Tier 3: the adversarial validator grades the running studio against this.
+contract: .harness/acceptance-contract.json
+validator:
+  enabled: true
+
+# Tier 3.5. LaunchBlocks signs flows with a server-side operator rather than
+# a browser wallet, so the funded ephemeral account is handed to the flow
+# runner as its operator — through environment variables only, never a file —
+# and the new flow runs on testnet before the app is graded. The runner exits
+# non-zero if any step fails, which fails the attempt.
+chainValidation:
+  enabled: true
+  network: testnet
+  operator:
+    accountIdEnv: HEDERA_OPERATOR_ID
+    privateKeyEnv: HEDERA_OPERATOR_KEY
+  # One account per run, reused across attempts. A burn launch costs about
+  # 14 HBAR (token creation dominates), so this covers three attempts.
+  fundingHbar: 45
+  sweepBack: true
+  deploy:
+    commands:
+      - name: burn-flow-on-testnet
+        command: >-
+          HEDERA_NETWORK=testnet
+          HEDERA_OPERATOR_ID="$HARNESS_SIGNER_ACCOUNT_ID"
+          HEDERA_OPERATOR_KEY="$HARNESS_SIGNER_PRIVATE_KEY"
+          HEDERA_OPERATOR_KEY_TYPE=ecdsa
+          yarn core:run hts-launch-burn
+        timeoutMs: 240000

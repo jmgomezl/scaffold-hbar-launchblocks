@@ -103,6 +103,8 @@ A **step definition** (`defineStep({...})`) bundles, in one object:
 
 The editor and API discover steps through the registry; there is nothing to register in `packages/nextjs`.
 
+`.harness/` holds a hedera-harness recipe that exercises exactly this recipe (adding `hts.burn`). Its `prd.md` is a worked example of the change.
+
 ### Hardhat
 
 - Contracts: `packages/hardhat/contracts/`

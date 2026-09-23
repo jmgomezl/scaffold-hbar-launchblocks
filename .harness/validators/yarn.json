@@ -1,0 +1,16 @@
+{
+  "name": "launchblocks-hts-burn-commands",
+  "description": "Every quality gate CI runs for the core and the app, plus a credential-free dry run that proves the new flow's wiring type-checks. Nothing here needs secrets or the network beyond installing packages.",
+  "requiresNoSecrets": true,
+  "forbiddenCommands": ["npm install", "npm run", "pnpm install", "pnpm run"],
+  "commands": [
+    { "name": "install", "command": "yarn install", "timeoutMs": 600000, "purpose": "Install workspace dependencies." },
+    { "name": "core-test", "command": "yarn core:test", "timeoutMs": 300000, "purpose": "Core unit tests, including the step contract test every registered step must pass." },
+    { "name": "core-lint", "command": "yarn core:lint --max-warnings=0", "timeoutMs": 180000, "purpose": "Lint the core package." },
+    { "name": "core-types", "command": "yarn core:check-types", "timeoutMs": 180000, "purpose": "Strict type check of the core package." },
+    { "name": "docs-check", "command": "yarn core:docs --check", "timeoutMs": 120000, "purpose": "The README step table matches the registry." },
+    { "name": "burn-flow-dry-run", "command": "yarn core:run hts-launch-burn --dry-run", "timeoutMs": 120000, "purpose": "The new gallery flow validates end to end, references and all, without touching the network." },
+    { "name": "next-lint", "command": "yarn next:lint --max-warnings=0", "timeoutMs": 180000, "purpose": "Lint the app." },
+    { "name": "build", "command": "yarn next:build", "timeoutMs": 600000, "purpose": "Production build of the app, including its type check." }
+  ]
+}

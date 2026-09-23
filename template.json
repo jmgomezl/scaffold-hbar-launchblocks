@@ -62,6 +62,22 @@
               "url": "http://localhost:3000"
             }
           ]
+        },
+        {
+          "title": "Optional: extend it with Hedera Harness",
+          "steps": [
+            {
+              "label": "Check the recipe and prerequisites",
+              "command": "{run:harness:doctor}"
+            },
+            {
+              "label": "Let an agent add an hts.burn step, graded by the harness",
+              "command": "{run:harness:run}"
+            },
+            {
+              "text": "See .harness/README.md: the harness forbids .env files in the workspace, so export the operator in your shell."
+            }
+          ]
         }
       ]
     }

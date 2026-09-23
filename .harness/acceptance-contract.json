@@ -1,0 +1,69 @@
+{
+  "name": "launchblocks-hts-burn",
+  "description": "Graded against the running app with no wallet and no operator credentials. The burn itself is proven on testnet by the chainValidation deploy hook before grading.",
+  "baseUrl": "http://localhost:3000",
+  "assertions": [
+    {
+      "id": "C1",
+      "statement": "The Launch Studio loads: the block editor renders with a Launch block and the flow is reported valid.",
+      "howToVerify": [
+        "Open http://localhost:3000/launch.",
+        "Wait up to 30 seconds for the block workspace to render.",
+        "Confirm a block reading 'Launch' with a name field and 'on testnet' is visible.",
+        "Confirm a badge with the text 'valid' is shown in the studio toolbar."
+      ],
+      "severity": "critical",
+      "walletRequired": false,
+      "verifiableWithoutCredentials": true
+    },
+    {
+      "id": "C2",
+      "statement": "The toolbox offers the new step: the 'Tokens · HTS' category contains a block labelled 'Burn tokens'.",
+      "howToVerify": [
+        "On /launch, click the 'Tokens · HTS' category in the toolbox on the left.",
+        "Confirm the flyout that opens contains a block whose title reads 'Burn tokens'.",
+        "Confirm that block has a 'Token' input socket and an 'Amount' field."
+      ],
+      "severity": "critical",
+      "walletRequired": false,
+      "verifiableWithoutCredentials": true
+    },
+    {
+      "id": "C3",
+      "statement": "The new gallery example loads as a valid flow that uses the burn step.",
+      "howToVerify": [
+        "On /launch, open the 'Load an example…' dropdown and choose 'Token launch with a supply burn' (accept the replace prompt if shown).",
+        "Confirm the Launch block now contains, in order: 'Create HTS token', 'Burn tokens', 'Create HCS topic', 'Log to HCS topic'.",
+        "Confirm the 'Burn tokens' block's Token socket holds 'createToken ▸ Token'.",
+        "Confirm the toolbar badge reads 'valid' and the Problems tab lists no problems."
+      ],
+      "severity": "critical",
+      "walletRequired": false,
+      "verifiableWithoutCredentials": true
+    },
+    {
+      "id": "C4",
+      "statement": "The step catalog API describes hts.burn with its inputs.",
+      "howToVerify": [
+        "Open http://localhost:3000/api/launchblocks/steps.",
+        "Confirm the JSON contains an entry whose type is 'hts.burn'.",
+        "Confirm that entry's inputSchema.properties includes 'tokenId' and 'amount', and its ui.label is 'Burn tokens'."
+      ],
+      "severity": "major",
+      "walletRequired": false,
+      "verifiableWithoutCredentials": true
+    },
+    {
+      "id": "C5",
+      "statement": "Exporting the burn example produces a launch.ts that calls burnFungibleToken.",
+      "howToVerify": [
+        "With 'Token launch with a supply burn' loaded on /launch, click 'Export'.",
+        "Select the 'launch.ts' tab and wait for the code to appear.",
+        "Confirm the code contains 'burnFungibleToken(ctx, {' with tokenId set to 'createToken.tokenId'."
+      ],
+      "severity": "major",
+      "walletRequired": false,
+      "verifiableWithoutCredentials": true
+    }
+  ]
+}

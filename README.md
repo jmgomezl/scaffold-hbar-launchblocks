@@ -198,6 +198,7 @@ The integration also refuses to create a pool that already exists, grants the ro
 | `yarn next:dev` | Start the app with the Launch Studio at `/launch`. |
 | `yarn core:test` | The core unit tests (vitest). No network. |
 | `yarn core:docs` | Regenerate the step table in this README. |
+| `yarn harness:doctor` · `yarn harness:validate` · `yarn harness:run` | The [Hedera Harness recipe](#extending-it-with-hedera-harness). |
 | `yarn lint` · `yarn check-types` · `yarn test` | Everything, across packages. |
 
 Gallery flows live in `packages/launchblocks/flows/`: `hts-launch-saucerswap` (the full launch) and `hts-launch-basic` (token with a 1% fee, HCS log and reserve mint; no pool, about 14 ℏ).
@@ -207,6 +208,25 @@ With npm, put `--` before script arguments: `npm run core:run -- <flow> --dry-ru
 ## Adding a step type
 
 Each step is one file under `packages/launchblocks/src/steps/<namespace>/`. The file holds the step's zod input and output schemas, an example output, editor fields, docs, the executor, and codegen. Register it in `src/steps/index.ts` and it appears in the registry, the API and the Launch Studio toolbox with no frontend changes; `yarn core:docs` adds it to this README's step table. A contract test checks every shipped step: its example output must be valid, its editor fields must exist in its schema, it must have docs, and its generated code must parse. [AGENTS.md](AGENTS.md) walks a coding agent through it.
+
+## Extending it with Hedera Harness
+
+`.harness/` is a [hedera-harness](https://github.com/hedera-dev/hedera-harness) recipe. It asks a coding agent to add a **Burn tokens** step (`hts.burn`) by following [AGENTS.md](AGENTS.md), then checks the result itself:
+
+| Tier | Check |
+| --- | --- |
+| 0–1 | The step, operation, tests and gallery flow exist where AGENTS.md puts them; tests, lint, strict types, the README docs check, a dry run of the new flow, and the production build all pass. |
+| 2 | The app boots; `/`, `/launch` and the step and gallery APIs render. |
+| 3 | In the running studio, **Burn tokens** is in the toolbox, the new example loads as valid, and export generates the call. |
+| 3.5 | The new flow burns supply **on testnet**, run as the harness's funded throwaway account. That account is passed to the flow runner only through environment variables. |
+
+The validators were checked in both directions. On the template as shipped they fail with 15 findings, all about the missing step. On a correct implementation they pass with none, and the on-chain check burned real supply. Details, and how to run it, are in [.harness/README.md](.harness/README.md).
+
+```bash
+yarn harness:doctor     # prerequisites and the recipe
+yarn harness:validate   # Tiers 0–2, no agent
+yarn harness:run        # the full agent run
+```
 
 ## Deploying the studio
 

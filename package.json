@@ -38,6 +38,9 @@
     "hardhat:verify": "yarn workspace @sh/hardhat verify",
     "hardhat:verify:mainnet": "yarn workspace @sh/hardhat verify:mainnet",
     "hardhat:verify:testnet": "yarn workspace @sh/hardhat verify:testnet",
+    "harness:doctor": "hedera-harness doctor .harness/spec.yaml",
+    "harness:run": "hedera-harness run .harness/spec.yaml",
+    "harness:validate": "hedera-harness validate .harness/spec.yaml",
     "lint": "yarn next:lint && yarn hardhat:lint && yarn core:lint",
     "next:build": "yarn workspace @sh/nextjs build",
     "next:check-types": "yarn workspace @sh/nextjs check-types",
@@ -53,8 +56,11 @@
   },
   "packageManager": "yarn@3.2.3",
   "devDependencies": {
+    "@hiero-ledger/sdk": "^2.86.2",
+    "hedera-harness": "1.2.2",
     "husky": "^9.1.6",
-    "lint-staged": "^15.2.10"
+    "lint-staged": "^15.2.10",
+    "playwright": "^1.61.1"
   },
   "engines": {
     "node": ">=20.18.3"

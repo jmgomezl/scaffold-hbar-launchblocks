@@ -1,0 +1,59 @@
+{
+  "name": "launchblocks-hts-burn-static",
+  "description": "The hts.burn step, its operation, tests and gallery flow exist where AGENTS.md puts them, are registered, and appear in the generated README table. No env files in the workspace.",
+  "jsonAssertions": [
+    { "file": "package.json", "path": "packageManager", "equals": "yarn@3.2.3" },
+    { "file": "packages/launchblocks/package.json", "path": "name", "equals": "@sh/launchblocks" }
+  ],
+  "fileAssertions": {
+    "required": [
+      "README.md",
+      "AGENTS.md",
+      ".harness/spec.yaml",
+      ".harness/prd.md",
+      "packages/launchblocks/src/steps/hts/burn.ts",
+      "packages/launchblocks/test/steps/hts/burn.test.ts",
+      "packages/launchblocks/flows/hts-launch-burn.json"
+    ],
+    "forbidden": [
+      ".env",
+      "packages/nextjs/.env",
+      "packages/launchblocks/.env",
+      "packages/hardhat/.env"
+    ]
+  },
+  "textAssertions": [
+    {
+      "file": "packages/launchblocks/src/hedera/ops/tokens.ts",
+      "contains": ["export function buildTokenBurn", "export async function burnFungibleToken", "TokenBurnTransaction"]
+    },
+    {
+      "file": "packages/launchblocks/src/steps/hts/burn.ts",
+      "contains": ["\"hts.burn\"", "Burn tokens", "burnFungibleToken"]
+    },
+    {
+      "file": "packages/launchblocks/src/steps/index.ts",
+      "contains": ["htsBurn"]
+    },
+    {
+      "file": "packages/launchblocks/test/steps/hts/burn.test.ts",
+      "contains": ["burnFungibleToken"]
+    },
+    {
+      "file": "packages/launchblocks/test/hedera/ops/tokens.test.ts",
+      "contains": ["buildTokenBurn"]
+    },
+    {
+      "file": "packages/launchblocks/flows/hts-launch-burn.json",
+      "contains": ["\"hts-launch-burn\"", "\"hts.burn\"", "{{steps.burnReserve.newTotalSupply}}"]
+    },
+    {
+      "file": "packages/launchblocks/src/gallery.ts",
+      "contains": ["hts-launch-burn", "Token launch with a supply burn"]
+    },
+    {
+      "file": "README.md",
+      "contains": ["| `hts.burn` |"]
+    }
+  ]
+}

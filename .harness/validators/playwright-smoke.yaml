@@ -1,0 +1,27 @@
+name: launchblocks-smoke
+server:
+  command: yarn next:dev
+  url: http://localhost:3000
+  timeoutMs: 180000
+defaults:
+  timeoutMs: 60000
+  # Blockly and the step catalog load after hydration.
+  hydrationTimeoutMs: 90000
+  # Wallet libraries in the scaffold shell log unrelated console errors; the
+  # acceptance contract checks behaviour instead.
+  failOnConsoleError: false
+routes:
+  - name: home
+    path: /
+  - name: launch-studio
+    path: /launch
+  - name: step-catalog
+    path: /api/launchblocks/steps
+  - name: gallery
+    path: /api/launchblocks/gallery
+forbidden:
+  visibleText:
+    - Application error
+    - Unhandled Runtime Error
+    - Build Error
+    - Could not load the step catalog
