@@ -47,7 +47,7 @@ A single run of the gallery flow `hts-launch-saucerswap`, started from the Launc
 | Router allowance, HCS topic and messages | 1.18 |
 | **Total** | **≈ 59** |
 
-Network fees are priced in USD, so the HBAR amounts move with the exchange rate (these were at about 7.7¢ per ℏ). The cheaper gallery flow, `hts-launch-basic`, has no pool and costs about 14 ℏ.
+Network fees are priced in USD, so the HBAR amounts move with the exchange rate (these were at about 7.7¢ per ℏ). The cheaper gallery flow, `hts-launch-basic`, has no pool and costs about 27 ℏ: its token carries a 1% fee, and a token with custom fees costs twice as much to create (26.02 ℏ measured, against 12.82 ℏ without).
 
 1. **Scaffold the project** (the CLI asks which package manager to use; both work):
 
@@ -198,10 +198,11 @@ The integration also refuses to create a pool that already exists, grants the ro
 | `yarn next:dev` | Start the app with the Launch Studio at `/launch`. |
 | `yarn core:test` | The core unit tests (vitest). No network. |
 | `yarn core:docs` | Regenerate the step table in this README. |
+| `yarn core:harness <flow.json>` | Export a flow as a [Hedera Harness recipe](#export-any-launch-as-a-recipe) into `.harness/`, the same files as the studio's **Export → Harness recipe**. |
 | `yarn harness:doctor` · `yarn harness:validate` · `yarn harness:run` | The [Hedera Harness recipe](#extending-it-with-hedera-harness). |
 | `yarn lint` · `yarn check-types` · `yarn test` | Everything, across packages. |
 
-Gallery flows live in `packages/launchblocks/flows/`: `hts-launch-saucerswap` (the full launch) and `hts-launch-basic` (token with a 1% fee, HCS log and reserve mint; no pool, about 14 ℏ).
+Gallery flows live in `packages/launchblocks/flows/`: `hts-launch-saucerswap` (the full launch) and `hts-launch-basic` (token with a 1% fee, HCS log and reserve mint; no pool, about 27 ℏ).
 
 With npm, put `--` before script arguments: `npm run core:run -- <flow> --dry-run`.
 
@@ -226,6 +227,28 @@ The validators were checked in both directions. On the template as shipped they 
 yarn harness:doctor     # prerequisites and the recipe
 yarn harness:validate   # Tiers 0–2, no agent
 yarn harness:run        # the full agent run
+```
+
+### Export any launch as a recipe
+
+A launch you build can become a recipe of its own. In the Launch Studio, **Export → Harness recipe** downloads it as a zip to unpack at the project root; `yarn core:harness <flow.json>` writes the same files from the terminal. The recipe asks a coding agent to add the launch to the gallery unchanged, then grades the work:
+
+| Tier | Check |
+| --- | --- |
+| 0 | The copy in `packages/launchblocks/flows/` and its gallery entry exist, with the exported ids and step types. No env files. |
+| 1 | Core tests (which validate every gallery flow and round-trip it through the editor), lint and types; the copy is exactly the export; a dry run by gallery id; the production build. |
+| 2 | The app boots, and `/launch?example=<id>` renders. |
+| 3 | The studio lists the example and loads it as valid, the gallery API lists it, and its export has one section per step. |
+| 3.5 | For testnet flows, the launch runs **on testnet** by its gallery id, as the harness's funded throwaway account. |
+
+The spec funds that account from a cost estimate: measured fees per step type, plus the HBAR the flow hands over to pools and swaps, times three attempts with 25% headroom. The harness sweeps back what is left. The files go to `.harness/<flow-id>.spec.yaml` and `.harness/<flow-id>/`, beside the template's own recipe, because the harness takes a spec's parent directory as the project root. A flow that is already a gallery example is refused; rename the launch first.
+
+This was checked with the real harness on the basic flow under a new name, `treasury-launch`. `validate` failed with 6 findings before the flow was in the gallery, all about the missing copy and its registration, and passed with none after, Playwright gate included. The Tier 3.5 command ran the flow on testnet as signer: token [`0.0.10676025`](https://hashscan.io/testnet/token/0.0.10676025), 26.42 ℏ in fees against an estimate of 26.7 ℏ.
+
+```bash
+yarn core:harness my-launch.json                            # or Export → Harness recipe in the studio
+npx hedera-harness validate .harness/my-launch.spec.yaml    # Tiers 0–2, no agent
+npx hedera-harness run .harness/my-launch.spec.yaml         # the agent, then every tier
 ```
 
 ## Deploying the studio

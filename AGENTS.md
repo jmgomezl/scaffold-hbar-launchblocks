@@ -48,6 +48,7 @@ yarn core:test
 yarn core:test:coverage
 yarn core:lint
 yarn core:check-types
+yarn core:harness <flow.json>   # export a flow as a Hedera Harness recipe into .harness/
 
 # Live networks
 yarn hardhat:deploy --network hederaTestnet   # or hederaMainnet
@@ -73,6 +74,7 @@ src/
   registry/   types.ts (StepDefinition contract), define-step.ts, registry.ts (createRegistry, validateFlow)
   runner/     runner.ts (runFlow → RunResult with per-step records, links, events)
   codegen/    typescript.ts (generateLaunchScript, renderExpr)
+  harness/    recipe.ts (generateHarnessRecipe: a flow → a Hedera Harness recipe; STEP_FEE_HBAR cost table)
   hedera/     context.ts (HederaContext, hashscanUrl), client.ts (createHederaContext, hederaContextFromEnv)
   steps/      one folder per namespace (hts/, hcs/, hss/, saucerswap/, …), one file per step type
   errors.ts   LaunchBlocksError subclasses with stable `code`s
@@ -99,11 +101,14 @@ A **step definition** (`defineStep({...})`) bundles, in one object:
 2. Register it in `packages/launchblocks/src/steps/index.ts` (the built-in registry).
 3. Add `test/steps/<namespace>/<action>.test.ts`: validate `input`/`outputExample`, run `codegen` and assert the body, and test `execute` against a stubbed `HederaContext` — no network in unit tests.
 4. If it produces on-chain entities, list them in `ui.outputs` with the right kind so the runner emits Hashscan links.
-5. Run `yarn core:test && yarn core:lint --max-warnings=0 && yarn core:check-types`.
+5. If its network fee is not small, add it to `STEP_FEE_HBAR` in `src/harness/recipe.ts`; exported recipes fund on-chain checks from that table, and unlisted types count as 2 ℏ.
+6. Run `yarn core:test && yarn core:lint --max-warnings=0 && yarn core:check-types`.
 
 The editor and API discover steps through the registry; there is nothing to register in `packages/nextjs`.
 
 `.harness/` holds a hedera-harness recipe that exercises exactly this recipe (adding `hts.burn`). Its `prd.md` is a worked example of the change.
+
+`yarn core:harness <flow.json>` (or **Export → Harness recipe** in the studio) turns any flow into a recipe of its own, `.harness/<flow-id>.spec.yaml` plus `.harness/<flow-id>/`, that asks an agent to add the flow to the gallery unchanged. Keep each spec directly in `.harness/`: the harness takes the spec's parent directory as the project root.
 
 ### Hardhat
 
