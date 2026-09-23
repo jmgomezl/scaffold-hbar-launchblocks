@@ -13,6 +13,7 @@ import { RunPanel } from "./RunPanel";
 import type { Catalog, EditorDocument, FlowInput, StepCatalogEntry } from "@sh/launchblocks/editor";
 import { editorToFlow, flowIdFromName, flowToEditor, indexCatalog, outputsOf } from "@sh/launchblocks/editor";
 import { useTheme } from "next-themes";
+import { EyeIcon, EyeSlashIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { notification } from "~~/utils/scaffold-hbar";
 
 const BlockEditor = dynamic(() => import("./BlockEditor"), {
@@ -22,6 +23,7 @@ const BlockEditor = dynamic(() => import("./BlockEditor"), {
 
 const STORAGE_KEY = "launchblocks.flow.v1";
 const TOKEN_KEY = "launchblocks.runToken";
+const PANEL_KEY = "launchblocks.panel";
 const HERO_FLOW = "hts-launch-saucerswap";
 const POOL_STEP = "saucerswap.createPool";
 
@@ -70,6 +72,8 @@ export function LaunchStudio() {
   const [exportOpen, setExportOpen] = useState(false);
   // Remounts the run log per run so collapsed/expanded choices start fresh.
   const [runKey, setRunKey] = useState(0);
+  // The Run / Problems / Outputs panel can be hidden to give the blocks the room.
+  const [panelOpen, setPanelOpen] = useState(true);
   const fileInput = useRef<HTMLInputElement>(null);
   const nonce = useRef(0);
 
@@ -122,6 +126,20 @@ export function LaunchStudio() {
       (error: ApiError) => setLoadError(error.message ?? "Could not load the step catalog"),
     );
   }, [openFlow]);
+
+  useEffect(() => {
+    if (readStorage(PANEL_KEY, () => window.localStorage) === "hidden") setPanelOpen(false);
+  }, []);
+
+  const togglePanel = (open: boolean) => {
+    setPanelOpen(open);
+    writeStorage(PANEL_KEY, open ? "shown" : "hidden", () => window.localStorage);
+  };
+
+  const showTab = (next: Tab) => {
+    setTab(next);
+    if (!panelOpen) togglePanel(true);
+  };
 
   // Remember the flow across reloads.
   useEffect(() => {
@@ -299,12 +317,21 @@ export function LaunchStudio() {
         {validating ? (
           <span className="badge badge-ghost">checking…</span>
         ) : issues.length ? (
-          <button className="badge badge-error cursor-pointer" onClick={() => setTab("problems")}>
+          <button className="badge badge-error cursor-pointer" onClick={() => showTab("problems")}>
             {issues.length} problem{issues.length === 1 ? "" : "s"}
           </button>
         ) : flow?.steps.length ? (
           <span className="badge badge-success">valid</span>
         ) : null}
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => togglePanel(!panelOpen)}
+          aria-pressed={!panelOpen}
+          title={panelOpen ? "Hide the Run, Problems and Outputs panel" : "Show the Run, Problems and Outputs panel"}
+        >
+          {panelOpen ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+          {panelOpen ? "Hide panel" : "Show panel"}
+        </button>
         <button className="btn btn-sm" disabled={!flow?.steps.length} onClick={() => setExportOpen(true)}>
           Export
         </button>
@@ -319,7 +346,9 @@ export function LaunchStudio() {
       </div>
 
       <div className="flex flex-col lg:min-h-0 lg:grow lg:flex-row">
-        <div className="relative h-[65dvh] min-h-[420px] lg:h-auto lg:grow">
+        <div
+          className={`relative min-h-[420px] lg:h-auto lg:grow ${panelOpen ? "h-[65dvh]" : "h-[calc(100dvh-14rem)]"}`}
+        >
           {catalog ? (
             <BlockEditor
               catalog={catalog}
@@ -335,57 +364,67 @@ export function LaunchStudio() {
           )}
         </div>
 
-        <aside className="flex w-full flex-col border-t border-base-300 bg-base-100 lg:min-h-0 lg:w-[380px] lg:border-l lg:border-t-0">
-          <div role="tablist" className="tabs tabs-bordered px-2 pt-1">
-            <button role="tab" className={`tab ${tab === "run" ? "tab-active" : ""}`} onClick={() => setTab("run")}>
-              Run
-            </button>
-            <button
-              role="tab"
-              className={`tab ${tab === "problems" ? "tab-active" : ""}`}
-              onClick={() => setTab("problems")}
-            >
-              Problems {issues.length ? `(${issues.length})` : ""}
-            </button>
-            <button
-              role="tab"
-              className={`tab ${tab === "outputs" ? "tab-active" : ""}`}
-              onClick={() => setTab("outputs")}
-            >
-              Outputs
-            </button>
-          </div>
-          <div className="p-4 lg:min-h-0 lg:grow lg:overflow-y-auto">
-            {tab === "run" && (
-              <RunPanel
-                key={runKey}
-                steps={steps}
-                run={run}
-                hasPool={workspace.steps.some(step => step.type === POOL_STEP)}
-              />
-            )}
-            {tab === "problems" &&
-              (issues.length || workspace.detachedIds.length ? (
-                <ul className="space-y-2 text-sm">
-                  {workspace.detachedIds.map(id => (
-                    <li key={`detached-${id}`} className="rounded-lg border border-warning/40 p-2">
-                      <span className="font-mono font-semibold">{id}</span> is outside the Launch block and will not
-                      run.
-                    </li>
-                  ))}
-                  {issues.map((issue, index) => (
-                    <li key={`${issue.path}-${index}`} className="rounded-lg border border-error/40 p-2">
-                      {issue.stepId && <span className="font-mono font-semibold">{issue.stepId} · </span>}
-                      {issueText(issue)}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm opacity-70">No problems. The flow is valid and ready to run.</p>
-              ))}
-            {tab === "outputs" && <OutputsPanel outputs={outputs} />}
-          </div>
-        </aside>
+        {panelOpen && (
+          <aside className="flex w-full flex-col border-t border-base-300 bg-base-100 lg:min-h-0 lg:w-[380px] lg:border-l lg:border-t-0">
+            <div role="tablist" className="tabs tabs-bordered items-center px-2 pt-1">
+              <button role="tab" className={`tab ${tab === "run" ? "tab-active" : ""}`} onClick={() => setTab("run")}>
+                Run
+              </button>
+              <button
+                role="tab"
+                className={`tab ${tab === "problems" ? "tab-active" : ""}`}
+                onClick={() => setTab("problems")}
+              >
+                Problems {issues.length ? `(${issues.length})` : ""}
+              </button>
+              <button
+                role="tab"
+                className={`tab ${tab === "outputs" ? "tab-active" : ""}`}
+                onClick={() => setTab("outputs")}
+              >
+                Outputs
+              </button>
+              <button
+                className="btn btn-ghost btn-xs btn-square ml-auto"
+                onClick={() => togglePanel(false)}
+                aria-label="Hide panel"
+                title="Hide panel"
+              >
+                <XMarkIcon className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-4 lg:min-h-0 lg:grow lg:overflow-y-auto">
+              {tab === "run" && (
+                <RunPanel
+                  key={runKey}
+                  steps={steps}
+                  run={run}
+                  hasPool={workspace.steps.some(step => step.type === POOL_STEP)}
+                />
+              )}
+              {tab === "problems" &&
+                (issues.length || workspace.detachedIds.length ? (
+                  <ul className="space-y-2 text-sm">
+                    {workspace.detachedIds.map(id => (
+                      <li key={`detached-${id}`} className="rounded-lg border border-warning/40 p-2">
+                        <span className="font-mono font-semibold">{id}</span> is outside the Launch block and will not
+                        run.
+                      </li>
+                    ))}
+                    {issues.map((issue, index) => (
+                      <li key={`${issue.path}-${index}`} className="rounded-lg border border-error/40 p-2">
+                        {issue.stepId && <span className="font-mono font-semibold">{issue.stepId} · </span>}
+                        {issueText(issue)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm opacity-70">No problems. The flow is valid and ready to run.</p>
+                ))}
+              {tab === "outputs" && <OutputsPanel outputs={outputs} />}
+            </div>
+          </aside>
+        )}
       </div>
 
       {flow && <ExportDialog flow={flow} open={exportOpen} onClose={() => setExportOpen(false)} />}

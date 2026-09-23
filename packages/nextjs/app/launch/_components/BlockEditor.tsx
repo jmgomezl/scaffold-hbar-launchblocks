@@ -77,7 +77,21 @@ export default function BlockEditor({ catalog, load, onChange, onLoadProblems, s
     });
 
     workspace.current = ws;
-    const resize = new ResizeObserver(() => Blockly.svgResize(ws));
+    // Blockly.svgResize compares against a cached size and skips the write
+    // when they match, so if layout settles after inject (late CSS, a panel
+    // toggle during a hot reload) the SVG can stay stale while the cache
+    // claims it is current. Size it from the container every time instead.
+    const fitToContainer = () => {
+      const svg = ws.getParentSvg();
+      const container = svg.parentElement;
+      if (!container) return;
+      const { offsetWidth: width, offsetHeight: height } = container;
+      svg.setAttribute("width", `${width}px`);
+      svg.setAttribute("height", `${height}px`);
+      ws.setCachedParentSvgSize(width, height);
+      ws.resize();
+    };
+    const resize = new ResizeObserver(fitToContainer);
     resize.observe(host.current);
     return () => {
       clearTimeout(syncTimer.current);

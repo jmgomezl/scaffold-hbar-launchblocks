@@ -34,14 +34,14 @@ export const Footer = () => {
       </div>
       <div className="w-full">
         <ul className="menu menu-horizontal w-full">
-          <div className="flex justify-center items-center gap-3 text-sm w-full text-base-content/60">
+          <div className="flex flex-wrap justify-center items-center gap-3 text-sm w-full text-base-content/60">
             <a
-              href="https://github.com/hedera-dev/scaffold-hbar"
+              href="https://github.com/jmgomezl/scaffold-hbar-launchblocks"
               target="_blank"
               rel="noreferrer"
               className="link hover:text-primary"
             >
-              GitHub
+              LaunchBlocks on GitHub
             </a>
             <span className="opacity-30">|</span>
             <span>
@@ -55,6 +55,15 @@ export const Footer = () => {
                 Hedera
               </a>
             </span>
+            <span className="opacity-30">|</span>
+            <a
+              href="https://github.com/hedera-dev/scaffold-hbar"
+              target="_blank"
+              rel="noreferrer"
+              className="link hover:text-primary"
+            >
+              Scaffold-HBAR
+            </a>
             <span className="opacity-30">|</span>
             <a href="https://docs.hedera.com/" target="_blank" rel="noreferrer" className="link hover:text-primary">
               Docs
