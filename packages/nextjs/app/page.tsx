@@ -71,6 +71,23 @@ const UNDER_THE_HOOD = [
   },
 ];
 
+/** What `.harness/` grades after the agent adds `hts.burn`; kept in step with `.harness/README.md`. */
+const HARNESS_TIERS = [
+  {
+    tier: "0–1",
+    body: "The step, its tests and a new example sit where AGENTS.md puts them; tests, lint, strict types, a dry run of the new flow and the production build pass.",
+  },
+  { tier: "2", body: "The app boots, and its pages and the step and gallery APIs render." },
+  {
+    tier: "3",
+    body: "Burn tokens is in the studio toolbox, its example loads as valid, and export generates the call.",
+  },
+  {
+    tier: "3.5",
+    body: "The new flow burns supply on testnet, signed by the harness's own funded throwaway account.",
+  },
+];
+
 const Home: NextPage = () => {
   return (
     <div className="flex grow flex-col">
@@ -225,6 +242,49 @@ const Home: NextPage = () => {
             Quick start and cost of a launch
             <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
           </a>
+        </section>
+
+        <section aria-labelledby="harness-heading" className="grid gap-8 lg:grid-cols-[1fr_1.2fr]">
+          <div>
+            <p className="mb-2 text-sm font-medium uppercase tracking-widest text-primary">Hedera Harness</p>
+            <h2 id="harness-heading" className="mb-3 text-2xl font-bold">
+              Let an agent add the next block
+            </h2>
+            <p className="mb-4 opacity-75">
+              The template ships a Hedera Harness recipe. It asks a coding agent to add a Burn tokens step by following
+              AGENTS.md, then grades the work itself, up to burning real supply on testnet. The checks were tried both
+              ways: 15 findings on the template as shipped, none on a correct implementation.
+            </p>
+            <CopyCommand command="yarn harness:run" />
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+              <a
+                href={`${REPO}/tree/main/.harness`}
+                target="_blank"
+                rel="noreferrer"
+                className="link link-primary inline-flex items-center gap-1"
+              >
+                The recipe and how it was verified
+                <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
+              </a>
+              <a
+                href={`${REPO}/blob/main/.harness/prd.md`}
+                target="_blank"
+                rel="noreferrer"
+                className="link link-primary inline-flex items-center gap-1"
+              >
+                What the agent is asked to build
+                <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
+              </a>
+            </div>
+          </div>
+          <ol className="grid gap-4 sm:grid-cols-2">
+            {HARNESS_TIERS.map(item => (
+              <li key={item.tier} className="rounded-2xl border border-base-300 p-5">
+                <span className="badge badge-primary badge-outline mb-2 font-mono">Tier {item.tier}</span>
+                <p className="text-sm opacity-75">{item.body}</p>
+              </li>
+            ))}
+          </ol>
         </section>
       </div>
     </div>
