@@ -296,6 +296,8 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 | `Could not quote HBAR → …` straight after creating a pool | The mirror node has not caught up yet. The swap step retries; if you call the operations directly, wait a few seconds. |
 | `POOL_EXISTS` | That token already has a SaucerSwap pool against HBAR. Trade against it with `saucerswap.swap`. |
 | npm install fails with `ERESOLVE` | Make sure the root `.npmrc` (`legacy-peer-deps=true`) came with the scaffold; npm workspaces read only the root file. |
+| `CONTRACT_ARTIFACT_MISSING` from **Deploy contract** | The Hardhat contracts are not compiled. Run `yarn hardhat:compile`. |
+| With npm, Hardhat tests fail with `Invalid Chai property: revertedWithCustomError` | Two copies of chai: the matchers attached to vitest's chai 5. Keep `chai` 4 pinned in the root `package.json` so npm hoists the copy both use. |
 
 ## Security notes
 
