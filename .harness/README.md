@@ -24,7 +24,7 @@ Export the operator in your shell instead:
 export HEDERA_OPERATOR_ID=0.0.xxxxx
 export HEDERA_OPERATOR_KEY=<ECDSA private key>
 yarn harness:doctor     # prerequisites, the recipe, every path it references
-yarn harness:validate   # Tiers 0–1 only, no agent; fails until hts.burn exists
+yarn harness:validate   # Tiers 0–2, no agent; fails until hts.burn exists
 yarn harness:run        # the full run: agent, repairs, all tiers
 ```
 
