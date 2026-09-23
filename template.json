@@ -4,9 +4,16 @@
   "version": "0.1.0",
   "create-scaffold-hbar": {
     "capabilities": {
-      "frontend": ["nextjs-app"],
-      "solidityFramework": ["hardhat"],
-      "packageManager": ["yarn", "npm"]
+      "frontend": [
+        "nextjs-app"
+      ],
+      "solidityFramework": [
+        "hardhat"
+      ],
+      "packageManager": [
+        "yarn",
+        "npm"
+      ]
     },
     "defaults": {
       "frontend": "nextjs-app",
@@ -18,23 +25,42 @@
         {
           "title": "Fund a testnet operator",
           "steps": [
-            { "label": "Create a testnet account and top it up", "url": "https://portal.hedera.com/faucet" },
-            { "label": "Copy the env example", "command": "cp packages/nextjs/.env.example packages/nextjs/.env" },
-            { "text": "Paste HEDERA_OPERATOR_ID and HEDERA_OPERATOR_KEY into that file. A full launch costs about 30 HBAR on testnet, most of it the SaucerSwap pool creation fee." }
+            {
+              "label": "Create a testnet account and top it up",
+              "url": "https://portal.hedera.com/faucet"
+            },
+            {
+              "label": "Copy the env example",
+              "command": "cp packages/nextjs/.env.example packages/nextjs/.env"
+            },
+            {
+              "text": "Paste HEDERA_OPERATOR_ID and HEDERA_OPERATOR_KEY into that file. A full launch costs about 60 HBAR on testnet: the SaucerSwap pool and the token's creation fee are most of it."
+            }
           ]
         },
         {
           "title": "Check the setup before spending anything",
           "steps": [
-            { "label": "Verify the operator, network and balance", "command": "{run:core:doctor}" }
+            {
+              "label": "Verify the operator, network and balance",
+              "command": "{run:core:doctor}"
+            }
           ]
         },
         {
           "title": "Launch a token",
           "steps": [
-            { "label": "Run the gallery flow from the terminal", "command": "{run:core:run} hts-launch-saucerswap" },
-            { "label": "Or start the app and use the block editor", "command": "{run:next:dev}" },
-            { "url": "http://localhost:3000" }
+            {
+              "label": "Run the gallery flow from the terminal",
+              "command": "{run:core:run} hts-launch-saucerswap"
+            },
+            {
+              "label": "Or start the app and use the block editor",
+              "command": "{run:next:dev}"
+            },
+            {
+              "url": "http://localhost:3000"
+            }
           ]
         }
       ]

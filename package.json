@@ -12,6 +12,7 @@
   "scripts": {
     "check-types": "yarn next:check-types && yarn hardhat:check-types && yarn core:check-types",
     "core:check-types": "yarn workspace @sh/launchblocks check-types",
+    "core:docs": "yarn workspace @sh/launchblocks docs",
     "core:doctor": "yarn workspace @sh/launchblocks doctor",
     "core:format": "yarn workspace @sh/launchblocks format",
     "core:lint": "yarn workspace @sh/launchblocks lint",

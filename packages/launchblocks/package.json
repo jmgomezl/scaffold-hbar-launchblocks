@@ -12,6 +12,7 @@
   "sideEffects": false,
   "scripts": {
     "check-types": "tsc --noEmit",
+    "docs": "tsx scripts/docs.ts",
     "doctor": "tsx scripts/doctor.ts",
     "format": "prettier --write './**/*.ts'",
     "lint": "eslint",

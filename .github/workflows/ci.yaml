@@ -42,6 +42,9 @@ jobs:
       - name: Core tests
         run: yarn core:test:coverage
 
+      - name: README step reference is up to date
+        run: yarn core:docs --check
+
       - name: Next.js lint
         run: yarn next:lint --max-warnings=0
 
