@@ -74,9 +74,10 @@ src/
   registry/   types.ts (StepDefinition contract), define-step.ts, registry.ts (createRegistry, validateFlow)
   runner/     runner.ts (runFlow → RunResult with per-step records, links, events)
   codegen/    typescript.ts (generateLaunchScript, renderExpr)
+  contracts/  artifacts.ts (loadHardhatArtifact: ABI and bytecode from packages/hardhat/artifacts; node only)
   harness/    recipe.ts (generateHarnessRecipe: a flow → a Hedera Harness recipe; STEP_FEE_HBAR cost table)
   hedera/     context.ts (HederaContext, hashscanUrl), client.ts (createHederaContext, hederaContextFromEnv)
-  steps/      one folder per namespace (hts/, hcs/, hss/, saucerswap/, …), one file per step type
+  steps/      one folder per namespace (hts/, hcs/, hss/, saucerswap/, contract/), one file per step type
   errors.ts   LaunchBlocksError subclasses with stable `code`s
 test/         mirrors src/; test/helpers/fake-steps.ts has network-free steps for runner/registry tests
 ```
@@ -97,7 +98,7 @@ A **step definition** (`defineStep({...})`) bundles, in one object:
 
 #### Adding a step type
 
-1. Create `packages/launchblocks/src/steps/<namespace>/<action>.ts` exporting `defineStep({...})`. Reuse the field kinds in `registry/types.ts` (`tokenId`, `accountId`, `topicId`, `amount`, …) — kinds drive which earlier outputs the editor offers to an input.
+1. Create `packages/launchblocks/src/steps/<namespace>/<action>.ts` exporting `defineStep({...})`. Reuse the field kinds in `registry/types.ts` (`tokenId`, `accountId`, `topicId`, `amount`, …) — kinds drive which earlier outputs the editor offers to an input. Entity ids, `amount` and `value` are sockets; a `value` socket takes any output, for generic inputs like contract arguments.
 2. Register it in `packages/launchblocks/src/steps/index.ts` (the built-in registry).
 3. Add `test/steps/<namespace>/<action>.test.ts`: validate `input`/`outputExample`, run `codegen` and assert the body, and test `execute` against a stubbed `HederaContext` — no network in unit tests.
 4. If it produces on-chain entities, list them in `ui.outputs` with the right kind so the runner emits Hashscan links.

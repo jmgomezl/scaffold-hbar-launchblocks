@@ -36,7 +36,7 @@ const STEPS = [
   {
     Icon: CubeTransparentIcon,
     title: "Compose",
-    body: "Snap steps together. ID sockets take a typed id or an output of an earlier step, dragged from the Outputs drawer.",
+    body: "Snap steps together. Sockets take a typed value or an output of an earlier step, dragged from the Outputs drawer.",
   },
   {
     Icon: CheckBadgeIcon,
@@ -66,8 +66,16 @@ const UNDER_THE_HOOD = [
     body: "The token's first pool with an exact opening price, then a first trade quoted by the router itself.",
   },
   {
+    name: "Schedule Service",
+    body: "Vesting transfers and supply unlocks as long-term schedules, which the network runs on their date with nobody online.",
+  },
+  {
+    name: "Smart contracts",
+    body: "Deploy and call your own Hardhat contracts from blocks, such as a TokenLock that holds the pool's LP tokens for 30 days.",
+  },
+  {
     name: "Mirror node",
-    body: "Free quotes and pool lookups, EVM-alias resolution, exchange rates, and reading the launch log back.",
+    body: "Free quotes, pool and contract reads, EVM-alias resolution, exchange rates, and reading the launch log back.",
   },
 ];
 
@@ -155,7 +163,7 @@ const Home: NextPage = () => {
             Start from an example
           </h2>
           <p className="mb-6 opacity-70">Each opens in the Launch Studio, ready to edit, validate and run.</p>
-          <div className={`grid gap-5 md:grid-cols-2 ${GALLERY.length >= 3 ? "lg:grid-cols-3" : ""}`}>
+          <div className={`grid gap-5 md:grid-cols-2 ${GALLERY.length % 3 === 0 ? "lg:grid-cols-3" : ""}`}>
             {GALLERY.map(entry => (
               <Link
                 key={entry.id}

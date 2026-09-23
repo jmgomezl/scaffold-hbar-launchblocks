@@ -5,7 +5,7 @@
 ![Node ≥ 20.18.3](https://img.shields.io/badge/node-%E2%89%A5%2020.18.3-339933)
 ![Hedera testnet](https://img.shields.io/badge/Hedera-testnet-8259EF)
 
-A [Scaffold-HBAR](https://docs.hedera.com/solutions/tools/scaffold-hbar/index) template for launching a token and giving it a market in one go. Snap blocks together — **create an HTS token → open a public HCS launch log → seed a SaucerSwap pool → make the first trade** — press Run, and watch each block turn green as its transaction reaches consensus. The same launch runs from the terminal, exports as a standalone `launch.ts`, and is stored as a plain JSON file you can review and commit.
+A [Scaffold-HBAR](https://docs.hedera.com/solutions/tools/scaffold-hbar/index) template for launching a token and giving it a market in one go. Snap blocks together — **create an HTS token → open a public HCS launch log → seed a SaucerSwap pool → make the first trade** — press Run, and watch each block turn green as its transaction reaches consensus. Then lock the pool's liquidity in a contract, or schedule supply unlocks the network runs on a date. The same launch runs from the terminal, exports as a standalone `launch.ts`, and is stored as a plain JSON file you can review and commit.
 
 ```bash
 npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblocks
@@ -15,10 +15,12 @@ npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblock
 
 ## What you get
 
-- **Launch Studio** (`/launch`) — a block editor in the style of App Inventor. ID inputs are sockets: type an id, or drag in an output from an earlier step, such as `createToken ▸ Token`. Problems show up on the block they belong to; runs stream live.
+- **Launch Studio** (`/launch`) — a block editor in the style of App Inventor. Id and amount inputs are sockets: type a value, or drag in an output from an earlier step, such as `createToken ▸ Token` or `seedPool ▸ LP tokens received`. Problems show up on the block they belong to; runs stream live.
 - **Flows as JSON** — the editor, the CLI and the API all run the same document. Nothing the editor can do is missing from the JSON.
 - **A SaucerSwap integration that gets the details right** — exact opening prices, the EVM-alias recipient, fee conversion, measured gas limits. See [what makes it hard](#the-saucerswap-integration).
-- **Nine step types** across HTS, HCS, smart contracts and the mirror node, each one schema-checked, documented, tested, and exportable as code.
+- **Your contracts as blocks** — **Deploy contract** and **Call contract** work with any contract in `packages/hardhat`. The included `TokenLock` locks a pool's LP tokens for a set time, so holders can see the liquidity cannot be pulled.
+- **Scheduled transactions** — **Schedule token transfer** and **Schedule a mint** use the Schedule Service's long-term schedules (HIP-423): vesting and supply unlocks that the network runs on their date with nobody online.
+- **Thirteen step types** across HTS, HCS, the Schedule Service, smart contracts and the mirror node, each one schema-checked, documented, tested, and exportable as code.
 - **A terminal runner** with dry runs, code generation, and a JSON record of every run, plus `core:doctor`, which checks your operator account before you spend anything.
 - **Guards for a public demo** — mainnet stays off unless you turn it on, plus an optional run token and a per-client rate limit.
 
@@ -33,6 +35,14 @@ A single run of the gallery flow `hts-launch-saucerswap`, started from the Launc
 | SaucerSwap V1 pool (10 ℏ + 50,000 LBM, opening price exactly 0.0002 ℏ) | [0.0.10674241](https://hashscan.io/testnet/contract/0.0.10674241) |
 | Pool deposit | [0.0.7231440-1790127888-310486314](https://hashscan.io/testnet/transaction/0.0.7231440-1790127888-310486314) |
 | First trade: 1 ℏ → 4,533.0544694 LBM, filled exactly at the quote | [0.0.7231440-1790127891-895373365](https://hashscan.io/testnet/transaction/0.0.7231440-1790127891-895373365) |
+
+The other gallery flows, also run from the Launch Studio:
+
+| What | Where |
+| --- | --- |
+| `hts-launch-locked-liquidity`: a `TokenLock` holding all 707.10677118 LP tokens of the new pool until 2026-10-23 | [lock 0.0.10676443](https://hashscan.io/testnet/contract/0.0.10676443), [LP token 0.0.10676441](https://hashscan.io/testnet/token/0.0.10676441), [log 0.0.10676438](https://hashscan.io/testnet/topic/0.0.10676438) |
+| `hts-launch-scheduled-unlocks`: two 250,000-token unlocks, scheduled for 2026-10-23 and 2026-11-22 | [schedule 0.0.10676533](https://hashscan.io/testnet/schedule/0.0.10676533), [schedule 0.0.10676534](https://hashscan.io/testnet/schedule/0.0.10676534), [token 0.0.10676531](https://hashscan.io/testnet/token/0.0.10676531) |
+| A scheduled mint and a scheduled transfer set 60 s out, which the network ran by itself | [schedule 0.0.10676486](https://hashscan.io/testnet/schedule/0.0.10676486), [schedule 0.0.10676488](https://hashscan.io/testnet/schedule/0.0.10676488) |
 
 ## Quick start
 
@@ -86,6 +96,8 @@ Network fees are priced in USD, so the HBAR amounts move with the exchange rate 
    ```
 
    Then open [http://localhost:3000/launch](http://localhost:3000/launch).
+
+   The **Deploy contract** block deploys contracts compiled from `packages/hardhat`, so compile them first with `yarn hardhat:compile`.
 
 To try it without spending, `yarn core:run hts-launch-saucerswap --dry-run` validates the flow and lists the steps. With npm, put `--` before script arguments so npm does not take the flags itself: `npm run core:run -- hts-launch-saucerswap --dry-run`.
 
@@ -186,12 +198,21 @@ Creating a pool and trading against it takes about twenty lines of SDK calls. Ge
 
 The integration also refuses to create a pool that already exists, grants the router an allowance through the token's ERC-20 facade (the approval SaucerSwap's own front end asks users to sign), and resolves pair contract ids through the mirror node, because pairs are deployed with CREATE2 and their addresses cannot be derived from the id arithmetically.
 
+## Locking liquidity and scheduling unlocks
+
+Two things holders of a new token ask: can the team pull the liquidity, and when does more supply arrive?
+
+**`TokenLock`** (`packages/hardhat/contracts/TokenLock.sol`) holds one token until a release time, then pays everything it holds to a fixed beneficiary. It has no owner and nothing changes after deployment, so no one can move the tokens early, including whoever deployed it. Anyone can trigger a release that is due, and the tokens only go to the beneficiary. In `hts-launch-locked-liquidity`, **Deploy contract** creates it with the pool's LP token, the treasury as beneficiary and 30 days, plus one token association slot so it can receive the LP token. **Transfer tokens** moves `seedPool ▸ LP tokens received` into it, and **Call contract** reads `lockedAmount()` and `releaseTime()` back for free before they go on the HCS log. The pool step reads the LP token from the pair's `lpToken()`: on SaucerSwap V1 it is a separate HTS token, not the pair contract. Deploying the lock costs about 16 ℏ, most of it the ContractCreate fee.
+
+**Scheduled unlocks** use the Schedule Service. **Schedule a mint** and **Schedule token transfer** create a long-term schedule that the network runs on its date; `delaySeconds` can be at most 62 days, the network's limit. Past that, schedule each tranche within 62 days of a run, or lock the tokens in a contract.
+
 ## Hedera services used
 
 - **Token Service (HTS):** fungible tokens with configurable admin, supply, freeze, wipe, pause, KYC and fee-schedule keys; finite or infinite supply; fractional and fixed-HBAR custom fees; minting; transfers; HIP-904 airdrops, which also reach accounts that have not associated the token; association; allowances.
 - **Consensus Service (HCS):** a topic per launch as a public, ordered, timestamped log, with messages in text or JSON and chunking up to 20 KB.
-- **Smart contracts:** SaucerSwap V1 factory and router, called with `ContractExecuteTransaction`, plus each token's ERC-20 facade.
-- **Mirror node:** free read-only contract calls for quotes and pool lookups, account and key verification, EVM alias resolution, exchange rates, and reading the launch log back.
+- **Schedule Service (HSS):** long-term scheduled transactions (HIP-423). A ScheduleCreate with an expiration time and `waitForExpiry` runs a transfer or a mint on its date with nobody online; the operator's signature on the create completes it, and an optional admin key makes it cancellable.
+- **Smart contracts:** your own contracts from `packages/hardhat`, deployed with `ContractCreateFlow` (the bytecode goes to the File Service, then ContractCreate) with token association slots, and called with `ContractExecuteTransaction`; SaucerSwap V1's factory, router and pairs; each token's ERC-20 facade.
+- **Mirror node:** free read-only contract calls for quotes, pool and LP token lookups, and the **Call contract** block's views (after waiting for the mirror node to catch up with earlier writes), account and key verification, EVM alias resolution, exchange rates, and reading the launch log back.
 
 ## Scripts
 
@@ -206,7 +227,7 @@ The integration also refuses to create a pool that already exists, grants the ro
 | `yarn harness:doctor` · `yarn harness:validate` · `yarn harness:run` | The [Hedera Harness recipe](#extending-it-with-hedera-harness). |
 | `yarn lint` · `yarn check-types` · `yarn test` | Everything, across packages. |
 
-Gallery flows live in `packages/launchblocks/flows/`: `hts-launch-saucerswap` (the full launch) and `hts-launch-basic` (token with a 1% fee, HCS log and reserve mint; no pool, about 27 ℏ).
+Gallery flows live in `packages/launchblocks/flows/`: `hts-launch-saucerswap` (the full launch), `hts-launch-locked-liquidity` (the launch with its LP tokens locked in a `TokenLock` for 30 days; about 64 ℏ), `hts-launch-scheduled-unlocks` (a reserve that unlocks in two scheduled tranches; about 14 ℏ) and `hts-launch-basic` (token with a 1% fee, HCS log and reserve mint; no pool, about 27 ℏ).
 
 With npm, put `--` before script arguments: `npm run core:run -- <flow> --dry-run`.
 

@@ -55,6 +55,10 @@
               "command": "{run:core:run} hts-launch-saucerswap"
             },
             {
+              "label": "Compile the contracts, for the Deploy contract block",
+              "command": "{run:hardhat:compile}"
+            },
+            {
               "label": "Or start the app and use the block editor",
               "command": "{run:next:dev}"
             },
