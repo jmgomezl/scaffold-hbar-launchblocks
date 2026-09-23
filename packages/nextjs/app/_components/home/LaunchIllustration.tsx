@@ -1,15 +1,9 @@
+import { BLOCK_COLOUR as COLOUR } from "~~/components/LaunchBlocksMark";
+
 /**
- * A static drawing of the hero flow as it appears in the Launch Studio, in
- * the same colours Blockly derives from each step category's hue. Pure
+ * A static drawing of the hero flow as it appears in the Launch Studio. Pure
  * markup, so it renders on the server and costs no JavaScript.
  */
-
-const COLOUR = {
-  launch: "#3c3c3c",
-  hts: "#5b8da6",
-  hcs: "#9a5ba6",
-  saucerswap: "#a6805b",
-} as const;
 
 type Row = { label: string; id: string; colour: string; reporter?: { text: string; colour: string } };
 

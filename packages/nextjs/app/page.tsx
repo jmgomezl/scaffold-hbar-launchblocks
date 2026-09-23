@@ -11,13 +11,6 @@ import {
   PlayIcon,
   RocketLaunchIcon,
 } from "@heroicons/react/24/outline";
-import { getMetadata } from "~~/utils/scaffold-hbar/getMetadata";
-
-export const metadata = getMetadata({
-  title: "LaunchBlocks",
-  description:
-    "Launch a Hedera token and give it a market, block by block: HTS token, HCS launch log, SaucerSwap pool and first trade, run on testnet or exported as code.",
-});
 
 const REPO = "https://github.com/jmgomezl/scaffold-hbar-launchblocks";
 const SCAFFOLD_COMMAND = "npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblocks";

@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useRef } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bars3Icon, BugAntIcon, MagnifyingGlassIcon, RocketLaunchIcon } from "@heroicons/react/24/outline";
+import { LaunchBlocksMark } from "~~/components/LaunchBlocksMark";
 import { RainbowKitCustomConnectButton } from "~~/components/scaffold-hbar";
 import { useOutsideClick } from "~~/hooks/scaffold-hbar";
 
@@ -87,15 +87,17 @@ export const Header = () => {
             <HeaderMenuLinks />
           </ul>
         </details>
-        <Link href="/" passHref className="hidden lg:flex items-center gap-3 ml-4 mr-6 shrink-0">
-          <div className="flex relative w-9 h-9">
-            <Image alt="Hedera icon" className="cursor-pointer dark:hidden" fill src="/Hedera-Icon-Dark.svg" />
-            <Image alt="Hedera icon" className="cursor-pointer hidden dark:block" fill src="/Hedera-Icon-White.svg" />
-          </div>
-          <div className="flex flex-col">
-            <span className="font-bold leading-tight text-base">Scaffold-HBAR</span>
+        <Link
+          href="/"
+          passHref
+          aria-label="LaunchBlocks home"
+          className="flex items-center gap-2.5 ml-1 mr-4 lg:ml-4 lg:mr-6 shrink-0"
+        >
+          <LaunchBlocksMark className="w-9 h-9" />
+          <div className="hidden sm:flex flex-col">
+            <span className="font-bold leading-tight text-base">LaunchBlocks</span>
             <span className="text-[10px] tracking-wider uppercase text-base-content/50 font-medium">
-              Built on Hedera
+              on Scaffold-HBAR
             </span>
           </div>
         </Link>
