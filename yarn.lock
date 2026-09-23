@@ -3805,6 +3805,7 @@ __metadata:
     prettier: ^3.5.3
     tsx: ^4.19.0
     typescript: ^5.8.2
+    viem: 2.39.0
     vitest: ^3.2.0
     yaml: ^2.8.2
     zod: ^4.1.0

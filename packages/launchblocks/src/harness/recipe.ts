@@ -57,13 +57,18 @@ export type HarnessRecipe = {
 export const STEP_FEE_HBAR: Readonly<Record<string, number>> = {
   "hts.createToken": 13,
   "hts.mint": 0.1,
-  "hts.transfer": 0.1,
+  // 0.66 measured when the transfer uses up a recipient's automatic association slot.
+  "hts.transfer": 0.7,
   "hts.associate": 0.7,
   "hts.airdrop": 1.5,
   "hcs.createTopic": 0.4,
   "hcs.submitMessage": 0.1,
   "saucerswap.createPool": 36,
   "saucerswap.swap": 0.5,
+  // FileCreate, FileAppend, ContractCreate and FileDelete: 15.97 measured for TokenLock.
+  "contract.deploy": 16,
+  // Reads are free; a TokenLock release() cost 0.05.
+  "contract.call": 0.1,
 };
 export const UNKNOWN_STEP_FEE_HBAR = 2;
 /** Custom fees double the token creation fee: 26.02 HBAR measured for the basic gallery flow's token, 12.82 without. */

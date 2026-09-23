@@ -165,6 +165,28 @@ export async function readContract(
 }
 
 /**
+ * Wait until the mirror node has ingested a block that closes at or after
+ * `sinceMs`. Every transaction that reached consensus before then is
+ * included, so a read that follows a write sees it. Returns false on timeout
+ * rather than throwing: the caller reads anyway, with the lag documented.
+ */
+export async function waitForMirror(
+  hedera: Pick<HederaContext, "mirrorBaseUrl">,
+  sinceMs: number,
+  options: { timeoutMs?: number; intervalMs?: number; signal?: AbortSignal } = {},
+): Promise<boolean> {
+  const url = `${hedera.mirrorBaseUrl}/api/v1/blocks?order=desc&limit=1`;
+  const deadline = Date.now() + (options.timeoutMs ?? 20_000);
+  for (;;) {
+    const body = (await mirrorFetch(url, options.signal)) as { blocks?: { timestamp?: { to?: string } }[] } | null;
+    const closedAt = Number(body?.blocks?.[0]?.timestamp?.to ?? 0) * 1000;
+    if (closedAt >= sinceMs) return true;
+    if (Date.now() >= deadline) return false;
+    await new Promise(resolve => setTimeout(resolve, options.intervalMs ?? 1000));
+  }
+}
+
+/**
  * Resolve an EVM address to its Hedera contract id. Contracts deployed with
  * CREATE2 — SaucerSwap pairs among them — have aliased addresses that cannot
  * be derived arithmetically, so the mirror node is the only way back.

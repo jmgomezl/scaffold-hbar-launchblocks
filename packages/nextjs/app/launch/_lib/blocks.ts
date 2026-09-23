@@ -255,7 +255,7 @@ const CATEGORY_NAMES: Record<StepCategory, string> = {
   hss: "Schedules · HSS",
   saucerswap: "SaucerSwap",
   oracle: "Oracles",
-  contract: "Contracts",
+  contract: "Contracts · EVM",
   util: "Utilities",
 };
 

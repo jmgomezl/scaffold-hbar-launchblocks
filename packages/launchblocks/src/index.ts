@@ -8,6 +8,7 @@
 export const LAUNCHBLOCKS_VERSION = "0.1.0";
 
 export * from "./codegen";
+export * from "./contracts";
 export * from "./errors";
 export * from "./flow";
 export * from "./gallery";

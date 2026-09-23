@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "id": "hts-launch-locked-liquidity",
+  "name": "Token launch with locked liquidity",
+  "description": "Create a token and its SaucerSwap market, then lock the pool's LP tokens in a TokenLock contract for 30 days so the liquidity cannot be pulled, and record the lock on the launch's HCS log.",
+  "network": "testnet",
+  "steps": [
+    {
+      "id": "createToken",
+      "type": "hts.createToken",
+      "label": "Create the token",
+      "params": {
+        "name": "LaunchBlocks Locked Demo",
+        "symbol": "LBL",
+        "decimals": 8,
+        "initialSupply": "1000000",
+        "supplyType": "finite",
+        "maxSupply": "1000000",
+        "memo": "Launched with LaunchBlocks",
+        "keys": {
+          "admin": true,
+          "supply": false,
+          "freeze": false,
+          "wipe": false,
+          "pause": false,
+          "kyc": false,
+          "feeSchedule": false
+        }
+      }
+    },
+    {
+      "id": "createLog",
+      "type": "hcs.createTopic",
+      "label": "Open the launch log",
+      "params": {
+        "memo": "{{steps.createToken.symbol}} launch log",
+        "adminKey": true,
+        "submitKey": true
+      }
+    },
+    {
+      "id": "recordLaunch",
+      "type": "hcs.submitMessage",
+      "label": "Record the token",
+      "params": {
+        "topicId": "{{steps.createLog.topicId}}",
+        "message": {
+          "event": "token.launched",
+          "tokenId": "{{steps.createToken.tokenId}}",
+          "symbol": "{{steps.createToken.symbol}}",
+          "supply": "{{steps.createToken.initialSupply}}",
+          "createTx": "{{steps.createToken.transactionId}}"
+        }
+      }
+    },
+    {
+      "id": "seedPool",
+      "type": "saucerswap.createPool",
+      "label": "Seed the SaucerSwap pool",
+      "params": {
+        "tokenId": "{{steps.createToken.tokenId}}",
+        "tokenAmount": "50000",
+        "hbarAmount": "10",
+        "slippageBps": 100,
+        "deadlineSeconds": 180
+      }
+    },
+    {
+      "id": "deployLock",
+      "type": "contract.deploy",
+      "label": "Deploy the liquidity lock",
+      "params": {
+        "contract": "TokenLock",
+        "arg1": "{{steps.seedPool.lpTokenId}}",
+        "arg2": "{{steps.createToken.treasuryAccountId}}",
+        "arg3": "2592000",
+        "autoAssociations": 1
+      }
+    },
+    {
+      "id": "lockLiquidity",
+      "type": "hts.transfer",
+      "label": "Move the LP tokens into the lock",
+      "params": {
+        "tokenId": "{{steps.seedPool.lpTokenId}}",
+        "to": "{{steps.deployLock.accountId}}",
+        "amount": "{{steps.seedPool.liquidity}}",
+        "memo": "Liquidity locked for 30 days"
+      }
+    },
+    {
+      "id": "checkLock",
+      "type": "contract.call",
+      "label": "Read what the lock holds",
+      "params": {
+        "contractId": "{{steps.deployLock.contractId}}",
+        "function": "function lockedAmount() view returns (uint256)"
+      }
+    },
+    {
+      "id": "checkRelease",
+      "type": "contract.call",
+      "label": "Read when it unlocks",
+      "params": {
+        "contractId": "{{steps.deployLock.contractId}}",
+        "function": "function releaseTime() view returns (uint256)"
+      }
+    },
+    {
+      "id": "recordLock",
+      "type": "hcs.submitMessage",
+      "label": "Record the lock",
+      "params": {
+        "topicId": "{{steps.createLog.topicId}}",
+        "message": {
+          "event": "liquidity.locked",
+          "pairId": "{{steps.seedPool.pairId}}",
+          "lpTokenId": "{{steps.seedPool.lpTokenId}}",
+          "lock": "{{steps.deployLock.contractId}}",
+          "lockedUnits": "{{steps.checkLock.result}}",
+          "releaseTime": "{{steps.checkRelease.result}}",
+          "lockTx": "{{steps.lockLiquidity.transactionId}}"
+        }
+      }
+    }
+  ]
+}

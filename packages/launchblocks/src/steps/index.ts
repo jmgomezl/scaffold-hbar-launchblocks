@@ -1,6 +1,8 @@
 import type { StepRegistry } from "../registry/registry";
 import { createRegistry } from "../registry/registry";
 import type { AnyStepDefinition } from "../registry/types";
+import { contractCall } from "./contract/call";
+import { contractDeploy } from "./contract/deploy";
 import { hcsCreateTopic } from "./hcs/create-topic";
 import { hcsSubmitMessage } from "./hcs/submit-message";
 import { htsAirdrop } from "./hts/airdrop";
@@ -22,6 +24,8 @@ export const BUILT_IN_STEPS: readonly AnyStepDefinition[] = [
   hcsSubmitMessage,
   saucerswapCreatePool,
   saucerswapSwap,
+  contractDeploy,
+  contractCall,
 ];
 
 export function createDefaultRegistry(extra: readonly AnyStepDefinition[] = []): StepRegistry {
@@ -29,6 +33,8 @@ export function createDefaultRegistry(extra: readonly AnyStepDefinition[] = []):
 }
 
 export {
+  contractCall,
+  contractDeploy,
   hcsCreateTopic,
   hcsSubmitMessage,
   htsAirdrop,

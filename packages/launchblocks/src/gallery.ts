@@ -1,4 +1,5 @@
 import htsLaunchBasic from "../flows/hts-launch-basic.json";
+import htsLaunchLockedLiquidity from "../flows/hts-launch-locked-liquidity.json";
 import htsLaunchSaucerSwap from "../flows/hts-launch-saucerswap.json";
 import type { FlowInput } from "./flow/schema";
 
@@ -19,6 +20,13 @@ export const GALLERY: readonly GalleryEntry[] = [
     blurb:
       "The full launchpad: create the token, log the launch on HCS, seed its first SaucerSwap V1 pool against HBAR, make the first trade to prove the market is live, and record it.",
     flow: htsLaunchSaucerSwap as FlowInput,
+  },
+  {
+    id: "hts-launch-locked-liquidity",
+    title: "Token launch with locked liquidity",
+    blurb:
+      "The launch with a lock: open the SaucerSwap market, deploy a TokenLock contract, move the pool's LP tokens into it for 30 days, read the lock back, and record it on HCS.",
+    flow: htsLaunchLockedLiquidity as FlowInput,
   },
   {
     id: "hts-launch-basic",
