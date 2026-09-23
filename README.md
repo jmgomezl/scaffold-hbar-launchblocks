@@ -11,7 +11,9 @@ A [Scaffold-HBAR](https://docs.hedera.com/solutions/tools/scaffold-hbar/index) t
 npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblocks
 ```
 
-![Launch Studio after a live testnet run: six blocks, each marked succeeded, with HashScan links for every transaction](docs/images/launch-studio.png)
+![A live testnet run in the Launch Studio, at three times speed: nine blocks light up in turn as each transaction reaches consensus, from creating the token and its SaucerSwap pool to deploying a TokenLock, locking the LP tokens in it, reading the lock back and logging it, while the run log fills with succeeded steps](docs/images/studio-run.gif)
+
+*A real run of `hts-launch-locked-liquidity` on testnet, started from the Launch Studio and shown at three times speed.*
 
 ## What you get
 
@@ -125,9 +127,10 @@ flowchart TB
   Flow -->|"POST /api/launchblocks/flows/run"| Runner["runner"]
   Flow --> Codegen["codegen"] --> Script["launch.ts"]
   Runner --> Registry["step registry: schema, executor, codegen, docs"]
-  Registry --> Ops["Hedera operations: HTS, HCS, SaucerSwap"]
+  Registry --> Ops["Hedera operations: HTS, HCS, HSS, contracts, SaucerSwap"]
+  Hardhat["packages/hardhat: compiled contracts"] -->|ABI and bytecode| Ops
   Ops --> Hedera[("Hedera testnet")]
-  Ops --> Mirror[("mirror node: quotes, aliases, rates")]
+  Ops --> Mirror[("mirror node: quotes, aliases, rates, contract reads")]
 ```
 
 A **flow** is an ordered list of steps. Each step has a `type`, a camelCase `id`, and `params`. A param can use an earlier step's output with `{{steps.<id>.<key>}}`: a param that is exactly one reference keeps the output's type, and a reference inside longer text is interpolated.
@@ -180,9 +183,9 @@ Generated from the step definitions with `yarn core:docs`; CI fails if this tabl
 | `contract.call` | Call a contract function: views and pure functions for free through the mirror node, others as a transaction. | SmartContract, MirrorNode | `contractId`, `function`, `arg1`, `arg2`, `arg3`, `arg4`, `payableHbar`, `gas` | `result`, `transactionId` |
 <!-- launchblocks:steps:end -->
 
-In the studio, the Outputs drawer lists what each step produces. Drag an output onto any id socket that accepts it:
+In the studio, the Outputs drawer lists what each step produces. Drag an output onto any socket that accepts it: ids and amounts take outputs of their kind, and contract arguments take any output.
 
-![The Outputs drawer listing each step's outputs as draggable blocks, such as createToken ▸ Token and seedPool ▸ Pool](docs/images/outputs-drawer.png)
+![The Outputs drawer listing each step's outputs as draggable blocks, such as createToken ▸ Token, createToken ▸ Initial supply and seedPool ▸ LP tokens received](docs/images/outputs-drawer.png)
 
 ## The SaucerSwap integration
 
@@ -203,6 +206,8 @@ The integration also refuses to create a pool that already exists, grants the ro
 Two things holders of a new token ask: can the team pull the liquidity, and when does more supply arrive?
 
 **`TokenLock`** (`packages/hardhat/contracts/TokenLock.sol`) holds one token until a release time, then pays everything it holds to a fixed beneficiary. It has no owner and nothing changes after deployment, so no one can move the tokens early, including whoever deployed it. Anyone can trigger a release that is due, and the tokens only go to the beneficiary. In `hts-launch-locked-liquidity`, **Deploy contract** creates it with the pool's LP token, the treasury as beneficiary and 30 days, plus one token association slot so it can receive the LP token. **Transfer tokens** moves `seedPool ▸ LP tokens received` into it, and **Call contract** reads `lockedAmount()` and `releaseTime()` back for free before they go on the HCS log. The pool step reads the LP token from the pair's `lpToken()`: on SaucerSwap V1 it is a separate HTS token, not the pair contract. Deploying the lock costs about 16 ℏ, most of it the ContractCreate fee.
+
+![The Launch Studio at the end of a testnet run of hts-launch-locked-liquidity: all nine blocks ticked, and the run log listing every step as succeeded with its HashScan links](docs/images/launch-studio.png)
 
 **Scheduled unlocks** use the Schedule Service. **Schedule a mint** and **Schedule token transfer** create a long-term schedule that the network runs on its date; `delaySeconds` can be at most 62 days, the network's limit. Past that, schedule each tranche within 62 days of a run, or lock the tokens in a contract.
 
