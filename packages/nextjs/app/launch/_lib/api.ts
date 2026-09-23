@@ -1,4 +1,4 @@
-import type { FlowInput, StepCatalogEntry } from "@sh/launchblocks/editor";
+import type { FlowInput, HarnessRecipe, StepCatalogEntry } from "@sh/launchblocks/editor";
 
 /** Client for the LaunchBlocks API routes. Types mirror what the server returns. */
 
@@ -73,6 +73,15 @@ export async function generateScript(flow: FlowInput): Promise<string> {
     body: JSON.stringify(flow),
   });
   return (await json<{ source: string }>(response)).source;
+}
+
+export async function exportHarnessRecipe(flow: FlowInput): Promise<HarnessRecipe> {
+  const response = await fetch(`${BASE}/flows/harness`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(flow),
+  });
+  return json<HarnessRecipe>(response);
 }
 
 /**

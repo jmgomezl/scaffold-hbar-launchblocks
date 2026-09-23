@@ -3838,6 +3838,7 @@ __metadata:
     eslint-config-next: ^15.2.3
     eslint-config-prettier: ^10.1.1
     eslint-plugin-prettier: ^5.2.4
+    fflate: ^0.8.2
     next: ^15.2.8
     next-nprogress-bar: ^2.3.13
     next-themes: ^0.4.6
@@ -9513,6 +9514,13 @@ __metadata:
     picomatch:
       optional: true
   checksum: bd537daa9d3cd53887eed35efa0eab2dbb1ca408790e10e024120e7a36c6e9ae2b33710cb8381e35def01bc9c1d7eaba746f886338413e68ff6ebaee07b9a6e8
+  languageName: node
+  linkType: hard
+
+"fflate@npm:^0.8.2":
+  version: 0.8.3
+  resolution: "fflate@npm:0.8.3"
+  checksum: a2a417e8fb5128b946cb397ab59a90e089057cba492f2c17a89c4af6ba8568b3da72ed36ef1efe901df7858a20964ce56e84d282e60498be1947fcc6133bc891
   languageName: node
   linkType: hard
 

@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import type { HederaContext, StepRegistry } from "@sh/launchblocks";
-import { FlowValidationError, LaunchBlocksError, createDefaultRegistry, hederaContextFromEnv } from "@sh/launchblocks";
+import {
+  FlowValidationError,
+  LaunchBlocksError,
+  createDefaultRegistry,
+  hederaContextFromEnv,
+  packageManagerFromUserAgent,
+} from "@sh/launchblocks";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import "server-only";
 
 /**
@@ -13,6 +21,25 @@ let registry: StepRegistry | undefined;
 export function getRegistry(): StepRegistry {
   registry ??= createDefaultRegistry();
   return registry;
+}
+
+/**
+ * The package manager this project runs its scripts with, for commands in
+ * exported recipes: the one that started the server, else the root
+ * package.json's `packageManager`, else npm.
+ */
+export function projectPackageManager(): string {
+  const fromAgent = packageManagerFromUserAgent(process.env.npm_config_user_agent);
+  if (fromAgent) return fromAgent;
+  try {
+    const manifest = JSON.parse(readFileSync(path.join(process.cwd(), "..", "..", "package.json"), "utf8")) as {
+      packageManager?: string;
+    };
+    if (manifest.packageManager) return manifest.packageManager;
+  } catch {
+    // Deployed without the monorepo around it.
+  }
+  return "npm";
 }
 
 /** Build the operator context for one request; the caller must close the client. */

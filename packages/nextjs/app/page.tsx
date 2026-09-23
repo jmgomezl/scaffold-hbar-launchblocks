@@ -253,7 +253,8 @@ const Home: NextPage = () => {
             <p className="mb-4 opacity-75">
               The template ships a Hedera Harness recipe. It asks a coding agent to add a Burn tokens step by following
               AGENTS.md, then grades the work itself, up to burning real supply on testnet. The checks were tried both
-              ways: 15 findings on the template as shipped, none on a correct implementation.
+              ways: 15 findings on the template as shipped, none on a correct implementation. Any launch you build can
+              become a recipe of its own: in the studio, choose Export, then Harness recipe.
             </p>
             <CopyCommand command="yarn harness:run" />
             <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">

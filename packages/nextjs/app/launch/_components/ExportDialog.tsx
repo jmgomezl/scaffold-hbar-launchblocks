@@ -2,14 +2,23 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ApiError } from "../_lib/api";
-import { generateScript } from "../_lib/api";
-import type { FlowInput } from "@sh/launchblocks/editor";
+import { exportHarnessRecipe, generateScript } from "../_lib/api";
+import type { FlowInput, HarnessRecipe } from "@sh/launchblocks/editor";
+import { strToU8, zipSync } from "fflate";
 import { notification } from "~~/utils/scaffold-hbar";
 
-type Tab = "json" | "script";
+type Tab = "json" | "script" | "harness";
 
-function download(filename: string, text: string, type: string) {
-  const url = URL.createObjectURL(new Blob([text], { type }));
+const DESCRIPTION: Record<Tab, string> = {
+  json: "The flow document: open it again here, run it with the core:run script, or commit it next to your app.",
+  script:
+    "A standalone script that performs the same steps with the Hedera SDK, calling the same functions the runner uses.",
+  harness:
+    "A Hedera Harness recipe: a coding agent adds this launch to your app's examples, unchanged, and the harness grades the work itself, up to running the launch on testnet with its own funded account.",
+};
+
+function download(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
@@ -17,11 +26,22 @@ function download(filename: string, text: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
-/** Export the flow as JSON (re-importable, runnable with core:run) or as a standalone launch.ts. */
+/** Every recipe file at its path from the project root, so the zip unpacks in place. */
+function recipeZip(recipe: HarnessRecipe): Blob {
+  const entries = Object.fromEntries(recipe.files.map(file => [file.path, strToU8(file.content)]));
+  return new Blob([zipSync(entries)], { type: "application/zip" });
+}
+
+/**
+ * Export the flow as JSON (re-importable, runnable with core:run), as a
+ * standalone launch.ts, or as a Hedera Harness recipe.
+ */
 export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: boolean; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [tab, setTab] = useState<Tab>("json");
   const [script, setScript] = useState<{ source?: string; error?: ApiError }>({});
+  const [recipe, setRecipe] = useState<{ value?: HarnessRecipe; error?: ApiError }>({});
+  const [recipeFile, setRecipeFile] = useState(0);
   const json = JSON.stringify(flow, null, 2);
 
   useEffect(() => {
@@ -38,8 +58,27 @@ export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: b
     );
   }, [open, tab, flow]);
 
-  const text = tab === "json" ? json : (script.source ?? "");
-  const filename = tab === "json" ? `${flow.id}.json` : "launch.ts";
+  useEffect(() => {
+    if (!open || tab !== "harness") return;
+    setRecipe({});
+    setRecipeFile(0);
+    exportHarnessRecipe(flow).then(
+      value => setRecipe({ value }),
+      (error: ApiError) => setRecipe({ error }),
+    );
+  }, [open, tab, flow]);
+
+  const shownRecipeFile = recipe.value?.files[recipeFile];
+  const text = tab === "json" ? json : tab === "script" ? (script.source ?? "") : (shownRecipeFile?.content ?? "");
+  const error = tab === "script" ? script.error : tab === "harness" ? recipe.error : undefined;
+  const downloadLabel =
+    tab === "json" ? `${flow.id}.json` : tab === "script" ? "launch.ts" : `${flow.id}-harness-recipe.zip`;
+
+  const onDownload = () => {
+    if (tab === "json") download(`${flow.id}.json`, new Blob([json], { type: "application/json" }));
+    else if (tab === "script") download("launch.ts", new Blob([text], { type: "text/typescript" }));
+    else if (recipe.value) download(downloadLabel, recipeZip(recipe.value));
+  };
 
   return (
     <dialog ref={dialog} className="modal" onClose={onClose}>
@@ -52,16 +91,27 @@ export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: b
           <button role="tab" className={`tab ${tab === "script" ? "tab-active" : ""}`} onClick={() => setTab("script")}>
             launch.ts
           </button>
+          <button
+            role="tab"
+            className={`tab ${tab === "harness" ? "tab-active" : ""}`}
+            onClick={() => setTab("harness")}
+          >
+            Harness recipe
+          </button>
         </div>
-        <p className="mb-2 text-xs opacity-70">
-          {tab === "json"
-            ? "The flow document: open it again here, run it with the core:run script, or commit it next to your app."
-            : "A standalone script that performs the same steps with the Hedera SDK, calling the same functions the runner uses."}
-        </p>
-        {script.error && tab === "script" ? (
-          <div className="alert alert-error text-xs">{script.error.message}</div>
+        <p className="mb-2 text-xs opacity-70">{DESCRIPTION[tab]}</p>
+        {tab === "harness" && recipe.value && (
+          <RecipeSummary recipe={recipe.value} selected={recipeFile} onSelect={setRecipeFile} />
+        )}
+        {error ? (
+          <div className="alert alert-error text-xs">
+            <div>
+              <p>{error.message}</p>
+              {error.hint && <p className="mt-1 opacity-80">{error.hint}</p>}
+            </div>
+          </div>
         ) : (
-          <pre className="max-h-[55vh] overflow-auto rounded-lg bg-base-200 p-3 text-xs">
+          <pre className="max-h-[50vh] overflow-auto rounded-lg bg-base-200 p-3 text-xs">
             <code>{text || "Generating…"}</code>
           </pre>
         )}
@@ -78,14 +128,10 @@ export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: b
               }
             }}
           >
-            Copy
+            {tab === "harness" ? "Copy this file" : "Copy"}
           </button>
-          <button
-            className="btn btn-sm btn-primary"
-            disabled={!text}
-            onClick={() => download(filename, text, tab === "json" ? "application/json" : "text/typescript")}
-          >
-            Download {filename}
+          <button className="btn btn-sm btn-primary" disabled={!text} onClick={onDownload}>
+            Download {downloadLabel}
           </button>
           <button className="btn btn-sm btn-ghost" onClick={onClose}>
             Close
@@ -96,5 +142,45 @@ export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: b
         <button aria-label="Close">close</button>
       </form>
     </dialog>
+  );
+}
+
+function RecipeSummary({
+  recipe,
+  selected,
+  onSelect,
+}: {
+  recipe: HarnessRecipe;
+  selected: number;
+  onSelect: (index: number) => void;
+}) {
+  const shortPath = (file: string) => file.replace(`.harness/${recipe.flowId}/`, "").replace(".harness/", "");
+  return (
+    <div className="mb-3 space-y-2 text-xs">
+      <p>
+        One run costs about <strong>{recipe.estimate.perRunHbar} ℏ</strong>.{" "}
+        {recipe.fundingHbar !== undefined
+          ? `The harness funds its own throwaway account with ${recipe.fundingHbar} ℏ from your operator and sweeps back the rest.`
+          : "The launch is not on testnet, so the recipe stops before the on-chain tier."}
+      </p>
+      <p>
+        Unzip at your project root, commit, then run{" "}
+        <code className="rounded bg-base-200 px-1 py-0.5">{recipe.commands.run}</code>. The recipe&apos;s README covers
+        the operator and prerequisites.
+      </p>
+      <div role="tablist" aria-label="Recipe files" className="flex flex-wrap gap-1">
+        {recipe.files.map((file, index) => (
+          <button
+            key={file.path}
+            role="tab"
+            aria-selected={index === selected}
+            className={`btn btn-xs font-mono ${index === selected ? "btn-primary" : "btn-ghost"}`}
+            onClick={() => onSelect(index)}
+          >
+            {shortPath(file.path)}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
