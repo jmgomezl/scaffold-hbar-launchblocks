@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "id": "hts-launch-scheduled-unlocks",
+  "name": "Token launch with scheduled unlocks",
+  "description": "Launch a token with part of its supply held back, and schedule that reserve to unlock in two tranches, at 30 and 60 days, with the Schedule Service. The network mints each tranche on its date with nobody online, and the plan is recorded on the launch's HCS log.",
+  "network": "testnet",
+  "steps": [
+    {
+      "id": "createToken",
+      "type": "hts.createToken",
+      "label": "Create the token",
+      "params": {
+        "name": "LaunchBlocks Unlock Demo",
+        "symbol": "LBU",
+        "decimals": 8,
+        "initialSupply": "1000000",
+        "supplyType": "finite",
+        "maxSupply": "1500000",
+        "memo": "Launched with LaunchBlocks",
+        "keys": {
+          "admin": true,
+          "supply": true,
+          "freeze": false,
+          "wipe": false,
+          "pause": false,
+          "kyc": false,
+          "feeSchedule": false
+        }
+      }
+    },
+    {
+      "id": "createLog",
+      "type": "hcs.createTopic",
+      "label": "Open the launch log",
+      "params": {
+        "memo": "{{steps.createToken.symbol}} launch log",
+        "adminKey": true,
+        "submitKey": true
+      }
+    },
+    {
+      "id": "recordLaunch",
+      "type": "hcs.submitMessage",
+      "label": "Record the token",
+      "params": {
+        "topicId": "{{steps.createLog.topicId}}",
+        "message": {
+          "event": "token.launched",
+          "tokenId": "{{steps.createToken.tokenId}}",
+          "symbol": "{{steps.createToken.symbol}}",
+          "supply": "{{steps.createToken.initialSupply}}",
+          "createTx": "{{steps.createToken.transactionId}}"
+        }
+      }
+    },
+    {
+      "id": "unlockMonth1",
+      "type": "hss.scheduleMint",
+      "label": "Unlock the first reserve tranche",
+      "params": {
+        "tokenId": "{{steps.createToken.tokenId}}",
+        "amount": "250000",
+        "delaySeconds": 2592000,
+        "memo": "Reserve unlock, month 1",
+        "adminKey": true
+      }
+    },
+    {
+      "id": "unlockMonth2",
+      "type": "hss.scheduleMint",
+      "label": "Unlock the second reserve tranche",
+      "params": {
+        "tokenId": "{{steps.createToken.tokenId}}",
+        "amount": "250000",
+        "delaySeconds": 5184000,
+        "memo": "Reserve unlock, month 2",
+        "adminKey": true
+      }
+    },
+    {
+      "id": "recordUnlocks",
+      "type": "hcs.submitMessage",
+      "label": "Record the unlock plan",
+      "params": {
+        "topicId": "{{steps.createLog.topicId}}",
+        "message": {
+          "event": "unlocks.scheduled",
+          "tokenId": "{{steps.createToken.tokenId}}",
+          "month1": {
+            "schedule": "{{steps.unlockMonth1.scheduleId}}",
+            "at": "{{steps.unlockMonth1.executesAt}}",
+            "amount": "250000"
+          },
+          "month2": {
+            "schedule": "{{steps.unlockMonth2.scheduleId}}",
+            "at": "{{steps.unlockMonth2.executesAt}}",
+            "amount": "250000"
+          }
+        }
+      }
+    }
+  ]
+}

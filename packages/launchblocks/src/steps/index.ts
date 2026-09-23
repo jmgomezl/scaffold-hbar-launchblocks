@@ -5,6 +5,8 @@ import { contractCall } from "./contract/call";
 import { contractDeploy } from "./contract/deploy";
 import { hcsCreateTopic } from "./hcs/create-topic";
 import { hcsSubmitMessage } from "./hcs/submit-message";
+import { hssScheduleMint } from "./hss/schedule-mint";
+import { hssScheduleTransfer } from "./hss/schedule-transfer";
 import { htsAirdrop } from "./hts/airdrop";
 import { htsAssociate } from "./hts/associate";
 import { htsCreateToken } from "./hts/create-token";
@@ -22,6 +24,8 @@ export const BUILT_IN_STEPS: readonly AnyStepDefinition[] = [
   htsAssociate,
   hcsCreateTopic,
   hcsSubmitMessage,
+  hssScheduleTransfer,
+  hssScheduleMint,
   saucerswapCreatePool,
   saucerswapSwap,
   contractDeploy,
@@ -37,6 +41,8 @@ export {
   contractDeploy,
   hcsCreateTopic,
   hcsSubmitMessage,
+  hssScheduleMint,
+  hssScheduleTransfer,
   htsAirdrop,
   htsAssociate,
   htsCreateToken,

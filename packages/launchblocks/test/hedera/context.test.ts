@@ -7,6 +7,12 @@ describe("normalizeTransactionId()", () => {
     expect(normalizeTransactionId("0.0.1234@1700000000.123456789")).toBe("0.0.1234-1700000000-123456789");
   });
 
+  it("drops the SDK's ?scheduled suffix, which Hashscan does not parse", () => {
+    expect(normalizeTransactionId("0.0.7231440@1790139542.291994196?scheduled")).toBe(
+      "0.0.7231440-1790139542-291994196",
+    );
+  });
+
   it("leaves mirror node format and unknown strings alone", () => {
     expect(normalizeTransactionId("0.0.1234-1700000000-123456789")).toBe("0.0.1234-1700000000-123456789");
     expect(normalizeTransactionId("garbage")).toBe("garbage");

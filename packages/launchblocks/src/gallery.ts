@@ -1,6 +1,7 @@
 import htsLaunchBasic from "../flows/hts-launch-basic.json";
 import htsLaunchLockedLiquidity from "../flows/hts-launch-locked-liquidity.json";
 import htsLaunchSaucerSwap from "../flows/hts-launch-saucerswap.json";
+import htsLaunchScheduledUnlocks from "../flows/hts-launch-scheduled-unlocks.json";
 import type { FlowInput } from "./flow/schema";
 
 export type GalleryEntry = {
@@ -27,6 +28,13 @@ export const GALLERY: readonly GalleryEntry[] = [
     blurb:
       "The launch with a lock: open the SaucerSwap market, deploy a TokenLock contract, move the pool's LP tokens into it for 30 days, read the lock back, and record it on HCS.",
     flow: htsLaunchLockedLiquidity as FlowInput,
+  },
+  {
+    id: "hts-launch-scheduled-unlocks",
+    title: "Token launch with scheduled unlocks",
+    blurb:
+      "Hold back part of the supply and schedule it to unlock in two tranches, at 30 and 60 days. The network mints each one on its date with nobody online.",
+    flow: htsLaunchScheduledUnlocks as FlowInput,
   },
   {
     id: "hts-launch-basic",

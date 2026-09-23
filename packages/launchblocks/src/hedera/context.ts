@@ -33,11 +33,13 @@ export function hashscanUrl(network: Network, entity: HashscanEntity, id: string
 }
 
 /**
- * The SDK renders transaction ids as `0.0.x@seconds.nanos`; mirror node and
- * Hashscan use `0.0.x-seconds-nanos`. Accepts either and returns the latter.
+ * The SDK renders transaction ids as `0.0.x@seconds.nanos`, with a
+ * `?scheduled` suffix for a scheduled transaction; mirror node and Hashscan
+ * use `0.0.x-seconds-nanos`. Accepts either and returns the latter, whose
+ * Hashscan page lists the schedule's creation and its execution.
  */
 export function normalizeTransactionId(id: string): string {
-  const match = /^(\d+\.\d+\.\d+)[@-](\d+)[.-](\d+)$/.exec(id.trim());
+  const match = /^(\d+\.\d+\.\d+)[@-](\d+)[.-](\d+)(?:\?scheduled(?:=true)?)?$/.exec(id.trim());
   if (!match) return id;
   return `${match[1]}-${match[2]}-${match[3]}`;
 }

@@ -63,6 +63,9 @@ export const STEP_FEE_HBAR: Readonly<Record<string, number>> = {
   "hts.airdrop": 1.5,
   "hcs.createTopic": 0.4,
   "hcs.submitMessage": 0.1,
+  // ScheduleCreate measured at 0.128; the scheduled transaction's own fee is paid when it runs.
+  "hss.scheduleTransfer": 0.3,
+  "hss.scheduleMint": 0.3,
   "saucerswap.createPool": 36,
   "saucerswap.swap": 0.5,
   // FileCreate, FileAppend, ContractCreate and FileDelete: 15.97 measured for TokenLock.
