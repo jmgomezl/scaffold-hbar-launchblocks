@@ -150,3 +150,14 @@
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/*
+ * Blockly hides parts of its UI (e.g. a closed toolbox flyout's scrollbar) by
+ * setting the SVG presentation attribute display="none". Tailwind's preflight
+ * declares `svg { display: block }`, and any CSS rule outranks a presentation
+ * attribute, so those hidden parts stayed painted over the blocks. Restore the
+ * attribute's meaning inside the editor.
+ */
+.injectionDiv [display="none"] {
+  display: none;
+}

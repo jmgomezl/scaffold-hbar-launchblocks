@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import type { ApiError, RunResult, StepRecord } from "../_lib/api";
 import type { StepStatus } from "../_lib/blocks";
-import { ArrowTopRightOnSquareIcon } from "@heroicons/react/24/outline";
+import { ArrowTopRightOnSquareIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 
 export type RunState =
   | { phase: "idle" }
@@ -24,9 +25,17 @@ type Props = {
   hasPool: boolean;
 };
 
-/** Live run log: one row per step with status, timing, explorer links and any error hint. */
+/**
+ * Live run log: one collapsible row per step. Collapsed rows show status,
+ * id and timing; expanding one shows its explorer links and details. Failed
+ * steps start expanded so an error is never hidden behind a click.
+ */
 export function RunPanel({ steps, run, hasPool }: Props) {
   const records = run.phase === "idle" ? {} : run.records;
+  // Explicit user choices per step; unset rows follow the default (open only when failed).
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const isOpen = (id: string, status: StepStatus) => expanded[id] ?? status === "failed";
+  const setAll = (open: boolean) => setExpanded(Object.fromEntries(steps.map(step => [step.id, open])));
 
   if (run.phase === "idle") {
     return (
@@ -58,57 +67,83 @@ export function RunPanel({ steps, run, hasPool }: Props) {
       {run.phase === "done" && (
         <div className={`alert py-2 text-xs ${run.result.status === "succeeded" ? "alert-success" : "alert-warning"}`}>
           {run.result.status === "succeeded"
-            ? "Launch complete. Every step is on-chain; the links below open it on HashScan."
+            ? "Launch complete. Every step is on-chain; expand a step for its HashScan links."
             : `Stopped at ${run.result.error?.stepId}. Earlier steps are on-chain; later ones were skipped.`}
         </div>
       )}
-      <ol className="space-y-2">
+      <div className="flex items-center justify-end gap-1">
+        <button className="btn btn-ghost btn-xs" onClick={() => setAll(true)}>
+          Expand all
+        </button>
+        <button className="btn btn-ghost btn-xs" onClick={() => setAll(false)}>
+          Collapse all
+        </button>
+      </div>
+      <ol className="space-y-1.5">
         {steps.map(step => {
           const record = records[step.id];
           const status: StepStatus = record?.status ?? "pending";
+          const open = isOpen(step.id, status);
+          const hasDetails = !!(record?.links.length || record?.error || typeof record?.outputs?.poolUrl === "string");
           return (
-            <li key={step.id} className="rounded-lg border border-base-300 p-2">
-              <div className="flex items-center gap-2">
+            <li key={step.id} className="rounded-lg border border-base-300">
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-2 py-1.5 text-left disabled:cursor-default"
+                onClick={() => setExpanded(current => ({ ...current, [step.id]: !open }))}
+                disabled={!hasDetails}
+                aria-expanded={hasDetails ? open : undefined}
+              >
+                <ChevronRightIcon
+                  className={`h-3 w-3 shrink-0 transition-transform ${open ? "rotate-90" : ""} ${hasDetails ? "" : "opacity-0"}`}
+                />
                 <span className={`badge badge-sm ${STATUS_BADGE[status]}`}>{status}</span>
                 <span className="font-mono font-semibold">{step.id}</span>
                 <span className="truncate opacity-60">{step.label}</span>
-                {record?.durationMs !== undefined && (
-                  <span className="ml-auto whitespace-nowrap opacity-60">
-                    {(record.durationMs / 1000).toFixed(1)} s
-                  </span>
-                )}
-              </div>
-              {record?.links.length ? (
-                <ul className="mt-1 space-y-0.5">
-                  {record.links.map(link => (
-                    <li key={link.url}>
-                      <a
-                        className="link link-primary inline-flex items-center gap-1 text-xs"
-                        href={link.url}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {link.label}: {link.url.split("/").pop()}
-                        <ArrowTopRightOnSquareIcon className="h-3 w-3" />
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {typeof record?.outputs?.poolUrl === "string" && (
-                <a
-                  className="btn btn-xs btn-outline mt-2"
-                  href={record.outputs.poolUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open the pool on SaucerSwap
-                </a>
-              )}
-              {record?.error && (
-                <div className="mt-1 text-xs text-error">
-                  {record.error.message}
-                  {record.error.hint && <div className="mt-0.5 opacity-80">{record.error.hint}</div>}
+                <span className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap opacity-60">
+                  {!open && record?.links.length ? (
+                    <span className="text-xs">
+                      {record.links.length} link{record.links.length === 1 ? "" : "s"}
+                    </span>
+                  ) : null}
+                  {record?.durationMs !== undefined && <span>{(record.durationMs / 1000).toFixed(1)} s</span>}
+                </span>
+              </button>
+              {open && hasDetails && (
+                <div className="border-t border-base-300 px-2 pb-2 pt-1.5 pl-7">
+                  {record?.links.length ? (
+                    <ul className="space-y-0.5">
+                      {record.links.map(link => (
+                        <li key={link.url}>
+                          <a
+                            className="link link-primary inline-flex items-center gap-1 text-xs"
+                            href={link.url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {link.label}: {link.url.split("/").pop()}
+                            <ArrowTopRightOnSquareIcon className="h-3 w-3" />
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {typeof record?.outputs?.poolUrl === "string" && (
+                    <a
+                      className="btn btn-xs btn-outline mt-2"
+                      href={record.outputs.poolUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open the pool on SaucerSwap
+                    </a>
+                  )}
+                  {record?.error && (
+                    <div className="mt-1 text-xs text-error">
+                      {record.error.message}
+                      {record.error.hint && <div className="mt-0.5 opacity-80">{record.error.hint}</div>}
+                    </div>
+                  )}
                 </div>
               )}
             </li>

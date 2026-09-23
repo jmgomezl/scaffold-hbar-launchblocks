@@ -68,6 +68,8 @@ export function LaunchStudio() {
   const [run, setRun] = useState<RunState>({ phase: "idle" });
   const [tab, setTab] = useState<Tab>("run");
   const [exportOpen, setExportOpen] = useState(false);
+  // Remounts the run log per run so collapsed/expanded choices start fresh.
+  const [runKey, setRunKey] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const nonce = useRef(0);
 
@@ -189,6 +191,7 @@ export function LaunchStudio() {
   const startRun = async (runToken?: string) => {
     if (!flow) return;
     setTab("run");
+    setRunKey(key => key + 1);
     const records: Record<string, StepRecord> = Object.fromEntries(
       flow.steps.map(step => [step.id, { id: step.id, type: step.type, status: "pending" as const, links: [] }]),
     );
@@ -241,9 +244,11 @@ export function LaunchStudio() {
   }
 
   return (
-    // Stops 4rem short of the viewport bottom: the footer's faucet and theme
-    // controls are fixed there and would otherwise sit on top of the blocks.
-    <div className="flex h-[calc(100dvh-8rem)] min-h-[600px] flex-col">
+    // Side by side (lg+), the studio fills the viewport but stops 4rem short
+    // of the bottom, where the footer's faucet and theme controls are fixed.
+    // Stacked, it flows with the page instead, so the footer (which reserves
+    // room for those controls) lands below the run log rather than on it.
+    <div className="flex flex-col lg:h-[calc(100dvh-8rem)] lg:min-h-[600px]">
       <div className="flex flex-wrap items-center gap-2 border-b border-base-300 bg-base-100 px-4 py-2">
         <span className="font-semibold">Launch Studio</span>
         <select
@@ -313,8 +318,8 @@ export function LaunchStudio() {
         </button>
       </div>
 
-      <div className="flex min-h-0 grow flex-col lg:flex-row">
-        <div className="relative min-h-[420px] grow">
+      <div className="flex flex-col lg:min-h-0 lg:grow lg:flex-row">
+        <div className="relative h-[65dvh] min-h-[420px] lg:h-auto lg:grow">
           {catalog ? (
             <BlockEditor
               catalog={catalog}
@@ -330,7 +335,7 @@ export function LaunchStudio() {
           )}
         </div>
 
-        <aside className="flex w-full flex-col border-t border-base-300 bg-base-100 lg:w-[380px] lg:border-l lg:border-t-0">
+        <aside className="flex w-full flex-col border-t border-base-300 bg-base-100 lg:min-h-0 lg:w-[380px] lg:border-l lg:border-t-0">
           <div role="tablist" className="tabs tabs-bordered px-2 pt-1">
             <button role="tab" className={`tab ${tab === "run" ? "tab-active" : ""}`} onClick={() => setTab("run")}>
               Run
@@ -350,9 +355,14 @@ export function LaunchStudio() {
               Outputs
             </button>
           </div>
-          <div className="min-h-0 grow overflow-y-auto p-4">
+          <div className="p-4 lg:min-h-0 lg:grow lg:overflow-y-auto">
             {tab === "run" && (
-              <RunPanel steps={steps} run={run} hasPool={workspace.steps.some(step => step.type === POOL_STEP)} />
+              <RunPanel
+                key={runKey}
+                steps={steps}
+                run={run}
+                hasPool={workspace.steps.some(step => step.type === POOL_STEP)}
+              />
             )}
             {tab === "problems" &&
               (issues.length || workspace.detachedIds.length ? (
