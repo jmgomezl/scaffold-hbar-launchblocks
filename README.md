@@ -107,17 +107,15 @@ All live in `packages/nextjs/.env` and are read on the server only. None of them
 ## How it works
 
 ```mermaid
-flowchart LR
-  subgraph Browser
-    Studio["Launch Studio<br/>(Blockly)"] <-->|editor model| Flow[("flow JSON")]
-  end
-  Flow -->|/api/launchblocks/flows/run| Runner
+flowchart TB
+  Studio["Launch Studio (Blockly)"] <-->|editor model| Flow[("flow JSON")]
   CLI["core:run"] --> Runner
-  Runner --> Registry["step registry<br/>schema · executor · codegen · docs"]
-  Registry --> Ops["Hedera operations<br/>HTS · HCS · SaucerSwap"]
-  Ops --> Hedera[("Hedera testnet")]
-  Ops --> Mirror[("mirror node<br/>quotes · aliases · rates")]
+  Flow -->|"POST /api/launchblocks/flows/run"| Runner["runner"]
   Flow --> Codegen["codegen"] --> Script["launch.ts"]
+  Runner --> Registry["step registry: schema, executor, codegen, docs"]
+  Registry --> Ops["Hedera operations: HTS, HCS, SaucerSwap"]
+  Ops --> Hedera[("Hedera testnet")]
+  Ops --> Mirror[("mirror node: quotes, aliases, rates")]
 ```
 
 A **flow** is an ordered list of steps. Each step has a `type`, a camelCase `id`, and `params`. A param can use an earlier step's output with `{{steps.<id>.<key>}}`: a param that is exactly one reference keeps the output's type, and a reference inside longer text is interpolated.
