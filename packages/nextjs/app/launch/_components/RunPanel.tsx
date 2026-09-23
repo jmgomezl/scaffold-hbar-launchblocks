@@ -37,7 +37,8 @@ export function RunPanel({ steps, run, hasPool }: Props) {
         </p>
         {hasPool && (
           <div className="alert alert-info py-2 text-xs">
-            Seeding a SaucerSwap pool costs a creation fee of roughly 26 ℏ on testnet, paid by the operator.
+            Seeding a SaucerSwap pool costs about 33 ℏ on testnet (SaucerSwap&apos;s fee plus creating the pool&apos;s
+            LP token), on top of the HBAR you deposit. A full launch is about 60 ℏ.
           </div>
         )}
         <p className="opacity-70">Press Run to watch each block light up as its transaction reaches consensus.</p>

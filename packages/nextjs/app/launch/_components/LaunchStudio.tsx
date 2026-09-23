@@ -241,7 +241,9 @@ export function LaunchStudio() {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-4rem)] min-h-[600px] flex-col">
+    // Stops 4rem short of the viewport bottom: the footer's faucet and theme
+    // controls are fixed there and would otherwise sit on top of the blocks.
+    <div className="flex h-[calc(100dvh-8rem)] min-h-[600px] flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-base-300 bg-base-100 px-4 py-2">
         <span className="font-semibold">Launch Studio</span>
         <select

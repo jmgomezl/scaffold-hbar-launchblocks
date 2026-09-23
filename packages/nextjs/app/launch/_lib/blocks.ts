@@ -105,6 +105,21 @@ function shortLabel(field: FieldSpec): string {
   return field.label.replace(/\s+key$/i, "").toLowerCase();
 }
 
+/**
+ * Text input that shows an em dash while empty. Blockly draws an empty text
+ * field as a small blank box, which reads as an unchecked checkbox; the dash
+ * marks it as an optional value left unset. Only the drawing changes: the
+ * value stays "" and editing shows the real input.
+ */
+export class OptionalTextField extends Blockly.FieldTextInput {
+  protected override getText_(): string | null {
+    const editing = super.getText_();
+    if (editing !== null) return editing;
+    const value = this.getValue();
+    return value === null || value === "" ? "—" : null;
+  }
+}
+
 const idValidator = (value: string) => (isValidStepId(value) ? value : null);
 const numberValidator = (value: string) =>
   value === "" || /^-?\d*\.?\d*$/.test(value) || parseRef(value) ? value : null;
@@ -123,9 +138,9 @@ function fieldFor(entry: StepCatalogEntry, field: FieldSpec): Blockly.Field {
     case "json":
       return new FieldMultilineInput(String(initial));
     case "number":
-      return new Blockly.FieldTextInput(String(initial), numberValidator);
+      return new OptionalTextField(String(initial), numberValidator);
     default:
-      return new Blockly.FieldTextInput(String(initial));
+      return new OptionalTextField(String(initial));
   }
 }
 
@@ -206,7 +221,7 @@ export function defineBlocks(catalog: Catalog): void {
 
   Blockly.Blocks[LITERAL_BLOCK] = {
     init(this: Blockly.Block) {
-      this.appendDummyInput().appendField(new Blockly.FieldTextInput(""), LITERAL_FIELD);
+      this.appendDummyInput().appendField(new OptionalTextField(""), LITERAL_FIELD);
       this.setOutput(true, null);
       this.setColour("#9aa4b2");
       this.setTooltip("Type an id such as 0.0.12345, or drop an output from the Outputs drawer here.");
