@@ -273,6 +273,14 @@ function specYaml({ flow, pm, agent, maxAttempts, estimate, fundingHbar, paths }
       "  sweepBack: true",
       "  deploy:",
       "    commands:",
+      // Deploy contract reads Hardhat's artifacts, which a fresh checkout does not have.
+      ...(flow.steps.some(step => step.type === "contract.deploy")
+        ? [
+            "      - name: compile-contracts",
+            `        command: ${q(pm.run("hardhat:compile"))}`,
+            "        timeoutMs: 300000",
+          ]
+        : []),
       "      - name: flow-on-testnet",
       "        command: >-",
       "          HEDERA_NETWORK=testnet",

@@ -78,6 +78,24 @@ describe("generateHarnessRecipe", () => {
     expect(spec.chainValidation.fundingHbar).toBe(recipe.fundingHbar);
   });
 
+  it("compiles the Hardhat contracts before a flow that deploys one runs on testnet", () => {
+    const deploys = parseYaml(
+      file(
+        generateHarnessRecipe(renamed("hts-launch-locked-liquidity", "my-locked-launch"), registry, {
+          packageManager: "npm",
+        }),
+        ".spec.yaml",
+      ),
+    ).chainValidation.deploy.commands.map((entry: { name: string; command: string }) => [entry.name, entry.command]);
+    expect(deploys[0]).toEqual(["compile-contracts", "npm run hardhat:compile"]);
+    expect(deploys[1]?.[0]).toBe("flow-on-testnet");
+
+    const spec = parseYaml(file(recipe, ".spec.yaml"));
+    expect(spec.chainValidation.deploy.commands.map((entry: { name: string }) => entry.name)).toEqual([
+      "flow-on-testnet",
+    ]);
+  });
+
   it("funds three attempts of the estimated cost with headroom", () => {
     // createToken 13, createLog 0.4, recordLaunch 0.1, seedPool 36 + 10, firstTrade 0.5 + 1, recordMarket 0.1
     expect(recipe.estimate.perRunHbar).toBe(61.1);
