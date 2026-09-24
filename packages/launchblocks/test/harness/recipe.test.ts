@@ -197,6 +197,20 @@ describe("generateHarnessRecipe", () => {
     }
   });
 
+  it("in copy mode, exports a gallery example as a copy under a new id and name", () => {
+    const hero = galleryFlow("hts-launch-basic")?.flow;
+    const copy = generateHarnessRecipe(hero, registry, { packageManager: "npm", galleryConflict: "copy" });
+    expect(copy.copiedFrom).toEqual({ id: "hts-launch-basic", name: "HTS token launch with HCS log" });
+    expect(copy.flowId).toBe("hts-launch-basic-copy");
+    expect(copy.specPath).toBe(".harness/hts-launch-basic-copy.spec.yaml");
+    expect(JSON.parse(file(copy, "flow.json"))).toMatchObject({
+      id: "hts-launch-basic-copy",
+      name: "HTS token launch with HCS log (copy)",
+    });
+    expect(file(copy, "prd.md")).toContain('title: "HTS token launch with HCS log (copy)"');
+    expect(recipe.copiedFrom).toBeUndefined();
+  });
+
   it("refuses an invalid flow", () => {
     const broken = renamed("hts-launch-basic", "broken", { steps: [{ id: "x", type: "hts.nope", params: {} }] });
     expect(() => generateHarnessRecipe(broken, registry, { packageManager: "npm" })).toThrow(FlowValidationError);

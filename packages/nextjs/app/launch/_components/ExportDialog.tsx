@@ -72,7 +72,11 @@ export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: b
   const text = tab === "json" ? json : tab === "script" ? (script.source ?? "") : (shownRecipeFile?.content ?? "");
   const error = tab === "script" ? script.error : tab === "harness" ? recipe.error : undefined;
   const downloadLabel =
-    tab === "json" ? `${flow.id}.json` : tab === "script" ? "launch.ts" : `${flow.id}-harness-recipe.zip`;
+    tab === "json"
+      ? `${flow.id}.json`
+      : tab === "script"
+        ? "launch.ts"
+        : `${recipe.value?.flowId ?? flow.id}-harness-recipe.zip`;
 
   const onDownload = () => {
     if (tab === "json") download(`${flow.id}.json`, new Blob([json], { type: "application/json" }));
@@ -157,6 +161,13 @@ function RecipeSummary({
   const shortPath = (file: string) => file.replace(`.harness/${recipe.flowId}/`, "").replace(".harness/", "");
   return (
     <div className="mb-3 space-y-2 text-xs">
+      {recipe.copiedFrom && (
+        <div role="note" className="rounded-lg bg-info/15 px-3 py-2">
+          “{recipe.copiedFrom.name}” is one of the built-in examples, so the recipe adds it as a copy, “
+          {recipe.copiedFrom.name} (copy)”, with the id <code>{recipe.flowId}</code>. Rename the launch to choose your
+          own name.
+        </div>
+      )}
       <p>
         One run costs about <strong>{recipe.estimate.perRunHbar} ℏ</strong>.{" "}
         {recipe.fundingHbar !== undefined

@@ -8,7 +8,11 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   try {
     const document = await readJsonBody(req);
-    const recipe = generateHarnessRecipe(document, getRegistry(), { packageManager: projectPackageManager() });
+    // A built-in example is exported as a copy, so a click on Export never dead-ends.
+    const recipe = generateHarnessRecipe(document, getRegistry(), {
+      packageManager: projectPackageManager(),
+      galleryConflict: "copy",
+    });
     return NextResponse.json(recipe);
   } catch (error) {
     return errorResponse(error);

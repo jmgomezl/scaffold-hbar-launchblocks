@@ -25,6 +25,11 @@ export type HarnessRecipeOptions = {
   /** Agent preset the harness drives. */
   agent?: string;
   maxAttempts?: number;
+  /**
+   * What to do with a flow that is already a gallery example: refuse it (the
+   * default), or export a copy under a new id and name, as the studio does.
+   */
+  galleryConflict?: "refuse" | "copy";
 };
 
 export type HarnessRecipeFile = { path: string; content: string };
@@ -47,6 +52,8 @@ export type HarnessRecipe = {
   /** HBAR the harness moves to its throwaway account; absent when the flow is not on testnet. */
   fundingHbar?: number;
   commands: { doctor: string; validate: string; run: string };
+  /** The gallery example this recipe copies, when it was exported under a new id and name. */
+  copiedFrom?: { id: string; name: string };
 };
 
 /**
@@ -137,11 +144,16 @@ export function generateHarnessRecipe(
   registry: StepRegistry,
   options: HarnessRecipeOptions,
 ): HarnessRecipe {
-  const flow = registry.validateFlow(document);
-  if (GALLERY.some(entry => entry.id === flow.id)) {
-    throw new LaunchBlocksError("RECIPE_ALREADY_IN_GALLERY", `"${flow.id}" is already a gallery example`, {
-      hint: "Give the launch a new name (its id follows the name) so the recipe adds a new example.",
-    });
+  let flow = registry.validateFlow(document);
+  let copiedFrom: HarnessRecipe["copiedFrom"];
+  if (isGalleryId(flow.id)) {
+    if (options.galleryConflict !== "copy") {
+      throw new LaunchBlocksError("RECIPE_ALREADY_IN_GALLERY", `"${flow.id}" is already a gallery example`, {
+        hint: "Give the launch a new name (its id follows the name) so the recipe adds a new example.",
+      });
+    }
+    copiedFrom = { id: flow.id, name: flow.name };
+    flow = { ...flow, id: copyId(flow.id), name: `${flow.name} (copy)`.slice(0, 120) };
   }
 
   const pm = scriptCommands(options.packageManager);
@@ -187,7 +199,21 @@ export function generateHarnessRecipe(
     estimate,
     ...(fundingHbar !== undefined ? { fundingHbar } : {}),
     commands,
+    ...(copiedFrom ? { copiedFrom } : {}),
   };
+}
+
+function isGalleryId(id: string): boolean {
+  return GALLERY.some(entry => entry.id === id);
+}
+
+/** `<id>-copy`, or `<id>-copy-2` and so on, kept within the 64-character id limit. */
+function copyId(id: string): string {
+  for (let n = 1; ; n += 1) {
+    const suffix = n === 1 ? "-copy" : `-copy-${n}`;
+    const candidate = `${id.slice(0, 64 - suffix.length).replace(/-+$/, "")}${suffix}`;
+    if (!isGalleryId(candidate)) return candidate;
+  }
 }
 
 // ── Files ───────────────────────────────────────────────────────────────────
