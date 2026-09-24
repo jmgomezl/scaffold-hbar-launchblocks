@@ -1,4 +1,5 @@
 import htsLaunchBasic from "../flows/hts-launch-basic.json";
+import htsLaunchBurn from "../flows/hts-launch-burn.json";
 import htsLaunchLockedLiquidity from "../flows/hts-launch-locked-liquidity.json";
 import htsLaunchSaucerSwap from "../flows/hts-launch-saucerswap.json";
 import htsLaunchScheduledUnlocks from "../flows/hts-launch-scheduled-unlocks.json";
@@ -42,6 +43,13 @@ export const GALLERY: readonly GalleryEntry[] = [
     blurb:
       "Fungible token with a fractional fee, finite supply and a public HCS launch log; mints a reserve and records it.",
     flow: htsLaunchBasic as FlowInput,
+  },
+  {
+    id: "hts-launch-burn",
+    title: "Token launch with a supply burn",
+    blurb:
+      "Create the token, burn part of the unsold reserve to prove circulating supply went down, and record the burn on an HCS log.",
+    flow: htsLaunchBurn as FlowInput,
   },
 ];
 

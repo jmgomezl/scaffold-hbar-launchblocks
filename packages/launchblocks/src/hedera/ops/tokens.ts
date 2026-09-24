@@ -7,6 +7,7 @@ import {
   Hbar,
   TokenAirdropTransaction,
   TokenAssociateTransaction,
+  TokenBurnTransaction,
   TokenCreateTransaction,
   TokenId,
   TokenInfoQuery,
@@ -248,6 +249,40 @@ export async function mintFungibleToken(hedera: HederaContext, params: MintParam
       tokenId: params.tokenId,
       transactionId,
       mintedUnits: tx.amount?.toString() ?? "0",
+      newTotalSupplyUnits: total,
+      newTotalSupply: fromUnits(total, decimals),
+    };
+  });
+}
+
+export type BurnParams = { tokenId: string; amount: DecimalAmount };
+export type BurnResult = {
+  tokenId: string;
+  transactionId: string;
+  burnedUnits: string;
+  newTotalSupplyUnits: string;
+  newTotalSupply: string;
+};
+
+export function buildTokenBurn(params: BurnParams, decimals: number): TokenBurnTransaction {
+  return new TokenBurnTransaction()
+    .setTokenId(TokenId.fromString(params.tokenId))
+    .setAmount(toLong(toUnits(params.amount, decimals)));
+}
+
+/** Burn supply from the treasury (the operator). Needs the token's supply key. */
+export async function burnFungibleToken(hedera: HederaContext, params: BurnParams): Promise<BurnResult> {
+  const { decimals } = await getTokenInfo(hedera, params.tokenId);
+  const tx = buildTokenBurn(params, decimals);
+  return submit(hedera, tx, `Burning ${params.amount} of ${params.tokenId}`, (receipt, transactionId) => {
+    if (!receipt.totalSupply) {
+      throw new LaunchBlocksError("RECEIPT_INCOMPLETE", "Burn succeeded but the receipt has no total supply");
+    }
+    const total = receipt.totalSupply.toString();
+    return {
+      tokenId: params.tokenId,
+      transactionId,
+      burnedUnits: tx.amount?.toString() ?? "0",
       newTotalSupplyUnits: total,
       newTotalSupply: fromUnits(total, decimals),
     };

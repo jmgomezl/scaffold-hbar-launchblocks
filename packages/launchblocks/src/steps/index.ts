@@ -9,6 +9,7 @@ import { hssScheduleMint } from "./hss/schedule-mint";
 import { hssScheduleTransfer } from "./hss/schedule-transfer";
 import { htsAirdrop } from "./hts/airdrop";
 import { htsAssociate } from "./hts/associate";
+import { htsBurn } from "./hts/burn";
 import { htsCreateToken } from "./hts/create-token";
 import { htsMint } from "./hts/mint";
 import { htsTransfer } from "./hts/transfer";
@@ -19,6 +20,7 @@ import { saucerswapSwap } from "./saucerswap/swap";
 export const BUILT_IN_STEPS: readonly AnyStepDefinition[] = [
   htsCreateToken,
   htsMint,
+  htsBurn,
   htsTransfer,
   htsAirdrop,
   htsAssociate,
@@ -45,6 +47,7 @@ export {
   hssScheduleTransfer,
   htsAirdrop,
   htsAssociate,
+  htsBurn,
   htsCreateToken,
   htsMint,
   htsTransfer,

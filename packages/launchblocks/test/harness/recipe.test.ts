@@ -240,7 +240,7 @@ describe("estimateFlowFees", () => {
 
   it("counts an unlisted step type at the default", () => {
     const flow = registry.validateFlow(renamed("hts-launch-basic", "basic"));
-    const unlisted = estimateFlowFees({ ...flow, steps: [{ id: "burn", type: "hts.burn", params: {} }] });
+    const unlisted = estimateFlowFees({ ...flow, steps: [{ id: "wipe", type: "hts.wipe", params: {} }] });
     expect(unlisted.lines[0]?.feeHbar).toBe(2);
   });
 

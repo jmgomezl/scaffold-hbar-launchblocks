@@ -64,6 +64,7 @@ export type HarnessRecipe = {
 export const STEP_FEE_HBAR: Readonly<Record<string, number>> = {
   "hts.createToken": 13,
   "hts.mint": 0.1,
+  "hts.burn": 0.1,
   // 0.66 measured when the transfer uses up a recipient's automatic association slot.
   "hts.transfer": 0.7,
   "hts.associate": 0.7,

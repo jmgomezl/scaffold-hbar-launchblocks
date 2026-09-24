@@ -6,6 +6,7 @@ import type { CreateFungibleTokenParams, TokenKeys } from "../../../src/hedera/o
 import {
   buildTokenAirdrop,
   buildTokenAssociate,
+  buildTokenBurn,
   buildTokenCreate,
   buildTokenMint,
   buildTokenTransfer,
@@ -121,6 +122,14 @@ describe("buildTokenCreate()", () => {
 describe("buildTokenMint()", () => {
   it("scales the amount by the token's decimals", () => {
     const tx = buildTokenMint({ tokenId: "0.0.9", amount: "12.5" }, 2);
+    expect(tx.tokenId?.toString()).toBe("0.0.9");
+    expect(tx.amount?.toString()).toBe("1250");
+  });
+});
+
+describe("buildTokenBurn()", () => {
+  it("scales the amount by the token's decimals", () => {
+    const tx = buildTokenBurn({ tokenId: "0.0.9", amount: "12.5" }, 2);
     expect(tx.tokenId?.toString()).toBe("0.0.9");
     expect(tx.amount?.toString()).toBe("1250");
   });

@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "hts-launch-burn",
+  "name": "Token launch with a supply burn",
+  "description": "Create a fungible token, burn part of the unsold reserve, and record the burn on a public HCS log.",
+  "network": "testnet",
+  "steps": [
+    {
+      "id": "createToken",
+      "type": "hts.createToken",
+      "label": "Create the token",
+      "params": {
+        "name": "LaunchBlocks Burn Demo",
+        "symbol": "LBB",
+        "decimals": 8,
+        "initialSupply": "1000000",
+        "supplyType": "infinite",
+        "keys": { "admin": true, "supply": true, "freeze": false, "wipe": false, "pause": false, "kyc": false, "feeSchedule": false }
+      }
+    },
+    {
+      "id": "burnReserve",
+      "type": "hts.burn",
+      "label": "Burn the unsold reserve",
+      "params": { "tokenId": "{{steps.createToken.tokenId}}", "amount": "100000" }
+    },
+    {
+      "id": "createLog",
+      "type": "hcs.createTopic",
+      "label": "Open the burn log",
+      "params": { "memo": "{{steps.createToken.symbol}} burn log" }
+    },
+    {
+      "id": "recordBurn",
+      "type": "hcs.submitMessage",
+      "label": "Record the burn",
+      "params": {
+        "topicId": "{{steps.createLog.topicId}}",
+        "message": {
+          "event": "supply.burned",
+          "tokenId": "{{steps.createToken.tokenId}}",
+          "burned": "100000",
+          "newTotalSupply": "{{steps.burnReserve.newTotalSupply}}",
+          "burnTx": "{{steps.burnReserve.transactionId}}"
+        }
+      }
+    }
+  ]
+}

@@ -250,6 +250,7 @@ Generated from the step definitions with `yarn core:docs`; CI fails if this tabl
 | --- | --- | --- | --- | --- |
 | `hts.createToken` | Create a fungible HTS token with configurable keys, supply type and custom fees. | HTS | `name`, `symbol`, `decimals`, `initialSupply`, `supplyType`, `maxSupply`, `memo`, `keys.admin`, `keys.supply`, `keys.freeze`, `keys.wipe`, `keys.pause`, `keys.kyc`, `keys.feeSchedule`, `fractionalFee.numerator`, `fractionalFee.denominator`, `fractionalFee.assessment`, `fixedHbarFee.amountHbar` | `tokenId`, `treasuryAccountId`, `transactionId`, `symbol`, `decimals`, `initialSupply` |
 | `hts.mint` | Mint additional supply into the treasury (requires the supply key). | HTS | `tokenId`, `amount` | `tokenId`, `transactionId`, `newTotalSupply` |
+| `hts.burn` | Burn supply from the treasury (requires the supply key). | HTS | `tokenId`, `amount` | `tokenId`, `transactionId`, `newTotalSupply` |
 | `hts.transfer` | Transfer tokens from the treasury to an associated account. | HTS | `tokenId`, `to`, `amount`, `memo` | `to`, `transactionId` |
 | `hts.airdrop` | Airdrop tokens to early supporters without requiring association (HIP-904). | HTS | `tokenId`, `recipients`, `memo` | `transactionId`, `recipientCount`, `pendingCount` |
 | `hts.associate` | Associate the operator with an existing token; a no-op if already associated. | HTS | `tokenId` | `accountId`, `transactionId` |
@@ -313,7 +314,7 @@ Two things holders of a new token ask: can the team pull the liquidity, and when
 | `yarn harness:doctor` · `yarn harness:validate` · `yarn harness:run` | The [Hedera Harness recipe](#extending-it-with-hedera-harness). |
 | `yarn lint` · `yarn check-types` · `yarn test` | Everything, across packages. |
 
-Gallery flows live in `packages/launchblocks/flows/`: `hts-launch-saucerswap` (the full launch), `hts-launch-locked-liquidity` (the launch with its LP tokens locked in a `TokenLock` for 30 days; about 64 ℏ), `hts-launch-scheduled-unlocks` (a reserve that unlocks in two scheduled tranches; about 14 ℏ) and `hts-launch-basic` (token with a 1% fee, HCS log and reserve mint; no pool, about 27 ℏ).
+Gallery flows live in `packages/launchblocks/flows/`: `hts-launch-saucerswap` (the full launch), `hts-launch-locked-liquidity` (the launch with its LP tokens locked in a `TokenLock` for 30 days; about 64 ℏ), `hts-launch-scheduled-unlocks` (a reserve that unlocks in two scheduled tranches; about 14 ℏ), `hts-launch-basic` (token with a 1% fee, HCS log and reserve mint; no pool, about 27 ℏ) and `hts-launch-burn` (token, a supply burn and an HCS log; about 13 ℏ).
 
 With npm, put `--` before script arguments: `npm run core:run -- <flow> --dry-run`.
 
