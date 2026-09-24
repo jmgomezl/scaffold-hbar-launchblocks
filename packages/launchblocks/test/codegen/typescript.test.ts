@@ -4,7 +4,9 @@ import { describe, expect, it } from "vitest";
 import { generateLaunchScript, renderExpr } from "../../src/codegen/typescript";
 import { FlowValidationError } from "../../src/errors";
 import { ref } from "../../src/flow/refs";
+import { GALLERY } from "../../src/gallery";
 import { createRegistry } from "../../src/registry/registry";
+import { createDefaultRegistry } from "../../src/steps";
 import { FAKE_STEPS } from "../helpers/fake-steps";
 
 const registry = createRegistry(FAKE_STEPS);
@@ -54,6 +56,52 @@ describe("renderExpr()", () => {
     expect(renderExpr({ tokenId: ref("mint", "tokenId"), "odd-key": 1, empty: {} })).toBe(
       '{ tokenId: mint.tokenId, "odd-key": 1, empty: {} }',
     );
+  });
+});
+
+describe("generateLaunchScript() naming and comments", () => {
+  const registry = createDefaultRegistry();
+
+  it("renames a step whose id matches an imported operation, and every reference to it", () => {
+    const source = generateLaunchScript(GALLERY.find(entry => entry.id === "hts-launch-usd-price")!.flow, registry);
+    expect(source).toContain('const priceInUsdResult = await step("priceInUsd", async () => {');
+    expect(source).toContain("return await priceInUsd(ctx, {");
+    expect(source).toContain("hbarAmount: priceInUsdResult.hbarAmount");
+    expect(source).not.toMatch(/const priceInUsd =/);
+  });
+
+  it("checks outputs that may be null before passing them on", () => {
+    const source = generateLaunchScript(
+      GALLERY.find(entry => entry.id === "hts-launch-locked-liquidity")!.flow,
+      registry,
+    );
+    expect(source).toContain('required(seedPool.lpTokenId, "seedPool.lpTokenId")');
+    expect(source).toContain("function required<T>(");
+  });
+
+  it("keeps labels, names and descriptions inside their comments", () => {
+    const source = generateLaunchScript(
+      {
+        schemaVersion: 1,
+        id: "comments",
+        name: "Name */ process.exit(1); /*",
+        description: "First line\nSecond */ line",
+        network: "testnet",
+        steps: [
+          {
+            id: "createToken",
+            type: "hts.createToken",
+            label: "Label\nprocess.exit(1)",
+            params: { name: "Demo", symbol: "DMO", initialSupply: "1" },
+          },
+        ],
+      },
+      registry,
+    );
+    expect(source).toContain("// 1. createToken: Label process.exit(1) (hts.createToken)");
+    expect(source).not.toMatch(/^process\.exit/m);
+    // The only "*/" left is the one that closes the header.
+    expect(source.indexOf("*/")).toBe(source.indexOf(" */\n") + 1);
   });
 });
 
