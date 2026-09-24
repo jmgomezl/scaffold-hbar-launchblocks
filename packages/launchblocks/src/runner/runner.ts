@@ -49,10 +49,17 @@ export type RunEvent =
   | { type: "step:error"; step: StepRecord }
   | { type: "flow:end"; result: RunResult };
 
+/**
+ * Called with each step's input after its references resolve and it parses,
+ * just before it runs. Throwing stops that step, which fails the run.
+ */
+export type BeforeStep = (step: StepEnvelope, input: unknown, earlier: StepOutputs) => void;
+
 export type RunOptions = {
   registry: StepRegistry;
   ctx: RunContext;
   onEvent?: (event: RunEvent) => void;
+  beforeStep?: BeforeStep;
 };
 
 /**
@@ -87,7 +94,7 @@ export async function runFlow(document: unknown, options: RunOptions): Promise<R
     emit({ type: "step:start", step: record });
 
     try {
-      const result = await executeStep(step, definition, outputs, ctx);
+      const result = await executeStep(step, definition, outputs, ctx, options.beforeStep);
       record.input = result.input;
       record.outputs = result.outputs;
       record.links = linksFor(definition, result.outputs, flow.network);
@@ -131,11 +138,25 @@ async function executeStep(
   definition: AnyStepDefinition,
   outputs: StepOutputs,
   ctx: RunContext,
+  beforeStep: BeforeStep | undefined,
 ): Promise<{ input: unknown; outputs: Record<string, unknown> }> {
   throwIfAborted(ctx.signal);
 
   const resolved = resolveRefs(step.params, outputs);
-  const input = definition.input.parse(resolved);
+  // Validation already checked literals and wiring types, so a failure here
+  // is an earlier step's actual output not fitting (e.g. a null LP token id).
+  const parsedInput = definition.input.safeParse(resolved);
+  if (!parsedInput.success) {
+    const problems = parsedInput.error.issues.map(i => `${i.path.join(".") || "<root>"}: ${i.message}`).join("; ");
+    throw new StepExecutionError({
+      stepId: step.id,
+      stepType: step.type,
+      message: `its input is invalid once references resolve (${problems})`,
+      hint: "An earlier step produced a value this step cannot take: check what that step returned.",
+    });
+  }
+  const input = parsedInput.data;
+  beforeStep?.(step, input, outputs);
   const raw = await definition.execute(input, ctx);
 
   const parsedOutput = definition.output.safeParse(raw);
