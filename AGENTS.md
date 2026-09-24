@@ -2,7 +2,7 @@
 
 Briefing for coding agents in this app (Cursor, Claude Code, Codex). Claude Code loads it through `CLAUDE.md`.
 
-This is **LaunchBlocks**, a Scaffold-HBAR template: a visual, block-based HTS token launchpad on Hedera. A launch is a *flow* (ordered JSON steps) that the app renders as Blockly blocks, runs from Next.js API routes with an operator key, and exports as a standalone `launch.ts`. Next.js App Router, wallet connect, Debug Contracts, and Hedera networks (testnet, mainnet, local fork). The CLI may have left only Hardhat or only Foundry.
+This is **LaunchBlocks**, a Scaffold-HBAR template: a visual, block-based HTS token launchpad on Hedera. A launch is a *flow* (ordered JSON steps) that the app renders as Blockly blocks, runs from Next.js API routes with an operator key (or in the page, signed by a visitor's Hedera wallet), and exports as a standalone `launch.ts`. Next.js App Router, wallet connect, Debug Contracts, and Hedera networks (testnet, mainnet, local fork). The CLI may have left only Hardhat or only Foundry.
 
 Use the package manager this project was created with — see `packageManager` in the root `package.json`, or the lockfile. The command examples below are written for the package manager this copy was scaffolded with; run the same script names through whichever one the project uses.
 
@@ -18,6 +18,7 @@ Product rules that shape every change:
 2. **No general-purpose blocks.** No if/loop/variable blocks. Every block is exactly one step type in the registry.
 3. **One hero use case.** The HTS launch → SaucerSwap pool flow is the headline; other steps and gallery flows are "also included".
 4. **Never log or return an operator key.** `HederaContext` holds it; nothing serializes it.
+5. **Every step works with a wallet too.** A wallet context has `hedera.signer` and no `operatorKey`. Send transactions through `send`, `submit` or `sendContract` (`hedera/ops/submit.ts`), never `execute` directly, and when `hedera.signer` is set, read from the mirror node (`hedera/mirror.ts`) instead of paid queries such as `TokenInfoQuery`: the wallet would have to approve each one.
 
 ## Commands
 
@@ -76,9 +77,12 @@ src/
   codegen/    typescript.ts (generateLaunchScript, renderExpr)
   contracts/  artifacts.ts (loadHardhatArtifact: ABI and bytecode from packages/hardhat/artifacts; node only)
   harness/    recipe.ts (generateHarnessRecipe: a flow → a Hedera Harness recipe; STEP_FEE_HBAR cost table)
-  hedera/     context.ts (HederaContext, hashscanUrl), client.ts (createHederaContext, hederaContextFromEnv)
+  hedera/     context.ts (HederaContext, hashscanUrl), client.ts (createHederaContext, hederaContextFromEnv),
+              wallet.ts (walletHederaContext: a connected wallet signs), mirror.ts (mirror node reads),
+              ops/submit.ts (send, submit, sendContract: operator or wallet), errors.ts (translate statuses and wallet refusals)
   steps/      one folder per namespace (hts/, hcs/, hss/, saucerswap/, contract/), one file per step type
   errors.ts   LaunchBlocksError subclasses with stable `code`s
+  browser.ts  the entry for wallet runs in the page (no Node built-ins); editor/ is the editor's entry
 test/         mirrors src/; test/helpers/fake-steps.ts has network-free steps for runner/registry tests
 ```
 
@@ -100,7 +104,7 @@ A **step definition** (`defineStep({...})`) bundles, in one object:
 
 1. Create `packages/launchblocks/src/steps/<namespace>/<action>.ts` exporting `defineStep({...})`. Reuse the field kinds in `registry/types.ts` (`tokenId`, `accountId`, `topicId`, `amount`, …) — kinds drive which earlier outputs the editor offers to an input. Entity ids, `amount` and `value` are sockets; a `value` socket takes any output, for generic inputs like contract arguments.
 2. Register it in `packages/launchblocks/src/steps/index.ts` (the built-in registry).
-3. Add `test/steps/<namespace>/<action>.test.ts`: validate `input`/`outputExample`, run `codegen` and assert the body, and test `execute` against a stubbed `HederaContext` — no network in unit tests.
+3. Add `test/steps/<namespace>/<action>.test.ts`: validate `input`/`outputExample`, run `codegen` and assert the body, and test `execute` against a stubbed `HederaContext` — no network in unit tests. If the step reads anything back, cover the wallet path as `test/hedera/wallet.test.ts` does.
 4. If it produces on-chain entities, list them in `ui.outputs` with the right kind so the runner emits Hashscan links.
 5. If its network fee is not small, add it to `STEP_FEE_HBAR` in `src/harness/recipe.ts`; exported recipes fund on-chain checks from that table, and unlisted types count as 2 ℏ.
 6. Run `yarn core:test && yarn core:lint --max-warnings=0 && yarn core:check-types`.

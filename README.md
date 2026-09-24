@@ -23,6 +23,7 @@ npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblock
 - **Your contracts as blocks** — **Deploy contract** and **Call contract** work with any contract in `packages/hardhat`. The included `TokenLock` locks a pool's LP tokens for a set time, so holders can see the liquidity cannot be pulled.
 - **Scheduled transactions** — **Schedule token transfer** and **Schedule a mint** use the Schedule Service's long-term schedules (HIP-423): vesting and supply unlocks that the network runs on their date with nobody online.
 - **Thirteen step types** across HTS, HCS, the Schedule Service, smart contracts and the mirror node, each one schema-checked, documented, tested, and exportable as code.
+- **The app's account or yours** — by default the server's operator account signs and pays, so anyone can press Run with nothing to set up. A visitor can instead connect their own testnet wallet (HashPack, Kabila, or any wallet through [hedera-wallet-connect](https://github.com/hashgraph/hedera-wallet-connect)) and approve each transaction; the launch then runs in their browser, and nothing they create belongs to the app.
 - **A terminal runner** with dry runs, code generation, and a JSON record of every run, plus `core:doctor`, which checks your operator account before you spend anything.
 - **Guards for a public demo** — mainnet stays off unless you turn it on, plus an optional run token and a per-client rate limit.
 
@@ -118,6 +119,8 @@ All live in `packages/nextjs/.env` and are read on the server only. None of them
 | `LAUNCHBLOCKS_RUN_TOKEN` | no | — | If set, runs through the API need an `x-launchblocks-token` header; the studio asks for it. |
 | `LAUNCHBLOCKS_RUNS_PER_HOUR` | no | `20` | Per-client run limit for a public deployment; `0` turns it off. |
 
+The one public variable is Scaffold-HBAR's `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`, used by RainbowKit and by the studio's wallet option. It falls back to a shared development id; set your own from [WalletConnect Cloud](https://cloud.reown.com) before you deploy.
+
 ## How it works
 
 ```mermaid
@@ -125,6 +128,7 @@ flowchart TB
   Studio["Launch Studio (Blockly)"] <-->|editor model| Flow[("flow JSON")]
   CLI["core:run"] --> Runner
   Flow -->|"POST /api/launchblocks/flows/run"| Runner["runner"]
+  Flow -.->|"in the page, with a connected wallet"| Runner
   Flow --> Codegen["codegen"] --> Script["launch.ts"]
   Runner --> Registry["step registry: schema, executor, codegen, docs"]
   Registry --> Ops["Hedera operations: HTS, HCS, HSS, contracts, SaucerSwap"]
@@ -151,15 +155,22 @@ A **flow** is an ordered list of steps. Each step has a `type`, a camelCase `id`
 
 Before anything runs, the flow is checked from end to end. That covers the document's shape, every step's params against its schema, and the **wiring**: each reference must point at an earlier step, name an output that step actually produces, and give a value the receiving param accepts. That last check runs each step's example output through the next step's schema, so feeding a number into a token id is caught before any HBAR is spent.
 
+**Who signs.** A run from the studio goes one of two ways, chosen in the Run panel's **Sign with** section:
+
+- **Default account** (the default). The API route runs the flow with `HEDERA_OPERATOR_ID` and `HEDERA_OPERATOR_KEY` and streams events back. The panel names the account; the key never leaves the server.
+- **Your testnet wallet.** The studio connects the wallet with hedera-wallet-connect, loading the connector only when this option is picked. The same runner then runs in the page through `@sh/launchblocks/browser`, with a context built by `walletHederaContext`. Each transaction is frozen for the wallet account and sent to the wallet with `hedera_signAndExecuteTransaction`: one approval per transaction, and the Run panel says roughly how many a flow needs. Nothing else goes through the wallet. Receipts come from free queries, while token details, contract results and pending airdrops come from the mirror node, so the wallet is never asked to approve a paid query. The wallet account's public key, which new tokens use for their keys, is also read from the mirror node, because wallets do not expose it. Accounts with a key list or a threshold key are refused, since one wallet cannot sign for them. So are topic messages longer than one 1024-byte chunk, because each chunk would need its own approval.
+
+The terminal can exercise the same path: `yarn core:run <flow> --wallet` runs with a wallet context whose signer is the SDK's `Wallet` holding the operator key, so every transaction goes through `executeWithSigner` exactly as it would with a browser wallet.
+
 **Packages**
 
 | Package | What it holds |
 | --- | --- |
-| `packages/launchblocks` | The core, with no framework: flow schema, step registry, runner, codegen, Hedera and SaucerSwap operations, the terminal scripts, and ~300 unit tests. `@sh/launchblocks/editor` is its browser entry, and a test keeps zod and the Hedera SDK out of it. |
+| `packages/launchblocks` | The core, with no framework: flow schema, step registry, runner, codegen, Hedera and SaucerSwap operations, the terminal scripts, and ~380 unit tests. It has two browser entries: `@sh/launchblocks/editor` for the block editor, which a test keeps free of zod and the Hedera SDK, and `@sh/launchblocks/browser` for wallet runs, which a test keeps free of Node built-ins. |
 | `packages/nextjs` | The Launch Studio (`app/launch`), API routes (`app/api/launchblocks`), and the Scaffold-HBAR app shell. |
 | `packages/hardhat` | The starter's contracts, tests and deploy scripts. |
 
-**API routes** (all under `/api/launchblocks`): `GET steps` (catalog with a JSON Schema for each step), `GET gallery`, `POST flows/validate`, `POST flows/codegen`, `POST flows/run` (the full result, or NDJSON events with `Accept: application/x-ndjson`).
+**API routes** (all under `/api/launchblocks`): `GET steps` (catalog with a JSON Schema for each step), `GET gallery`, `POST flows/validate`, `POST flows/codegen`, `POST flows/harness`, `POST flows/run` (the full result, or NDJSON events with `Accept: application/x-ndjson`), `GET operator` (the default account's id, never its key), and `GET artifacts/<Contract>` (a compiled contract's ABI and bytecode, for wallet runs that deploy one).
 
 ## Steps
 
@@ -216,15 +227,16 @@ Two things holders of a new token ask: can the team pull the liquidity, and when
 - **Token Service (HTS):** fungible tokens with configurable admin, supply, freeze, wipe, pause, KYC and fee-schedule keys; finite or infinite supply; fractional and fixed-HBAR custom fees; minting; transfers; HIP-904 airdrops, which also reach accounts that have not associated the token; association; allowances.
 - **Consensus Service (HCS):** a topic per launch as a public, ordered, timestamped log, with messages in text or JSON and chunking up to 20 KB.
 - **Schedule Service (HSS):** long-term scheduled transactions (HIP-423). A ScheduleCreate with an expiration time and `waitForExpiry` runs a transfer or a mint on its date with nobody online; the operator's signature on the create completes it, and an optional admin key makes it cancellable.
-- **Smart contracts:** your own contracts from `packages/hardhat`, deployed with `ContractCreateFlow` (the bytecode goes to the File Service, then ContractCreate) with token association slots, and called with `ContractExecuteTransaction`; SaucerSwap V1's factory, router and pairs; each token's ERC-20 facade.
-- **Mirror node:** free read-only contract calls for quotes, pool and LP token lookups, and the **Call contract** block's views (after waiting for the mirror node to catch up with earlier writes), account and key verification, EVM alias resolution, exchange rates, and reading the launch log back.
+- **Smart contracts:** your own contracts from `packages/hardhat`, deployed with `ContractCreateFlow` (the bytecode goes to the File Service, then ContractCreate) with token association slots, or with a wallet as a single ContractCreate with the bytecode inline, so a small contract costs one approval; and called with `ContractExecuteTransaction`; SaucerSwap V1's factory, router and pairs; each token's ERC-20 facade.
+- **Mirror node:** free read-only contract calls for quotes, pool and LP token lookups, and the **Call contract** block's views (after waiting for the mirror node to catch up with earlier writes), account and key verification, EVM alias resolution, exchange rates, and reading the launch log back. With a wallet it also stands in for paid queries: token details, contract results and gas used, and which airdrop recipients were left pending.
+- **Wallets (HIP-820):** hedera-wallet-connect's `DAppConnector` and `DAppSigner` connect a visitor's account over WalletConnect, and `hedera_signAndExecuteTransaction` has the wallet sign and submit each transaction.
 
 ## Scripts
 
 | Command | What it does |
 | --- | --- |
 | `yarn core:doctor` | Check the operator (key, account, network, balance) without spending anything. |
-| `yarn core:run <flow.json \| gallery-id>` | Run a flow. Add `--dry-run` to validate only, `--codegen out.ts` to write the script. Each run's full result is saved under `packages/launchblocks/runs/`. |
+| `yarn core:run <flow.json \| gallery-id>` | Run a flow. Add `--dry-run` to validate only, `--codegen out.ts` to write the script, `--wallet` to sign through a `Signer` as a browser wallet would. Each run's full result is saved under `packages/launchblocks/runs/`. |
 | `yarn next:dev` | Start the app with the Launch Studio at `/launch`. |
 | `yarn core:test` | The core unit tests (vitest). No network. |
 | `yarn core:docs` | Regenerate the step table in this README. |
@@ -289,6 +301,7 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 - Without a run token, `LAUNCHBLOCKS_RUNS_PER_HOUR` (default 20) is the only brake: it counts runs per visitor, per server instance. It identifies visitors by `X-Real-IP`, which the proxy must set (`proxy_set_header X-Real-IP $remote_addr;` in nginx), rather than by the first `X-Forwarded-For` entry, which visitors can forge.
 - Behind nginx, keep response buffering off for `/api/launchblocks/flows/run`. The route already sends `X-Accel-Buffering: no` so run events stream.
 - A full launch takes about a minute; the route allows up to 120 s.
+- Wallet runs happen in the visitor's browser and spend their HBAR, so the run token and rate limit do not apply to them. Set your own `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`.
 
 ## Troubleshooting
 
@@ -302,6 +315,10 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 | `Could not quote HBAR → …` straight after creating a pool | The mirror node has not caught up yet. The swap step retries; if you call the operations directly, wait a few seconds. |
 | `POOL_EXISTS` | That token already has a SaucerSwap pool against HBAR. Trade against it with `saucerswap.swap`. |
 | npm install fails with `ERESOLVE` | Make sure the root `.npmrc` (`legacy-peer-deps=true`) came with the scaffold; npm workspaces read only the root file. |
+| `WALLET_REJECTED` | The transaction was declined in the wallet. Run again and approve each request, or switch **Sign with** back to the default account. |
+| `WALLET_KEY_UNSUPPORTED` | The connected account has a key list or threshold key. Connect an account with a single ED25519 or ECDSA key. |
+| `WALLET_MESSAGE_TOO_LONG` | With a wallet, a topic message must fit in one 1024-byte chunk. Shorten it, or run with the default account. |
+| `WALLET_DISCONNECTED` | The WalletConnect session ended. Reconnect in the Run panel and run again. |
 | `CONTRACT_ARTIFACT_MISSING` from **Deploy contract** | The Hardhat contracts are not compiled. Run `yarn hardhat:compile`. |
 | With npm, Hardhat tests fail with `Invalid Chai property: revertedWithCustomError` | Two copies of chai: the matchers attached to vitest's chai 5. Keep `chai` 4 pinned in the root `package.json` so npm hoists the copy both use. |
 
@@ -309,6 +326,7 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 
 - The operator key stays on the server. It is never logged or returned by the API, and `core:doctor` prints only whether it is set and its length.
 - The operator is the treasury and holds every key it enables, so a flow never needs a second signer. The flip side: anyone who can reach an unguarded run endpoint can spend its HBAR. Use the run guards.
+- A wallet run never touches the operator key, and the page never sees the wallet's private key: the wallet signs each transaction after the visitor approves it. The studio offers wallet runs on testnet only.
 - The code is experimental and unaudited. It is built for testnet.
 
 ## Credits
