@@ -1,5 +1,10 @@
+<p align="center">
+  <a href="https://launchblocks.aivylabs.xyz"><img src="packages/nextjs/public/thumbnail.jpg" alt="LaunchBlocks: launch a token, give it a market, block by block. A launch built from Hedera blocks, each marked done." width="100%"></a>
+</p>
+
 # LaunchBlocks — a visual token launchpad for Hedera
 
+[![Live demo](https://img.shields.io/badge/live%20demo-launchblocks.aivylabs.xyz-4f46e5)](https://launchblocks.aivylabs.xyz)
 [![CI](https://github.com/jmgomezl/scaffold-hbar-launchblocks/actions/workflows/ci.yaml/badge.svg)](https://github.com/jmgomezl/scaffold-hbar-launchblocks/actions/workflows/ci.yaml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Node ≥ 20.18.3](https://img.shields.io/badge/node-%E2%89%A5%2020.18.3-339933)
@@ -7,13 +12,15 @@
 
 A [Scaffold-HBAR](https://docs.hedera.com/solutions/tools/scaffold-hbar/index) template for launching a token and giving it a market in one go. Snap blocks together — **create an HTS token → open a public HCS launch log → seed a SaucerSwap pool → make the first trade** — press Run, and watch each block turn green as its transaction reaches consensus. Then lock the pool's liquidity in a contract, or schedule supply unlocks the network runs on a date. The same launch runs from the terminal, exports as a standalone `launch.ts`, and is stored as a plain JSON file you can review and commit.
 
+**[Try it live at launchblocks.aivylabs.xyz](https://launchblocks.aivylabs.xyz/launch)**, on Hedera testnet. The app's funded account signs every run, so there is nothing to install, connect or fund; you can also connect your own testnet wallet in the Run panel.
+
 ```bash
 npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblocks
 ```
 
-![A live testnet run in the Launch Studio, at three times speed: nine blocks light up in turn as each transaction reaches consensus, from creating the token and its SaucerSwap pool to deploying a TokenLock, locking the LP tokens in it, reading the lock back and logging it, while the run log fills with succeeded steps](docs/images/studio-run.gif)
+![A live testnet run in the Launch Studio, at three times speed: nine blocks get a tick in turn as each transaction reaches consensus, from creating the token and its SaucerSwap pool to deploying a TokenLock, locking the LP tokens in it, reading the lock back and logging it, while the run log fills with succeeded steps, signed by the default account](docs/images/studio-run.gif)
 
-*A real run of `hts-launch-locked-liquidity` on testnet, started from the Launch Studio and shown at three times speed.*
+*A real run of `hts-launch-locked-liquidity` on testnet, started from the Launch Studio: a token, its launch log, a SaucerSwap pool, a `TokenLock` contract holding the pool's LP tokens, and two reads of the lock, in 36 seconds. Shown at three times speed.*
 
 ## What you get
 
@@ -26,6 +33,43 @@ npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblock
 - **The app's account or yours** — by default the server's operator account signs and pays, so anyone can press Run with nothing to set up. A visitor can instead connect their own testnet wallet (HashPack, Kabila, or any wallet through [hedera-wallet-connect](https://github.com/hashgraph/hedera-wallet-connect)) and approve each transaction; the launch then runs in their browser, and nothing they create belongs to the app.
 - **A terminal runner** with dry runs, code generation, and a JSON record of every run, plus `core:doctor`, which checks your operator account before you spend anything.
 - **Guards for a public demo** — mainnet stays off unless you turn it on, plus an optional run token and a per-client rate limit.
+
+## See it in action
+
+### Build a launch, then run it
+
+![Building a launch from an empty Launch block: Create HTS token is dragged in from the toolbox and given the name Rocket Coin, symbol RKT and an initial supply; Create HCS topic and Seed SaucerSwap pool are stacked below it, the deposit amounts are typed in, and createToken ▸ Token is dragged from the Outputs drawer into the pool's Token socket. The badge turns valid, Run on testnet is pressed, and the three blocks get their ticks as the run log fills](docs/images/build-and-run.gif)
+
+*Recorded live, from an empty launch to a token, an HCS topic and a funded SaucerSwap pool on testnet. The wire from `createToken ▸ Token` into the pool's Token socket is what makes the flow valid. Shown at 1.6 times speed.*
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/studio-problems.png" alt="The hero launch with Decimals set to 40: a warning on the Create HTS token block reads decimals: Too big: expected number to be &lt;=18, the Problems tab lists the same message, the header badge says 1 problem and Run on testnet is disabled"><br>
+      <b>Mistakes show up before anything is spent.</b> Every field and every wire is checked against the step schemas as you edit. Here Decimals 40 is flagged on the block and in Problems, and Run stays disabled.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/studio-wallet.png" alt="The Run panel's Sign with section set to Your testnet wallet, next to the WalletConnect window with a QR code and HashPack, Kabila and Venly listed; the Run button reads Run with your wallet"><br>
+      <b>The app's account, or your own wallet.</b> Runs are signed by the default account unless you connect HashPack, Kabila or another WalletConnect wallet, which then approves each transaction.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/export-launch-ts.png" alt="The Export dialog on the launch.ts tab, showing a generated TypeScript script that imports createFungibleToken, createPoolWithHbar, createTopic and the other operations the runner uses"><br>
+      <b>Export it as code.</b> A standalone <code>launch.ts</code> that calls the same functions the runner uses, next to the flow JSON that <code>core:run</code> takes.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/export-harness-recipe.png" alt="The Export dialog on the Harness recipe tab: an estimate of 61.1 ℏ per run, the eight recipe files, and the spec with its baseline commands and validators"><br>
+      <b>Or as an agent recipe.</b> A Hedera Harness recipe with a cost estimate: a coding agent adds the launch to your app, and the harness grades the result on testnet.
+    </td>
+  </tr>
+</table>
+
+### Or from the terminal
+
+![A terminal session: core:doctor checks the env file, the operator id and key, the network, that the key matches the account, and the balance; then core:run hts-launch-scheduled-unlocks runs six steps on testnet, printing a tick, the time taken and HashScan links for each, and ends with Flow succeeded](docs/images/terminal-run.gif)
+
+*`core:doctor` checks the operator account without spending anything. `core:run` then launches `hts-launch-scheduled-unlocks` on testnet: a token, its launch log, and two supply unlocks that the Schedule Service will run on their dates.*
 
 ## Verified on testnet
 
@@ -46,6 +90,31 @@ The other gallery flows, also run from the Launch Studio:
 | `hts-launch-locked-liquidity`: a `TokenLock` holding all 707.10677118 LP tokens of the new pool until 2026-10-23 | [lock 0.0.10676443](https://hashscan.io/testnet/contract/0.0.10676443), [LP token 0.0.10676441](https://hashscan.io/testnet/token/0.0.10676441), [log 0.0.10676438](https://hashscan.io/testnet/topic/0.0.10676438) |
 | `hts-launch-scheduled-unlocks`: two 250,000-token unlocks, scheduled for 2026-10-23 and 2026-11-22 | [schedule 0.0.10676533](https://hashscan.io/testnet/schedule/0.0.10676533), [schedule 0.0.10676534](https://hashscan.io/testnet/schedule/0.0.10676534), [token 0.0.10676531](https://hashscan.io/testnet/token/0.0.10676531) |
 | A scheduled mint and a scheduled transfer set 60 s out, which the network ran by itself | [schedule 0.0.10676486](https://hashscan.io/testnet/schedule/0.0.10676486), [schedule 0.0.10676488](https://hashscan.io/testnet/schedule/0.0.10676488) |
+
+What those runs left on-chain, as other apps show it:
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/proof-saucerswap-pool.png" alt="SaucerSwap's testnet app showing the HBAR / LBM V1 pool with 0.30% fee: pool liquidity of 11 HBAR and 45.47K LBM"><br>
+      <b>The pool on SaucerSwap.</b> The HBAR/LBM V1 pool from the first table, in SaucerSwap's own app after the first trade: the 10 ℏ and 50,000 LBM deposited, plus the 1 ℏ trade.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/proof-hcs-log.png" alt="HashScan's Messages tab for topic 0.0.10676438 with two JSON messages: token.launched with the token id and supply, and liquidity.locked with the pair, LP token, lock contract, locked units and release time"><br>
+      <b>The launch log on HCS.</b> Each launch writes what it created to its own topic as it goes; here the token, then the pool, LP token and lock.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/proof-lp-locked.png" alt="HashScan's Holders tab for LP token 0.0.10676441: the TokenLock contract 0.0.10676443 holds 707.10677118, and the treasury account 0.0.7231440 holds 0"><br>
+      <b>Liquidity that cannot be pulled.</b> The <code>TokenLock</code> contract 0.0.10676443 holds all 707.10677118 LP tokens, and the treasury holds none.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/proof-schedule-executed.png" alt="HashScan's page for schedule 0.0.10676486, marked EXECUTED: a token mint with wait for expiry set to true, executed at its expiration time, with no admin key"><br>
+      <b>A schedule the network ran by itself.</b> A mint created with <code>waitForExpiry</code>, executed at its expiration time with nobody online.
+    </td>
+  </tr>
+</table>
 
 ## Quick start
 
