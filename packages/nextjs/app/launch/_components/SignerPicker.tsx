@@ -170,6 +170,11 @@ export function SignerPicker({
           )}
         </div>
       )}
+
+      {/* The Scaffold-HBAR header shows its own wallet (often a burner with 0 HBAR) next to the Run button. */}
+      <p className="border-t border-base-300 pt-2 text-xs opacity-60">
+        The wallet in the page header is Scaffold-HBAR&apos;s EVM wallet for Debug Contracts. It does not sign launches.
+      </p>
     </fieldset>
   );
 }
