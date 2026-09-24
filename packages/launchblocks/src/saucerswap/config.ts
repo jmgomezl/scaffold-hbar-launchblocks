@@ -13,16 +13,8 @@ export type SaucerSwapDeployment = {
   v1Factory: string;
   /** SaucerSwapV1RouterV3 — the router this template calls. */
   v1Router: string;
-  /** SaucerSwapV2Factory. */
-  v2Factory: string;
-  /** SaucerSwapV2SwapRouter. */
-  v2SwapRouter: string;
-  /** SaucerSwapV2QuoterV2 — gas-free quotes. */
-  v2Quoter: string;
   /** The WHBAR HTS token (what pools actually hold), not the WHBAR contract. */
   whbarToken: string;
-  /** The WHBAR contract that wraps and unwraps HBAR. */
-  whbarContract: string;
   /** Where a human verifies a pool. */
   appBaseUrl: string;
 };
@@ -31,21 +23,13 @@ export const SAUCERSWAP_DEPLOYMENTS: Partial<Record<Network, SaucerSwapDeploymen
   mainnet: {
     v1Factory: "0.0.1062784",
     v1Router: "0.0.3045981",
-    v2Factory: "0.0.3946833",
-    v2SwapRouter: "0.0.3949434",
-    v2Quoter: "0.0.3949424",
     whbarToken: "0.0.1456986",
-    whbarContract: "0.0.1456985",
     appBaseUrl: "https://www.saucerswap.finance",
   },
   testnet: {
     v1Factory: "0.0.9959",
     v1Router: "0.0.19264",
-    v2Factory: "0.0.1197038",
-    v2SwapRouter: "0.0.1414040",
-    v2Quoter: "0.0.1390002",
     whbarToken: "0.0.15058",
-    whbarContract: "0.0.15057",
     appBaseUrl: "https://testnet.saucerswap.finance",
   },
 };

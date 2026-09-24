@@ -131,6 +131,3 @@ export type StepDefinition<In, Out extends Record<string, unknown>> = {
 // Method signatures are bivariant, so a concrete definition is assignable here.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyStepDefinition = StepDefinition<any, any>;
-
-export type StepInputOf<D> = D extends StepDefinition<infer In, Record<string, unknown>> ? In : never;
-export type StepOutputOf<D> = D extends StepDefinition<unknown, infer Out> ? Out : never;

@@ -3880,7 +3880,6 @@ __metadata:
     next-themes: ^0.4.6
     postcss: ^8.4.45
     prettier: ^3.5.3
-    qrcode.react: ^4.0.1
     react: ^19.2.3
     react-dom: ^19.2.3
     react-hot-toast: ^2.4.0
@@ -13529,15 +13528,6 @@ __metadata:
   version: 0.5.4
   resolution: "qr@npm:0.5.4"
   checksum: 8d662c3e74484f22df71e299818501ef1abf42f7f8eb76a0d46daa12839031623ec0ca1de85e5a6d3298fbfcb29065563e8176c68920ea2f294100c214bda72a
-  languageName: node
-  linkType: hard
-
-"qrcode.react@npm:^4.0.1":
-  version: 4.2.0
-  resolution: "qrcode.react@npm:4.2.0"
-  peerDependencies:
-    react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
-  checksum: fe7f496bb3696eedf4113390c6feda386e7a5e5d69d12fcc2489c55ecec467f682dc99b0d8085afbeb8ed3962c1f7554b26225cd78b72e78416f9506abbebd5d
   languageName: node
   linkType: hard
 

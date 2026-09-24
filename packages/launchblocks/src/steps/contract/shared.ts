@@ -2,8 +2,7 @@ import { z } from "zod";
 
 import type { CodegenContext, FieldSpec } from "../../registry/types";
 
-/** Contract blocks take up to this many arguments, one socket each. */
-export const MAX_CONTRACT_ARGS = 4;
+/** Contract blocks take up to four arguments, one socket each. */
 export const ARG_KEYS = ["arg1", "arg2", "arg3", "arg4"] as const;
 
 /** A literal or a reference; the ABI coder converts it for the parameter's type when the step runs. */
