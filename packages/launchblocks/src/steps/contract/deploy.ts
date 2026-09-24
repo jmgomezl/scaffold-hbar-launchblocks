@@ -93,6 +93,12 @@ export const contractDeploy = defineStep({
     ].join("\n"),
     hederaServices: ["SmartContract", "MirrorNode"],
   },
+  // Finding a missing contract before the run, not after the token and pool are paid for.
+  preflight: async (params, ctx) => {
+    const name = params.contract;
+    if (typeof name !== "string" || name.includes("{{") || !ctx.artifacts) return;
+    await ctx.artifacts(name);
+  },
   execute: async (input, ctx) => {
     if (!ctx.artifacts) {
       throw new LaunchBlocksError("CONTRACT_ARTIFACTS_UNAVAILABLE", "This run has no way to load compiled contracts", {

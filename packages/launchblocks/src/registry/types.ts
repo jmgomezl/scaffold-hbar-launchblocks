@@ -119,6 +119,12 @@ export type StepDefinition<In, Out extends Record<string, unknown>> = {
   ui: StepUi;
   docs: StepDocs;
   execute(input: In, ctx: RunContext): Promise<Out>;
+  /**
+   * Optional check, run for every step before the flow's first step, of what
+   * this step will need later: a failure refuses the run before anything is
+   * spent. `params` are as written, references unresolved.
+   */
+  preflight?(params: Readonly<Record<string, unknown>>, ctx: RunContext): Promise<void>;
   codegen(ctx: CodegenContext): CodegenFragment;
 };
 

@@ -72,6 +72,8 @@ export async function runFlow(document: unknown, options: RunOptions): Promise<R
   const emit = options.onEvent ?? (() => undefined);
   const flow = registry.validateFlow(document);
   assertNetworkMatches(flow, ctx);
+  // What later steps need (e.g. a compiled contract) is checked before the first one spends anything.
+  for (const step of flow.steps) await registry.get(step.type).preflight?.(step.params, ctx);
 
   const startedAt = new Date().toISOString();
   const steps: StepRecord[] = flow.steps.map(step => pendingRecord(step));
