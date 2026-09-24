@@ -12,6 +12,7 @@ import { htsAssociate } from "./hts/associate";
 import { htsCreateToken } from "./hts/create-token";
 import { htsMint } from "./hts/mint";
 import { htsTransfer } from "./hts/transfer";
+import { pythPriceInUsd } from "./pyth/price-in-usd";
 import { saucerswapCreatePool } from "./saucerswap/create-pool";
 import { saucerswapSwap } from "./saucerswap/swap";
 
@@ -26,6 +27,7 @@ export const BUILT_IN_STEPS: readonly AnyStepDefinition[] = [
   hcsSubmitMessage,
   hssScheduleTransfer,
   hssScheduleMint,
+  pythPriceInUsd,
   saucerswapCreatePool,
   saucerswapSwap,
   contractDeploy,
@@ -48,6 +50,7 @@ export {
   htsCreateToken,
   htsMint,
   htsTransfer,
+  pythPriceInUsd,
   saucerswapCreatePool,
   saucerswapSwap,
 };

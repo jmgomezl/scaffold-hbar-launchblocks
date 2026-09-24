@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "id": "hts-launch-usd-price",
+  "name": "Token launch priced in USD",
+  "description": "Open a SaucerSwap market at a US dollar price: Pyth's HBAR/USD feed on Hedera sets how much HBAR goes next to the tokens, then the token, its launch log and the pool follow. The price comes first, so a stale price stops the launch before anything is spent.",
+  "network": "testnet",
+  "steps": [
+    {
+      "id": "priceInUsd",
+      "type": "pyth.priceInUsd",
+      "label": "Price the pool in USD",
+      "params": {
+        "tokenAmount": "50000",
+        "tokenPriceUsd": "0.00002",
+        "maxAgeSeconds": 120,
+        "maxConfidenceBps": 100
+      }
+    },
+    {
+      "id": "createToken",
+      "type": "hts.createToken",
+      "label": "Create the token",
+      "params": {
+        "name": "LaunchBlocks Dollar Demo",
+        "symbol": "LBU",
+        "decimals": 8,
+        "initialSupply": "1000000",
+        "supplyType": "finite",
+        "maxSupply": "1000000",
+        "memo": "Launched with LaunchBlocks",
+        "keys": {
+          "admin": true,
+          "supply": false,
+          "freeze": false,
+          "wipe": false,
+          "pause": false,
+          "kyc": false,
+          "feeSchedule": false
+        }
+      }
+    },
+    {
+      "id": "createLog",
+      "type": "hcs.createTopic",
+      "label": "Open the launch log",
+      "params": {
+        "memo": "{{steps.createToken.symbol}} launch log",
+        "adminKey": true,
+        "submitKey": true
+      }
+    },
+    {
+      "id": "seedPool",
+      "type": "saucerswap.createPool",
+      "label": "Seed the pool at the USD price",
+      "params": {
+        "tokenId": "{{steps.createToken.tokenId}}",
+        "tokenAmount": "{{steps.priceInUsd.tokenAmount}}",
+        "hbarAmount": "{{steps.priceInUsd.hbarAmount}}",
+        "slippageBps": 100,
+        "deadlineSeconds": 180
+      }
+    },
+    {
+      "id": "recordMarket",
+      "type": "hcs.submitMessage",
+      "label": "Record the market and its price",
+      "params": {
+        "topicId": "{{steps.createLog.topicId}}",
+        "message": {
+          "event": "market.opened",
+          "dex": "SaucerSwap V1",
+          "tokenId": "{{steps.createToken.tokenId}}",
+          "pairId": "{{steps.seedPool.pairId}}",
+          "openingPriceUsd": "{{steps.priceInUsd.tokenPriceUsd}}",
+          "openingPriceHbar": "{{steps.seedPool.openingPriceHbar}}",
+          "hbarUsd": "{{steps.priceInUsd.hbarUsd}}",
+          "priceSource": "Pyth {{steps.priceInUsd.source}}",
+          "pricePublishTime": "{{steps.priceInUsd.publishTime}}",
+          "priceUpdateTx": "{{steps.priceInUsd.updateTransactionId}}",
+          "poolTx": "{{steps.seedPool.transactionId}}"
+        }
+      }
+    }
+  ]
+}

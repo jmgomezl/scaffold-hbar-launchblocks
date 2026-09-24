@@ -4,7 +4,7 @@ import { PublicKey } from "@hiero-ledger/sdk";
 import { LaunchBlocksError } from "../errors";
 import type { Network } from "../flow/schema";
 import { MIRROR_BASE_URL, clientFor } from "./client";
-import type { HederaContext } from "./context";
+import type { HederaContext, PythPriceUpdates } from "./context";
 import { fetchAccount } from "./mirror";
 
 export type WalletContextOptions = {
@@ -12,6 +12,8 @@ export type WalletContextOptions = {
   signer: Signer;
   network: Network;
   mirrorBaseUrl?: string | undefined;
+  /** Where Pyth price updates come from, e.g. the app's route, which holds the API key. */
+  pythPriceUpdates?: PythPriceUpdates | undefined;
   signal?: AbortSignal;
 };
 
@@ -50,6 +52,7 @@ export async function walletHederaContext(options: WalletContextOptions): Promis
     operatorPublicKey,
     signer: options.signer,
     mirrorBaseUrl,
+    ...(options.pythPriceUpdates ? { pythPriceUpdates: options.pythPriceUpdates } : {}),
   };
 }
 

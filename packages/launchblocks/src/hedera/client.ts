@@ -3,6 +3,7 @@ import { AccountId, Client, PrivateKey } from "@hiero-ledger/sdk";
 import { LaunchBlocksError } from "../errors";
 import type { Network } from "../flow/schema";
 import { NetworkSchema } from "../flow/schema";
+import { hermesPriceUpdates } from "../pyth/hermes";
 import type { HederaContext } from "./context";
 
 export const MIRROR_BASE_URL: Record<Network, string> = {
@@ -20,6 +21,10 @@ export type HederaContextOptions = {
   /** Only needed for raw hex keys, which do not encode their curve. DER keys are self-describing. */
   operatorKeyType?: OperatorKeyType | undefined;
   mirrorBaseUrl?: string | undefined;
+  /** A Hermes API key: Pyth steps then post fresh prices before reading them. */
+  pythApiKey?: string | undefined;
+  /** Another Hermes provider than Pyth's own. */
+  pythHermesUrl?: string | undefined;
 };
 
 /** Build the SDK client and operator identity a run needs. Never logs the key. */
@@ -34,6 +39,14 @@ export function createHederaContext(options: HederaContextOptions): HederaContex
     operatorPublicKey: operatorKey.publicKey,
     operatorKey,
     mirrorBaseUrl: (blankToUndefined(options.mirrorBaseUrl) ?? MIRROR_BASE_URL[options.network]).replace(/\/+$/, ""),
+    ...(blankToUndefined(options.pythApiKey)
+      ? {
+          pythPriceUpdates: hermesPriceUpdates({
+            apiKey: (options.pythApiKey as string).trim(),
+            baseUrl: blankToUndefined(options.pythHermesUrl),
+          }),
+        }
+      : {}),
   };
 }
 
@@ -47,6 +60,8 @@ export const ENV_VARS = {
   operatorKey: "HEDERA_OPERATOR_KEY",
   operatorKeyType: "HEDERA_OPERATOR_KEY_TYPE",
   mirrorBaseUrl: "HEDERA_MIRROR_URL",
+  pythApiKey: "PYTH_API_KEY",
+  pythHermesUrl: "PYTH_HERMES_URL",
 } as const;
 
 /**
@@ -72,6 +87,8 @@ export function hederaContextFromEnv(
     operatorKey,
     operatorKeyType: overrides.operatorKeyType ?? parseKeyType(read(env, ENV_VARS.operatorKeyType)),
     mirrorBaseUrl: overrides.mirrorBaseUrl ?? read(env, ENV_VARS.mirrorBaseUrl),
+    pythApiKey: overrides.pythApiKey ?? read(env, ENV_VARS.pythApiKey),
+    pythHermesUrl: overrides.pythHermesUrl ?? read(env, ENV_VARS.pythHermesUrl),
   });
 }
 

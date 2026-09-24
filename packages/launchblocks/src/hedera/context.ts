@@ -27,7 +27,19 @@ export type HederaContext = {
   signer?: Signer;
   /** Mirror node REST base URL without trailing slash, e.g. https://testnet.mirrornode.hedera.com */
   mirrorBaseUrl: string;
+  /**
+   * Where Pyth price updates come from, when one is configured: Hermes with
+   * an API key on the server, or the app's own route in the browser. Without
+   * one, Pyth steps read the price last posted on Hedera.
+   */
+  pythPriceUpdates?: PythPriceUpdates;
 };
+
+/**
+ * Fetches signed Pyth price updates (hex, one per update) for the given feed
+ * ids, ready to post to Pyth's contract with `updatePriceFeeds`.
+ */
+export type PythPriceUpdates = (feedIds: readonly string[], signal?: AbortSignal) => Promise<readonly `0x${string}`[]>;
 
 const HASHSCAN_NETWORK_PATH: Record<Network, string> = {
   testnet: "testnet",

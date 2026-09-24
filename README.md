@@ -27,9 +27,10 @@ npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblock
 - **Launch Studio** (`/launch`) — a block editor in the style of App Inventor. Id and amount inputs are sockets: type a value, or drag in an output from an earlier step, such as `createToken ▸ Token` or `seedPool ▸ LP tokens received`. Problems show up on the block they belong to; runs stream live.
 - **Flows as JSON** — the editor, the CLI and the API all run the same document. Nothing the editor can do is missing from the JSON.
 - **A SaucerSwap integration that gets the details right** — exact opening prices, the EVM-alias recipient, fee conversion, measured gas limits. See [what makes it hard](#the-saucerswap-integration).
+- **Prices in US dollars from Pyth** — **Price in USD with Pyth** works out the HBAR to pair with your tokens so the pool opens at a dollar price, from Pyth's HBAR/USD feed on Hedera. With a Hermes API key it posts a fresh signed price first. See [pricing in US dollars](#pricing-a-launch-in-us-dollars-with-pyth).
 - **Your contracts as blocks** — **Deploy contract** and **Call contract** work with any contract in `packages/hardhat`. The included `TokenLock` locks a pool's LP tokens for a set time, so holders can see the liquidity cannot be pulled.
 - **Scheduled transactions** — **Schedule token transfer** and **Schedule a mint** use the Schedule Service's long-term schedules (HIP-423): vesting and supply unlocks that the network runs on their date with nobody online.
-- **Thirteen step types** across HTS, HCS, the Schedule Service, smart contracts and the mirror node, each one schema-checked, documented, tested, and exportable as code.
+- **Fourteen step types** across HTS, HCS, the Schedule Service, smart contracts, SaucerSwap, Pyth and the mirror node, each one schema-checked, documented, tested, and exportable as code.
 - **The app's account or yours** — by default the server's operator account signs and pays, so anyone can press Run with nothing to set up. A visitor can instead connect their own testnet wallet (HashPack, Kabila, or any wallet through [hedera-wallet-connect](https://github.com/hashgraph/hedera-wallet-connect)) and approve each transaction; the launch then runs in their browser, and nothing they create belongs to the app.
 - **A terminal runner** with dry runs, code generation, and a JSON record of every run, plus `core:doctor`, which checks your operator account before you spend anything.
 - **Guards for a public demo** — mainnet stays off unless you turn it on, plus an optional run token and a per-client rate limit.
@@ -88,6 +89,7 @@ The other gallery flows, also run from the Launch Studio:
 | What | Where |
 | --- | --- |
 | `hts-launch-locked-liquidity`: a `TokenLock` holding all 707.10677118 LP tokens of the new pool until 2026-10-23 | [lock 0.0.10676443](https://hashscan.io/testnet/contract/0.0.10676443), [LP token 0.0.10676441](https://hashscan.io/testnet/token/0.0.10676441), [log 0.0.10676438](https://hashscan.io/testnet/topic/0.0.10676438) |
+| `hts-launch-usd-price`: a pool opened at $0.00002 a token, pairing 50,000 tokens with 12.41463079 ℏ at Pyth's HBAR/USD of $0.08055012, read from Pyth's contract without a key | [pool 0.0.10700800](https://hashscan.io/testnet/contract/0.0.10700800), [token 0.0.10700795](https://hashscan.io/testnet/token/0.0.10700795), [log 0.0.10700797](https://hashscan.io/testnet/topic/0.0.10700797) |
 | `hts-launch-scheduled-unlocks`: two 250,000-token unlocks, scheduled for 2026-10-23 and 2026-11-22 | [schedule 0.0.10676533](https://hashscan.io/testnet/schedule/0.0.10676533), [schedule 0.0.10676534](https://hashscan.io/testnet/schedule/0.0.10676534), [token 0.0.10676531](https://hashscan.io/testnet/token/0.0.10676531) |
 | A scheduled mint and a scheduled transfer set 60 s out, which the network ran by itself | [schedule 0.0.10676486](https://hashscan.io/testnet/schedule/0.0.10676486), [schedule 0.0.10676488](https://hashscan.io/testnet/schedule/0.0.10676488) |
 
@@ -184,6 +186,8 @@ All live in `packages/nextjs/.env` and are read on the server only. None of them
 | `HEDERA_OPERATOR_KEY_TYPE` | for raw hex keys | — | `ecdsa` or `ed25519`. Raw hex does not say which curve it is; DER does. |
 | `HEDERA_NETWORK` | no | `testnet` | `testnet`, `mainnet` or `localnet`. SaucerSwap steps need testnet or mainnet. |
 | `HEDERA_MIRROR_URL` | no | per network | Override the mirror node base URL. |
+| `PYTH_API_KEY` | no | — | A Hermes API key from [Pyth Terminal](https://docs.pyth.network/price-feeds/core/upgrade/preparing). With it, **Price in USD with Pyth** posts a fresh HBAR/USD update before reading it; without it, the step reads the price already on Hedera. |
+| `PYTH_HERMES_URL` | no | Pyth's own | Another Hermes provider. |
 | `LAUNCHBLOCKS_ALLOW_MAINNET` | no | `false` | The run API refuses mainnet flows unless this is exactly `true`. |
 | `LAUNCHBLOCKS_RUN_TOKEN` | no | — | If set, runs through the API need an `x-launchblocks-token` header; the studio asks for it. |
 | `LAUNCHBLOCKS_RUNS_PER_HOUR` | no | `20` | Per-client run limit for a public deployment; `0` turns it off. |
@@ -239,7 +243,7 @@ The terminal can exercise the same path: `yarn core:run <flow> --wallet` runs wi
 | `packages/nextjs` | The Launch Studio (`app/launch`), API routes (`app/api/launchblocks`), and the Scaffold-HBAR app shell. |
 | `packages/hardhat` | The starter's contracts, tests and deploy scripts. |
 
-**API routes** (all under `/api/launchblocks`): `GET steps` (catalog with a JSON Schema for each step), `GET gallery`, `POST flows/validate`, `POST flows/codegen`, `POST flows/harness`, `POST flows/run` (the full result, or NDJSON events with `Accept: application/x-ndjson`), `GET operator` (the default account's id, never its key), and `GET artifacts/<Contract>` (a compiled contract's ABI and bytecode, for wallet runs that deploy one).
+**API routes** (all under `/api/launchblocks`): `GET steps` (catalog with a JSON Schema for each step), `GET gallery`, `POST flows/validate`, `POST flows/codegen`, `POST flows/harness`, `POST flows/run` (the full result, or NDJSON events with `Accept: application/x-ndjson`), `GET operator` (the default account's id, never its key), `GET artifacts/<Contract>` (a compiled contract's ABI and bytecode, for wallet runs that deploy one), and `GET pyth/updates` (signed Pyth price updates for wallet runs, fetched with the server's key, for the feeds the steps use only).
 
 ## Steps
 
@@ -257,6 +261,7 @@ Generated from the step definitions with `yarn core:docs`; CI fails if this tabl
 | `hcs.submitMessage` | Append a text or JSON message to a topic, with consensus timestamp and sequence number. | HCS | `topicId`, `message`, `maxChunks` | `topicId`, `sequenceNumber`, `transactionId` |
 | `hss.scheduleTransfer` | Schedule a token transfer from the treasury that the network runs later by itself, for vesting. | HSS, HTS | `tokenId`, `to`, `amount`, `delaySeconds`, `memo`, `adminKey` | `scheduleId`, `executesAt`, `scheduledTransactionId` |
 | `hss.scheduleMint` | Schedule a mint into the treasury that the network runs later by itself, for a supply unlock. | HSS, HTS | `tokenId`, `amount`, `delaySeconds`, `memo`, `adminKey` | `scheduleId`, `executesAt`, `scheduledTransactionId` |
+| `pyth.priceInUsd` | Price a pool in US dollars: the HBAR to pair with a token deposit, from Pyth's HBAR/USD feed. | SmartContract, MirrorNode, Pyth | `tokenAmount`, `tokenPriceUsd`, `maxAgeSeconds`, `maxConfidenceBps` | `tokenAmount`, `hbarAmount`, `hbarUsd`, `pythContractId`, `updateTransactionId` |
 | `saucerswap.createPool` | Create the token's first SaucerSwap V1 liquidity pool against HBAR, making it tradeable. | HTS, SmartContract, MirrorNode, SaucerSwap | `tokenId`, `tokenAmount`, `hbarAmount`, `slippageBps`, `deadlineSeconds`, `gasLimit` | `pairId`, `lpTokenId`, `liquidity`, `createPairTransactionId`, `transactionId`, `openingPriceHbar`, `creationFeeHbar` |
 | `saucerswap.swap` | Buy the token with HBAR through its SaucerSwap V1 pool, proving the market is live. | HTS, SmartContract, MirrorNode, SaucerSwap | `tokenId`, `hbarAmount`, `slippageBps`, `deadlineSeconds`, `gasLimit` | `transactionId`, `tokensOut`, `effectivePriceHbar` |
 | `contract.deploy` | Deploy a Hardhat-compiled contract to Hedera, with constructor arguments and token slots. | SmartContract, MirrorNode | `contract`, `arg1`, `arg2`, `arg3`, `arg4`, `autoAssociations`, `gas`, `initialHbar`, `adminKey` | `contractId`, `accountId`, `transactionId` |
@@ -291,6 +296,17 @@ Two things holders of a new token ask: can the team pull the liquidity, and when
 
 **Scheduled unlocks** use the Schedule Service. **Schedule a mint** and **Schedule token transfer** create a long-term schedule that the network runs on its date; `delaySeconds` can be at most 62 days, the network's limit. Past that, schedule each tranche within 62 days of a run, or lock the tokens in a contract.
 
+## Pricing a launch in US dollars with Pyth
+
+A pool's opening price is the ratio of what goes into it. **Price in USD with Pyth** lets you set it in dollars instead: give it the tokens you will deposit and the price of one token in US dollars, and it reads HBAR/USD from [Pyth](https://pyth.network) and outputs **Tokens** and **HBAR** to wire into **Seed SaucerSwap pool**. HBAR = tokens × price ÷ HBAR/USD, in exact decimal arithmetic, rounded down to a tinybar.
+
+Pyth is a pull oracle. Its contract on Hedera (`0.0.3042133` on testnet, `0.0.4622850` on mainnet) holds the last price anyone posted, and anyone can post a fresher one:
+
+- **With `PYTH_API_KEY`**, the step fetches a signed HBAR/USD update from Hermes, Pyth's price service, asks the contract for its fee (1 tinybar per update on testnet), posts it with `updatePriceFeeds`, waits for the mirror node, and reads the price back, seconds old. In a wallet run the wallet pays for the update, and the key stays on the server behind `GET /api/launchblocks/pyth/updates`.
+- **Without a key**, it reads the price already on-chain through the mirror node, for free. Since 26 August 2026 Hermes answers only requests with a key, and nobody has posted HBAR/USD to testnet since 23 August, so that price is weeks old.
+
+Either way, the step refuses a price older than `maxAgeSeconds` (120 by default; 0 accepts any age) and one whose confidence interval is wider than `maxConfidenceBps` of it (1% by default). In `hts-launch-usd-price` the price comes first, so a refusal stops the launch before anything is spent. The run in [Verified on testnet](#verified-on-testnet) accepted the on-chain price and recorded where it came from: its log says `"priceSource": "Pyth on-chain"`, with the price's publish time, and 0.00024829 ℏ a token at $0.08055012 is exactly $0.00002.
+
 ## Hedera services used
 
 - **Token Service (HTS):** fungible tokens with configurable admin, supply, freeze, wipe, pause, KYC and fee-schedule keys; finite or infinite supply; fractional and fixed-HBAR custom fees; minting; transfers; HIP-904 airdrops, which also reach accounts that have not associated the token; association; allowances.
@@ -298,6 +314,7 @@ Two things holders of a new token ask: can the team pull the liquidity, and when
 - **Schedule Service (HSS):** long-term scheduled transactions (HIP-423). A ScheduleCreate with an expiration time and `waitForExpiry` runs a transfer or a mint on its date with nobody online; the operator's signature on the create completes it, and an optional admin key makes it cancellable.
 - **Smart contracts:** your own contracts from `packages/hardhat`, deployed with `ContractCreateFlow` (the bytecode goes to the File Service, then ContractCreate) with token association slots, or with a wallet as a single ContractCreate with the bytecode inline, so a small contract costs one approval; and called with `ContractExecuteTransaction`; SaucerSwap V1's factory, router and pairs; each token's ERC-20 facade.
 - **Mirror node:** free read-only contract calls for quotes, pool and LP token lookups, and the **Call contract** block's views (after waiting for the mirror node to catch up with earlier writes), account and key verification, EVM alias resolution, exchange rates, and reading the launch log back. With a wallet it also stands in for paid queries: token details, contract results and gas used, and which airdrop recipients were left pending.
+- **Pyth:** HBAR/USD from Pyth's contract on Hedera, read through the mirror node, or refreshed first with `updatePriceFeeds` and a signed update from Hermes.
 - **Wallets (HIP-820):** hedera-wallet-connect's `DAppConnector` and `DAppSigner` connect a visitor's account over WalletConnect, and `hedera_signAndExecuteTransaction` has the wallet sign and submit each transaction.
 
 ## Scripts
@@ -313,7 +330,7 @@ Two things holders of a new token ask: can the team pull the liquidity, and when
 | `yarn harness:doctor` · `yarn harness:validate` · `yarn harness:run` | The [Hedera Harness recipe](#extending-it-with-hedera-harness). |
 | `yarn lint` · `yarn check-types` · `yarn test` | Everything, across packages. |
 
-Gallery flows live in `packages/launchblocks/flows/`: `hts-launch-saucerswap` (the full launch), `hts-launch-locked-liquidity` (the launch with its LP tokens locked in a `TokenLock` for 30 days; about 64 ℏ), `hts-launch-scheduled-unlocks` (a reserve that unlocks in two scheduled tranches; about 14 ℏ) and `hts-launch-basic` (token with a 1% fee, HCS log and reserve mint; no pool, about 27 ℏ).
+Gallery flows live in `packages/launchblocks/flows/`: `hts-launch-saucerswap` (the full launch), `hts-launch-locked-liquidity` (the launch with its LP tokens locked in a `TokenLock` for 30 days; about 64 ℏ), `hts-launch-usd-price` (the pool opened at a dollar price from Pyth; about 60 ℏ), `hts-launch-scheduled-unlocks` (a reserve that unlocks in two scheduled tranches; about 14 ℏ) and `hts-launch-basic` (token with a 1% fee, HCS log and reserve mint; no pool, about 27 ℏ).
 
 With npm, put `--` before script arguments: `npm run core:run -- <flow> --dry-run`.
 
@@ -385,6 +402,8 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 | `OPERATOR_MISSING` | `HEDERA_OPERATOR_ID` or `HEDERA_OPERATOR_KEY` is empty. Run `yarn core:doctor`. |
 | `INVALID_SIGNATURE`, or doctor says the key does not control the account | Wrong key for the account, or a raw hex key read as the wrong curve. Set `HEDERA_OPERATOR_KEY_TYPE`. |
 | `INSUFFICIENT_PAYER_BALANCE` | Top up at the [faucet](https://portal.hedera.com/faucet). A full launch needs about 60 ℏ. |
+| `PYTH_PRICE_STALE` | Pyth's HBAR/USD on Hedera is older than **Max age**. Set `PYTH_API_KEY` so the step posts a fresh price, or set Max age to 0 to accept the price as it is. |
+| `PYTH_API_KEY_REJECTED` | Hermes refused the key. Check it in Pyth Terminal; keys are sent only to Hermes, as a Bearer token. |
 | `Safe token transfer failed!` from a SaucerSwap contract | Almost always a long-zero recipient for an alias account (see [the integration](#the-saucerswap-integration)). Check the transaction's child records for the real status. |
 | `Safe multiple associations failed!` | Out of gas inside the pool contracts. Raise the step's gas limit. |
 | `Could not quote HBAR → …` straight after creating a pool | The mirror node has not caught up yet. The swap step retries; if you call the operations directly, wait a few seconds. |
@@ -400,6 +419,7 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 ## Security notes
 
 - The operator key stays on the server. It is never logged or returned by the API, and `core:doctor` prints only whether it is set and its length.
+- `PYTH_API_KEY` stays on the server too, and travels only to Hermes over HTTPS. Wallet runs get price updates through the app's route, which serves only the feeds the steps use and reuses an answer for a few seconds.
 - The operator is the treasury and holds every key it enables, so a flow never needs a second signer. The flip side: anyone who can reach an unguarded run endpoint can spend its HBAR. Use the run guards.
 - A wallet run never touches the operator key, and the page never sees the wallet's private key: the wallet signs each transaction after the visitor approves it. The studio offers wallet runs on testnet only.
 - The code is experimental and unaudited. It is built for testnet.

@@ -12,7 +12,7 @@ export type { RunEvent, RunOptions, RunResult, StepRecord } from "./runner/runne
 export { createDefaultRegistry } from "./steps";
 export { walletHederaContext } from "./hedera/wallet";
 export type { WalletContextOptions } from "./hedera/wallet";
-export type { HederaContext } from "./hedera/context";
+export type { HederaContext, PythPriceUpdates } from "./hedera/context";
 export type { RunContext } from "./registry/types";
 export type { ArtifactLoader, ContractArtifact } from "./contracts/types";
 export { FlowValidationError, LaunchBlocksError } from "./errors";

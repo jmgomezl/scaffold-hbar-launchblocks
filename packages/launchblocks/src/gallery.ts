@@ -2,6 +2,7 @@ import htsLaunchBasic from "../flows/hts-launch-basic.json";
 import htsLaunchLockedLiquidity from "../flows/hts-launch-locked-liquidity.json";
 import htsLaunchSaucerSwap from "../flows/hts-launch-saucerswap.json";
 import htsLaunchScheduledUnlocks from "../flows/hts-launch-scheduled-unlocks.json";
+import htsLaunchUsdPrice from "../flows/hts-launch-usd-price.json";
 import type { FlowInput } from "./flow/schema";
 
 export type GalleryEntry = {
@@ -28,6 +29,13 @@ export const GALLERY: readonly GalleryEntry[] = [
     blurb:
       "The launch with a lock: open the SaucerSwap market, deploy a TokenLock contract, move the pool's LP tokens into it for 30 days, read the lock back, and record it on HCS.",
     flow: htsLaunchLockedLiquidity as FlowInput,
+  },
+  {
+    id: "hts-launch-usd-price",
+    title: "Token launch priced in USD",
+    blurb:
+      "Open the market at a dollar price: Pyth's HBAR/USD feed on Hedera works out the HBAR to pair with 50,000 tokens at $0.00002 each, then the token, its launch log and the SaucerSwap pool follow.",
+    flow: htsLaunchUsdPrice as FlowInput,
   },
   {
     id: "hts-launch-scheduled-unlocks",

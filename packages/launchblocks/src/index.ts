@@ -15,6 +15,7 @@ export * from "./gallery";
 export * from "./harness";
 export * from "./hedera";
 export * from "./registry";
+export * from "./pyth";
 export * from "./saucerswap";
 export * from "./runner";
 export * from "./steps";
