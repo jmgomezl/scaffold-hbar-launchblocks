@@ -118,7 +118,13 @@ export function guardRun(req: Request, network: string): NextResponse | null {
   return null;
 }
 
+/**
+ * The caller's address, as the reverse proxy saw it. X-Real-IP comes first:
+ * proxies such as nginx overwrite it, whereas the first X-Forwarded-For entry
+ * is whatever the client sent, so trusting it would let a script dodge the
+ * limit by inventing a new address per request.
+ */
 function clientKey(req: Request): string {
   const forwarded = req.headers.get("x-forwarded-for");
-  return forwarded?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "local";
+  return req.headers.get("x-real-ip")?.trim() || forwarded?.split(",").pop()?.trim() || "local";
 }

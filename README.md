@@ -286,8 +286,9 @@ npx hedera-harness run .harness/my-launch.spec.yaml         # the agent, then ev
 The app is a standard Next.js server; flows run in its API routes with the operator key from the environment. For a public demo:
 
 - Leave `LAUNCHBLOCKS_ALLOW_MAINNET` unset, and consider `LAUNCHBLOCKS_RUN_TOKEN`: every run spends the operator's HBAR.
+- Without a run token, `LAUNCHBLOCKS_RUNS_PER_HOUR` (default 20) is the only brake: it counts runs per visitor, per server instance. It identifies visitors by `X-Real-IP`, which the proxy must set (`proxy_set_header X-Real-IP $remote_addr;` in nginx), rather than by the first `X-Forwarded-For` entry, which visitors can forge.
 - Behind nginx, keep response buffering off for `/api/launchblocks/flows/run`. The route already sends `X-Accel-Buffering: no` so run events stream.
-- Runs can take 30 s; the route allows up to 120 s.
+- A full launch takes about a minute; the route allows up to 120 s.
 
 ## Troubleshooting
 
