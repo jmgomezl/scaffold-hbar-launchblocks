@@ -66,6 +66,10 @@ const UNDER_THE_HOOD = [
     body: "The token's first pool with an exact opening price, then a first trade quoted by the router itself.",
   },
   {
+    name: "Pyth",
+    body: "Open the pool at a US dollar price, from Pyth's HBAR/USD feed on Hedera, posting a fresh signed update when you have a Hermes key.",
+  },
+  {
     name: "Schedule Service",
     body: "Vesting transfers and supply unlocks as long-term schedules, which the network runs on their date with nobody online.",
   },

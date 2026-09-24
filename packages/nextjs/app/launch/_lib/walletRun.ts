@@ -1,5 +1,6 @@
 import type { ApiError, RunEvent } from "./api";
 import type { Signer } from "@hiero-ledger/sdk";
+import type { PythPriceUpdates } from "@sh/launchblocks/browser";
 import type { FlowInput } from "@sh/launchblocks/editor";
 
 /** A compiled contract from the app, for a Deploy contract block run in the browser. */
@@ -8,6 +9,27 @@ async function fetchArtifact(name: string) {
   const body = await response.json();
   if (!response.ok) throw Object.assign(new Error(body?.error?.message ?? `No contract ${name}`), body?.error ?? {});
   return body;
+}
+
+/**
+ * Pyth price updates through the app's route, which holds the Hermes key, when
+ * the server has one. Without it, Pyth steps read the price already on-chain.
+ */
+async function pythPriceUpdates(flow: FlowInput): Promise<PythPriceUpdates | undefined> {
+  if (!flow.steps.some(step => step.type.startsWith("pyth."))) return undefined;
+  const status: { configured?: boolean } = await fetch("/api/launchblocks/pyth/updates")
+    .then(response => (response.ok ? response.json() : {}))
+    .catch(() => ({}));
+  if (!status.configured) return undefined;
+  return async (feedIds, signal) => {
+    const query = feedIds.map(id => `ids=${encodeURIComponent(id)}`).join("&");
+    const response = await fetch(`/api/launchblocks/pyth/updates?${query}`, signal ? { signal } : {});
+    const body = await response.json();
+    if (!response.ok) {
+      throw Object.assign(new Error(body?.error?.message ?? "Could not get a Pyth price update"), body?.error ?? {});
+    }
+    return body.updates;
+  };
 }
 
 function toApiError(error: unknown): ApiError {
@@ -42,7 +64,8 @@ export async function* runFlowWithWallet(flow: FlowInput, signer: Signer): Async
 
   try {
     const core = await import("@sh/launchblocks/browser");
-    const hedera = await core.walletHederaContext({ signer, network });
+    const pyth = await pythPriceUpdates(flow);
+    const hedera = await core.walletHederaContext({ signer, network, ...(pyth ? { pythPriceUpdates: pyth } : {}) });
     void core
       .runFlow(flow, {
         registry: core.createDefaultRegistry(),
