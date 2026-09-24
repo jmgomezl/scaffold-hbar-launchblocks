@@ -197,7 +197,7 @@ All live in `packages/nextjs/.env` and are read on the server only. None of them
 | `HEDERA_NETWORK` | no | `testnet` | `testnet`, `mainnet` or `localnet`. SaucerSwap steps need testnet or mainnet. |
 | `HEDERA_MIRROR_URL` | no | per network | Override the mirror node base URL. |
 | `PYTH_API_KEY` | no | — | A Hermes API key from [Pyth Terminal](https://docs.pyth.network/price-feeds/core/upgrade/preparing). With it, **Price in USD with Pyth** posts a fresh HBAR/USD update before reading it; without it, the step reads the price already on Hedera. |
-| `PYTH_HERMES_URL` | no | Pyth's own | Another Hermes provider. |
+| `PYTH_HERMES_URL` | no | Pyth's own | Another Hermes provider, `https://` only: the key travels in a header. |
 | `LAUNCHBLOCKS_ALLOW_MAINNET` | no | `false` | The run API refuses mainnet flows unless this is exactly `true`. |
 | `LAUNCHBLOCKS_RUN_TOKEN` | no | — | If set, runs through the API need an `x-launchblocks-token` header; the studio asks for it. |
 | `LAUNCHBLOCKS_RUNS_PER_HOUR` | no | `20` | Per-client run limit for a public deployment; `0` turns it off. |

@@ -133,6 +133,16 @@ describe("priceInUsd() without a price source", () => {
     }
   });
 
+  it("reports a failing mirror node as itself, not as a missing price", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(json({}, 503));
+    const hedera = offlineHederaContext();
+    try {
+      await expect(readPythPrice(hedera, PYTH_FEEDS.hbarUsd)).rejects.toMatchObject({ code: "MIRROR_ERROR" });
+    } finally {
+      hedera.client.close();
+    }
+  });
+
   it("reports a feed the contract has never priced", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(json({ _status: { messages: [{ message: "revert" }] } }, 400));
     const hedera = offlineHederaContext();
@@ -231,6 +241,14 @@ describe("hermesPriceUpdates()", () => {
       code: "PYTH_API_KEY_REJECTED",
       hint: expect.stringContaining("Pyth Terminal"),
     });
+  });
+
+  it("refuses a provider URL that is not https, so the key never travels in the clear", () => {
+    const fetch = vi.spyOn(globalThis, "fetch");
+    expect(() => hermesPriceUpdates({ apiKey: "k", baseUrl: "http://hermes.example" })).toThrow(
+      expect.objectContaining({ code: "PYTH_URL_INVALID" }),
+    );
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("is what an operator context uses when PYTH_API_KEY is set, and only then", () => {

@@ -36,6 +36,8 @@ export async function readPythPrice(hedera: HederaContext, feedId: string, signa
   try {
     raw = await readContract(hedera, { to: evmAddress, data }, signal);
   } catch (cause) {
+    // A revert means no price; an unreachable or failing mirror node is reported as itself.
+    if (!(cause instanceof LaunchBlocksError) || cause.code !== "CONTRACT_READ_FAILED") throw cause;
     throw new LaunchBlocksError(
       "PYTH_NO_PRICE",
       `Pyth's contract on ${hedera.network} has no price for feed ${feedId}`,

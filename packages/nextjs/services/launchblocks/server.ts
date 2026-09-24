@@ -58,12 +58,30 @@ export function jsonError(status: number, code: string, message: string, extra: 
 }
 
 /** Map thrown errors to HTTP responses without leaking internals. */
+/** Errors that are not the request's fault. Everything else a LaunchBlocksError reports is a 400. */
+const HTTP_STATUS: Readonly<Record<string, number>> = {
+  CONTRACT_ARTIFACT_MISSING: 404,
+  NETWORK_MISMATCH: 409,
+  // The server's own setup: contracts not compiled, no operator, a bad Hermes URL.
+  CONTRACT_ARTIFACTS_MISSING: 500,
+  CONTRACT_ARTIFACTS_UNAVAILABLE: 500,
+  PYTH_URL_INVALID: 500,
+  OPERATOR_MISSING: 503,
+  // A service the server depends on failed or refused it.
+  MIRROR_UNREACHABLE: 502,
+  MIRROR_ERROR: 502,
+  PYTH_UNREACHABLE: 502,
+  PYTH_UPDATE_FAILED: 502,
+  PYTH_API_KEY_REJECTED: 502,
+  PYTH_NOT_ENTITLED: 502,
+};
+
 export function errorResponse(error: unknown) {
   if (error instanceof FlowValidationError) {
     return jsonError(400, error.code, "Flow is invalid", { issues: error.issues });
   }
   if (error instanceof LaunchBlocksError) {
-    const status = error.code === "OPERATOR_MISSING" ? 503 : error.code === "NETWORK_MISMATCH" ? 409 : 400;
+    const status = HTTP_STATUS[error.code] ?? 400;
     return jsonError(status, error.code, error.message, error.hint ? { hint: error.hint } : {});
   }
   console.error("[launchblocks]", error);

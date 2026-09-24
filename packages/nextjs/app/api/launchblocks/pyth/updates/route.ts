@@ -7,18 +7,19 @@ export const runtime = "nodejs";
 const SERVED_FEEDS = new Set<string>(Object.values(PYTH_FEEDS));
 /** Updates stay valid on Pyth's contract for 60 s; reusing one for a few seconds bounds the key's use. */
 const REUSE_MS = 3_000;
-let latest: { ids: string; at: number; updates: readonly string[] } | null = null;
+let latest: { ids: string; at: number; updates: Promise<readonly string[]> } | null = null;
 
 /**
  * Signed Pyth price updates for wallet runs in the browser, fetched with the
  * server's Hermes key, so the key never reaches the page. Without `ids` it
  * says whether a key is configured. Only the feeds LaunchBlocks uses are
- * served, and an answer is reused for a few seconds, so the route cannot
- * spend the key's quota on anything else.
+ * served, and an answer (or the request for it) is shared for a few seconds,
+ * so the route cannot spend the key's quota on anything else.
  */
 export async function GET(req: Request) {
   const apiKey = process.env.PYTH_API_KEY?.trim();
-  const ids = new URL(req.url).searchParams.getAll("ids");
+  // Sorted and deduplicated, so any order or repetition of the same feeds shares one answer.
+  const ids = [...new Set(new URL(req.url).searchParams.getAll("ids"))].sort();
   if (!ids.length) return NextResponse.json({ configured: !!apiKey });
   if (!apiKey) {
     return NextResponse.json(
@@ -35,10 +36,18 @@ export async function GET(req: Request) {
   try {
     const key = ids.join(",");
     if (!latest || latest.ids !== key || Date.now() - latest.at > REUSE_MS) {
-      const updates = await hermesPriceUpdates({ apiKey, baseUrl: process.env.PYTH_HERMES_URL })(ids);
-      latest = { ids: key, at: Date.now(), updates };
+      // Requests that arrive while Hermes answers wait for the same call; a failed call is not reused.
+      const entry = {
+        ids: key,
+        at: Date.now(),
+        updates: hermesPriceUpdates({ apiKey, baseUrl: process.env.PYTH_HERMES_URL })(ids),
+      };
+      entry.updates.catch(() => {
+        if (latest === entry) latest = null;
+      });
+      latest = entry;
     }
-    return NextResponse.json({ updates: latest.updates });
+    return NextResponse.json({ updates: await latest.updates });
   } catch (error) {
     return errorResponse(error);
   }

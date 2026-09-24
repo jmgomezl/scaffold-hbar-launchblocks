@@ -17,6 +17,10 @@ type HermesLatest = { binary?: { encoding?: string; data?: string[] } };
  */
 export function hermesPriceUpdates(options: HermesOptions): PythPriceUpdates {
   const base = (options.baseUrl?.trim() || HERMES_BASE_URL).replace(/\/+$/, "");
+  if (!base.startsWith("https://")) {
+    // The API key rides in a header: never send it in the clear.
+    throw new LaunchBlocksError("PYTH_URL_INVALID", `PYTH_HERMES_URL must be an https:// URL, not "${base}"`);
+  }
   return async (feedIds, signal) => {
     const query = feedIds.map(id => `ids[]=${encodeURIComponent(id)}`).join("&");
     const url = `${base}/v2/updates/price/latest?${query}&encoding=hex&parsed=false`;

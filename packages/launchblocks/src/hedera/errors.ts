@@ -35,7 +35,8 @@ export const STATUS_HINTS: Readonly<Record<string, string>> = {
   INVALID_TOPIC_ID: "Check the topic id: it must exist on the selected network.",
   TOKEN_NOT_ASSOCIATED_TO_ACCOUNT:
     "The receiving account has not associated this token. Use hts.airdrop (no association needed) or associate first.",
-  TOKEN_ALREADY_ASSOCIATED_TO_ACCOUNT: "The account already holds this token; remove the associate step.",
+  TOKEN_ALREADY_ASSOCIATED_TO_ACCOUNT:
+    "The account has already associated this token, so it needs no association here. The Associate token step counts this as done.",
   INSUFFICIENT_TOKEN_BALANCE: "The treasury does not hold enough tokens. Mint more or lower the amount.",
   TOKEN_HAS_NO_SUPPLY_KEY: "Minting needs a supply key. Recreate the token with supplyKey enabled.",
   TOKEN_MAX_SUPPLY_REACHED: "The token's max supply is exhausted; raise maxSupply or mint less.",

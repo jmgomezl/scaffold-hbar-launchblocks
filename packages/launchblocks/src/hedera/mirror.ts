@@ -3,9 +3,11 @@ import type { HederaContext } from "./context";
 import { normalizeTransactionId } from "./context";
 
 /**
- * Minimal mirror node reads. The mirror node lags consensus by a few
- * seconds, so it is used for verification and dashboards, never to gate a
- * transaction that was just submitted.
+ * Mirror node reads: free, where a consensus-node query costs a fee. They
+ * serve contract reads and dry runs (contracts/call), proof after a run, and
+ * wallet contexts, which read here what an operator gets from a paid query or
+ * record. The mirror node lags consensus by a few seconds, so a read that
+ * follows a write waits for it to catch up (waitForMirror, or a retry on 404).
  */
 
 export type MirrorAccount = {
@@ -112,14 +114,6 @@ export async function fetchExchangeRates(
   return { current, next: toRate(response?.next_rate) };
 }
 
-/** The current rate only; see fetchExchangeRates for why that is not always the rate in effect. */
-export async function fetchExchangeRate(
-  hedera: Pick<HederaContext, "mirrorBaseUrl">,
-  signal?: AbortSignal,
-): Promise<ExchangeRate> {
-  return (await fetchExchangeRates(hedera, signal)).current;
-}
-
 /** Convert tinycents to tinybars exactly as the 0x168 precompile does. */
 export function tinycentsToTinybars(tinycents: bigint, rate: ExchangeRate): bigint {
   return (tinycents * BigInt(rate.hbarEquivalent)) / BigInt(rate.centEquivalent);
@@ -150,6 +144,10 @@ export async function readContract(
     });
   } catch (cause) {
     throw new LaunchBlocksError("MIRROR_UNREACHABLE", `Could not reach the mirror node at ${url}`, { cause });
+  }
+  if (response.status === 429 || response.status >= 500) {
+    // The mirror node's trouble, not the contract's: a revert comes back as a 400.
+    throw new LaunchBlocksError("MIRROR_ERROR", `Mirror node returned ${response.status} for ${url}`);
   }
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
