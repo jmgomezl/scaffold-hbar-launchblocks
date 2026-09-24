@@ -57,7 +57,7 @@ export function buildSchedule(
     .setExpirationTime(Timestamp.fromDate(executesAt))
     .setWaitForExpiry(true);
   if (options.memo) transaction.setScheduleMemo(options.memo);
-  if (options.adminKey) transaction.setAdminKey(hedera.operatorKey.publicKey);
+  if (options.adminKey) transaction.setAdminKey(hedera.operatorPublicKey);
   return { transaction, executesAt };
 }
 
@@ -68,7 +68,7 @@ async function submitSchedule(
   context: string,
 ): Promise<ScheduleResult> {
   const { transaction, executesAt } = buildSchedule(hedera, inner, options);
-  return submit(hedera.client, transaction, context, (receipt, response) => {
+  return submit(hedera, transaction, context, (receipt, transactionId) => {
     if (!receipt.scheduleId || !receipt.scheduledTransactionId) {
       throw new LaunchBlocksError("RECEIPT_INCOMPLETE", "The schedule was created but the receipt has no schedule id");
     }
@@ -76,7 +76,7 @@ async function submitSchedule(
       scheduleId: receipt.scheduleId.toString(),
       scheduledTransactionId: receipt.scheduledTransactionId.toString(),
       executesAt: executesAt.toISOString(),
-      transactionId: response.transactionId.toString(),
+      transactionId,
     };
   });
 }

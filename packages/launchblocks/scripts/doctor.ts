@@ -107,7 +107,7 @@ async function main(): Promise<void> {
         hint: `The id and key may belong to a different network. Create a ${network} account at https://portal.hedera.com`,
       });
     } else {
-      const derived = hedera.operatorKey.publicKey.toStringRaw().toLowerCase();
+      const derived = hedera.operatorPublicKey.toStringRaw().toLowerCase();
       const onChain = account.publicKey?.toLowerCase().replace(/^0x/, "") ?? null;
       checks.push({
         label: "key matches account",

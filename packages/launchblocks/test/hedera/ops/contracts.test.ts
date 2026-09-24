@@ -2,7 +2,7 @@ import { ContractCreateFlow, ContractExecuteTransaction } from "@hiero-ledger/sd
 import { encodeAbiParameters, encodeFunctionData, hexToBytes, parseAbiItem, toFunctionSelector, toHex } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { ContractArtifact } from "../../../src/contracts/artifacts";
+import type { ContractArtifact } from "../../../src/contracts/types";
 import { LaunchBlocksError } from "../../../src/errors";
 import {
   callContract,
@@ -210,5 +210,7 @@ describe("deployContract", () => {
     );
     expect(flow.maxAutomaticTokenAssociation).toBe(1);
     expect(flow.adminKey).toBeNull();
+    // The flow uploads the bytecode as hex text; raw bytes fail with ERROR_DECODING_BYTESTRING.
+    expect(new TextDecoder().decode(flow.bytecode as Uint8Array)).toBe("6080604052");
   });
 });

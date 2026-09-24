@@ -22,17 +22,17 @@ export type CreateTopicResult = { topicId: string; transactionId: string };
 export function buildTopicCreate(hedera: HederaContext, params: CreateTopicParams): TopicCreateTransaction {
   const tx = new TopicCreateTransaction();
   if (params.memo) tx.setTopicMemo(params.memo);
-  if (params.adminKey) tx.setAdminKey(hedera.operatorKey.publicKey);
-  if (params.submitKey) tx.setSubmitKey(hedera.operatorKey.publicKey);
+  if (params.adminKey) tx.setAdminKey(hedera.operatorPublicKey);
+  if (params.submitKey) tx.setSubmitKey(hedera.operatorPublicKey);
   return tx;
 }
 
 export async function createTopic(hedera: HederaContext, params: CreateTopicParams): Promise<CreateTopicResult> {
-  return submit(hedera.client, buildTopicCreate(hedera, params), "Creating topic", (receipt, response) => {
+  return submit(hedera, buildTopicCreate(hedera, params), "Creating topic", (receipt, transactionId) => {
     if (!receipt.topicId) {
       throw new LaunchBlocksError("RECEIPT_INCOMPLETE", "Topic creation succeeded but the receipt has no topic id");
     }
-    return { topicId: receipt.topicId.toString(), transactionId: response.transactionId.toString() };
+    return { topicId: receipt.topicId.toString(), transactionId };
   });
 }
 
@@ -57,9 +57,14 @@ export function encodeMessage(message: SubmitMessageParams["message"]): string {
   return typeof message === "string" ? message : JSON.stringify(message);
 }
 
+/** UTF-8 size, measured the same way in Node and in the browser. */
+export function messageBytes(message: SubmitMessageParams["message"]): number {
+  return new TextEncoder().encode(encodeMessage(message)).length;
+}
+
 export function buildTopicMessageSubmit(params: SubmitMessageParams): TopicMessageSubmitTransaction {
   const encoded = encodeMessage(params.message);
-  const bytes = Buffer.byteLength(encoded, "utf8");
+  const bytes = messageBytes(params.message);
   if (bytes === 0) {
     throw new LaunchBlocksError("MESSAGE_EMPTY", "Topic message must not be empty");
   }
@@ -80,11 +85,18 @@ export async function submitTopicMessage(
   params: SubmitMessageParams,
 ): Promise<SubmitMessageResult> {
   const tx = buildTopicMessageSubmit(params);
-  const bytes = Buffer.byteLength(encodeMessage(params.message), "utf8");
-  return submit(hedera.client, tx, `Submitting message to ${params.topicId}`, (receipt, response) => ({
+  const bytes = messageBytes(params.message);
+  if (hedera.signer && bytes > HCS_CHUNK_BYTES) {
+    throw new LaunchBlocksError(
+      "WALLET_MESSAGE_TOO_LONG",
+      `Message is ${bytes} bytes; with a wallet a message must fit one ${HCS_CHUNK_BYTES}-byte chunk`,
+      { hint: "Shorten the message, or run the flow with the demo account, which sends every chunk." },
+    );
+  }
+  return submit(hedera, tx, `Submitting message to ${params.topicId}`, (receipt, transactionId) => ({
     topicId: params.topicId,
     sequenceNumber: Number(receipt.topicSequenceNumber),
-    transactionId: response.transactionId.toString(),
+    transactionId,
     bytes,
   }));
 }

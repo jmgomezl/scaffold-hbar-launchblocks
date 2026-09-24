@@ -23,6 +23,7 @@ import {
   resolveEvmAddress,
   tinycentsToTinybars,
 } from "../hedera/mirror";
+import { send, sendContract } from "../hedera/ops/submit";
 import { getTokenInfo } from "../hedera/ops/tokens";
 import {
   ADD_LIQUIDITY_GAS,
@@ -233,19 +234,24 @@ export async function createPoolWithHbar(
   // 1. Create the pair, paying the fee. Nothing is deposited yet.
   let createPairTransactionId: string;
   try {
-    const response = await new ContractExecuteTransaction()
+    const createPair = new ContractExecuteTransaction()
       .setContractId(ContractId.fromString(deployment.v1Factory))
       .setGas(params.createPairGasLimit ?? CREATE_PAIR_GAS)
       .setPayableAmount(Hbar.fromTinybars(toLong(feePaid)))
       .setFunction(
         "createPair",
         new ContractFunctionParameters().addAddress(tokenEvm).addAddress(entityIdToEvmAddress(deployment.whbarToken)),
-      )
-      .execute(hedera.client);
-    await response.getReceipt(hedera.client);
-    createPairTransactionId = response.transactionId.toString();
+      );
+    ({ transactionId: createPairTransactionId } = await send(
+      hedera,
+      createPair,
+      `Creating the SaucerSwap pair for ${params.tokenId}`,
+    ));
   } catch (error) {
-    const translated = translateHederaError(error, `Creating the SaucerSwap pair for ${params.tokenId}`);
+    const translated =
+      error instanceof LaunchBlocksError
+        ? error
+        : translateHederaError(error, `Creating the SaucerSwap pair for ${params.tokenId}`);
     throw new LaunchBlocksError(translated.code, translated.message, {
       cause: error,
       hint:
@@ -260,7 +266,7 @@ export async function createPoolWithHbar(
   // 3. Deposit both sides; into an empty pair the router takes them as given.
   try {
     const deadline = Math.floor(Date.now() / 1000) + params.deadlineSeconds;
-    const response = await new ContractExecuteTransaction()
+    const deposit = new ContractExecuteTransaction()
       .setContractId(ContractId.fromString(deployment.v1Router))
       .setGas(params.gasLimit ?? ADD_LIQUIDITY_GAS)
       .setPayableAmount(Hbar.fromTinybars(toLong(hbarTinybar)))
@@ -273,17 +279,17 @@ export async function createPoolWithHbar(
           .addUint256(toLong(applySlippage(hbarTinybar, params.slippageBps)))
           .addAddress(recipient)
           .addUint256(deadline),
-      )
-      .execute(hedera.client);
-    const record = await response.getRecord(hedera.client);
-    const result = record.contractFunctionResult;
-    if (!result) {
-      throw new LaunchBlocksError("CONTRACT_NO_RESULT", "The deposit produced no contract result");
-    }
-
-    const amountToken = BigInt(result.getUint256(0).toString());
-    const amountHbar = BigInt(result.getUint256(1).toString());
-    const liquidity = BigInt(result.getUint256(2).toString());
+      );
+    const outcome = await sendContract(
+      hedera,
+      deposit,
+      `Depositing into the new SaucerSwap pool for ${params.tokenId}`,
+      signal,
+    );
+    // addLiquidityETH returns (amountToken, amountETH, liquidity).
+    const amountToken = decodeUint(outcome.output, 0);
+    const amountHbar = decodeUint(outcome.output, 1);
+    const liquidity = decodeUint(outcome.output, 2);
     const pair = await findPoolAfterWrite(hedera, params.tokenId, signal ? { signal } : {});
     const pairId = pair?.contractId ?? null;
     const lpTokenId = pair ? await readLpToken(hedera, pair.evmAddress, signal) : null;
@@ -294,7 +300,7 @@ export async function createPoolWithHbar(
       pairEvmAddress: pair?.evmAddress ?? null,
       lpTokenId,
       liquidity: fromUnits(liquidity, LP_TOKEN_DECIMALS),
-      transactionId: response.transactionId.toString(),
+      transactionId: outcome.transactionId,
       createPairTransactionId,
       allowanceTransactionId,
       tokenAmountUnits: amountToken.toString(),
@@ -302,11 +308,12 @@ export async function createPoolWithHbar(
       liquidityUnits: liquidity.toString(),
       creationFeeHbar: quote.creationFeeHbar,
       creationFeePaidHbar: fromUnits(feePaid, 8),
-      gasUsed: Number(result.gasUsed ?? 0),
+      gasUsed: outcome.gasUsed,
       openingPriceHbar: openingPrice(amountHbar, amountToken, decimals),
       poolUrl: pairId ? `${deployment.appBaseUrl}/liquidity/${pairId}` : deployment.appBaseUrl,
     };
   } catch (error) {
+    if (error instanceof LaunchBlocksError) throw error;
     throw translateHederaError(error, `Depositing into the new SaucerSwap pool for ${params.tokenId}`);
   }
 }
@@ -322,20 +329,15 @@ async function approveRouterAllowance(
   routerId: string,
   units: bigint,
 ): Promise<string> {
-  try {
-    const response = await new ContractExecuteTransaction()
-      .setContractId(ContractId.fromString(tokenId))
-      .setGas(APPROVE_GAS)
-      .setFunction(
-        "approve",
-        new ContractFunctionParameters().addAddress(entityIdToEvmAddress(routerId)).addUint256(toLong(units)),
-      )
-      .execute(hedera.client);
-    await response.getReceipt(hedera.client);
-    return response.transactionId.toString();
-  } catch (error) {
-    throw translateHederaError(error, `Approving the SaucerSwap router to spend ${tokenId}`);
-  }
+  const approve = new ContractExecuteTransaction()
+    .setContractId(ContractId.fromString(tokenId))
+    .setGas(APPROVE_GAS)
+    .setFunction(
+      "approve",
+      new ContractFunctionParameters().addAddress(entityIdToEvmAddress(routerId)).addUint256(toLong(units)),
+    );
+  const { transactionId } = await send(hedera, approve, `Approving the SaucerSwap router to spend ${tokenId}`);
+  return transactionId;
 }
 
 /** `amount` increased by `bps` basis points, rounded up. */

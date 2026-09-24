@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-import { CONTRACT_NAME_PATTERN, loadHardhatArtifact } from "../../contracts/artifacts";
+import { CONTRACT_NAME_PATTERN } from "../../contracts/types";
+import { LaunchBlocksError } from "../../errors";
 import { DEFAULT_DEPLOY_GAS, deployContract } from "../../hedera/ops/contracts";
 import { defineStep } from "../../registry/define-step";
 import { AmountSchema, CATEGORY_COLOUR, MemoSchema } from "../shared";
@@ -92,12 +93,17 @@ export const contractDeploy = defineStep({
     ].join("\n"),
     hederaServices: ["SmartContract", "MirrorNode"],
   },
-  execute: (input, ctx) => {
+  execute: async (input, ctx) => {
+    if (!ctx.artifacts) {
+      throw new LaunchBlocksError("CONTRACT_ARTIFACTS_UNAVAILABLE", "This run has no way to load compiled contracts", {
+        hint: "Run the flow from the Launch Studio or core:run, which read the Hardhat package's artifacts.",
+      });
+    }
     const { args } = collectArgs(input);
     return deployContract(
       ctx.hedera,
       {
-        artifact: loadHardhatArtifact(input.contract),
+        artifact: await ctx.artifacts(input.contract),
         args,
         gas: input.gas,
         autoAssociations: input.autoAssociations,

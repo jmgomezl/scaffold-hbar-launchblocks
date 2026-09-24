@@ -31,6 +31,7 @@ export function createHederaContext(options: HederaContextOptions): HederaContex
     network: options.network,
     client,
     operatorId,
+    operatorPublicKey: operatorKey.publicKey,
     operatorKey,
     mirrorBaseUrl: (blankToUndefined(options.mirrorBaseUrl) ?? MIRROR_BASE_URL[options.network]).replace(/\/+$/, ""),
   };
@@ -130,7 +131,7 @@ export function parsePrivateKey(value: string, type?: OperatorKeyType): PrivateK
   }
 }
 
-function clientFor(network: Network): Client {
+export function clientFor(network: Network): Client {
   switch (network) {
     case "testnet":
       return Client.forTestnet();

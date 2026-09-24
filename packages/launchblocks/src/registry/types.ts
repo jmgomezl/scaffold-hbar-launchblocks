@@ -1,6 +1,7 @@
 import type { ZodType } from "zod";
 
 import type { Network } from "../flow/schema";
+import type { ArtifactLoader } from "../contracts/types";
 import type { HederaContext } from "../hedera/context";
 
 /**
@@ -75,6 +76,8 @@ export type RunContext = {
   log: Logger;
   /** Aborts long waits (mirror node polling) when the caller cancels the run. */
   signal?: AbortSignal;
+  /** Compiled contracts for contract.deploy; runs without one cannot deploy. */
+  artifacts?: ArtifactLoader;
 };
 
 /** What a step's `codegen` receives: symbolic access to its params. */

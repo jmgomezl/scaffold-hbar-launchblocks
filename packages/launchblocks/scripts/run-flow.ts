@@ -1,20 +1,28 @@
 /**
  * Run a flow from the terminal.
  *
- *   yarn core:run <flow.json | gallery-id> [--dry-run] [--codegen <out.ts>] [--env <path>] [--network <net>]
+ *   yarn core:run <flow.json | gallery-id> [--dry-run] [--codegen <out.ts>] [--env <path>] [--network <net>] [--wallet]
  *
  * Reads the operator from the environment (see packages/nextjs/.env.example);
  * without --env it loads packages/nextjs/.env, then ./.env. Every run writes
  * its RunResult to packages/launchblocks/runs/ so testnet activity is traceable.
+ *
+ * --wallet signs through the SDK's local Wallet (a Signer holding the operator
+ * key) instead of the operator client: the code path a browser wallet takes,
+ * testable from the terminal.
  */
+import { LocalProvider, Wallet } from "@hiero-ledger/sdk";
 import { config as loadEnv } from "dotenv";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { generateLaunchScript } from "../src/codegen/typescript";
+import { loadHardhatArtifact } from "../src/contracts/artifacts";
 import { FlowValidationError, LaunchBlocksError } from "../src/errors";
 import { GALLERY, galleryFlow } from "../src/gallery";
 import { hederaContextFromEnv, parseNetwork } from "../src/hedera/client";
+import type { HederaContext } from "../src/hedera/context";
+import { walletHederaContext } from "../src/hedera/wallet";
 import type { RunContext } from "../src/registry/types";
 import type { RunEvent, RunResult } from "../src/runner/runner";
 import { runFlow } from "../src/runner/runner";
@@ -24,10 +32,10 @@ import { findCallerFile } from "./paths";
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
 const RUNS_DIR = path.join(PACKAGE_ROOT, "runs");
 
-type Args = { source: string; dryRun: boolean; codegen?: string; env?: string; network?: string };
+type Args = { source: string; dryRun: boolean; wallet: boolean; codegen?: string; env?: string; network?: string };
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { source: "", dryRun: false };
+  const args: Args = { source: "", dryRun: false, wallet: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i] as string;
     const next = (): string => {
@@ -37,6 +45,7 @@ function parseArgs(argv: string[]): Args {
       return value;
     };
     if (arg === "--dry-run") args.dryRun = true;
+    else if (arg === "--wallet") args.wallet = true;
     else if (arg === "--codegen") args.codegen = next();
     else if (arg === "--env") args.env = next();
     else if (arg === "--network") args.network = next();
@@ -46,7 +55,7 @@ function parseArgs(argv: string[]): Args {
   }
   if (!args.source) {
     throw new Error(
-      `Usage: run-flow <flow.json | gallery-id> [--dry-run] [--codegen out.ts] [--env path] [--network net]\n` +
+      `Usage: run-flow <flow.json | gallery-id> [--dry-run] [--codegen out.ts] [--env path] [--network net] [--wallet]\n` +
         `Gallery: ${GALLERY.map(entry => entry.id).join(", ")}`,
     );
   }
@@ -96,6 +105,13 @@ function printEvent(event: RunEvent): void {
   }
 }
 
+/** A wallet context whose signer is the SDK's local Wallet for the operator account. */
+async function asWallet(operator: HederaContext): Promise<HederaContext> {
+  if (!operator.operatorKey) throw new Error("--wallet needs the operator key in the environment");
+  const signer = new Wallet(operator.operatorId, operator.operatorKey, LocalProvider.fromClient(operator.client));
+  return walletHederaContext({ signer, network: operator.network, mirrorBaseUrl: operator.mirrorBaseUrl });
+}
+
 function saveRun(result: RunResult): string {
   mkdirSync(RUNS_DIR, { recursive: true });
   const stamp = result.startedAt.replace(/[:.]/g, "-");
@@ -124,8 +140,11 @@ async function main(): Promise<void> {
   }
 
   loadEnvironment(args.env);
-  const hedera = hederaContextFromEnv(process.env, args.network ? { network: parseNetwork(args.network) } : {});
-  console.log(`operator: ${hedera.operatorId.toString()} on ${hedera.network}`);
+  const operator = hederaContextFromEnv(process.env, args.network ? { network: parseNetwork(args.network) } : {});
+  const hedera = args.wallet ? await asWallet(operator) : operator;
+  console.log(
+    `operator: ${hedera.operatorId.toString()} on ${hedera.network}${args.wallet ? ", signing through a local Wallet" : ""}`,
+  );
 
   const ctx: RunContext = {
     network: hedera.network,
@@ -134,6 +153,7 @@ async function main(): Promise<void> {
       if (level === "debug") return;
       if (level === "error") console.error(`    [${level}] ${message}`, meta ?? "");
     },
+    artifacts: name => loadHardhatArtifact(name),
   };
 
   try {
@@ -145,6 +165,7 @@ async function main(): Promise<void> {
     if (result.status === "failed") process.exitCode = 1;
   } finally {
     hedera.client.close();
+    if (hedera !== operator) operator.client.close();
   }
 }
 

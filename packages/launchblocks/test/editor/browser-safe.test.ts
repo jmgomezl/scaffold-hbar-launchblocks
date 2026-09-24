@@ -45,6 +45,22 @@ function reachable(entry: string): { modules: Set<string>; packages: Set<string>
   return { modules, packages };
 }
 
+const NODE_ONLY = ["fs", "path", "os", "child_process", "dotenv"];
+
+describe("@sh/launchblocks/browser", () => {
+  it("reaches no Node built-ins or env loading at runtime, so a page can run flows", () => {
+    const { modules, packages } = reachable(path.join(SRC, "browser.ts"));
+    expect(modules.size).toBeGreaterThan(20);
+    expect([...packages].filter(name => name.startsWith("node:") || NODE_ONLY.includes(name))).toEqual([]);
+    expect([...modules].some(file => file.endsWith(path.join("contracts", "artifacts.ts")))).toBe(false);
+  });
+
+  it("would catch a Node import (the walker works)", () => {
+    const { packages } = reachable(path.join(SRC, "contracts/artifacts.ts"));
+    expect(packages.has("node:fs")).toBe(true);
+  });
+});
+
 describe("@sh/launchblocks/editor", () => {
   it("reaches no zod or Hedera SDK code at runtime", () => {
     const { modules, packages } = reachable(path.join(SRC, "editor/index.ts"));

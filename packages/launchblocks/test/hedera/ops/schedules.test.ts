@@ -25,7 +25,7 @@ describe("buildSchedule", () => {
   it("gives the schedule the operator's key only when asked, so it can be cancelled", () => {
     const hedera = offlineHederaContext();
     const { transaction } = buildSchedule(hedera, mint(), { delaySeconds: 60, adminKey: true, memo: "unlock" }, NOW);
-    expect(transaction.adminKey?.toString()).toBe(hedera.operatorKey.publicKey.toString());
+    expect(transaction.adminKey?.toString()).toBe(hedera.operatorPublicKey.toString());
     expect(transaction.getScheduleMemo).toBe("unlock");
   });
 

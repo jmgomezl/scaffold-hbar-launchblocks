@@ -1,8 +1,9 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-import type { Abi } from "viem";
 
 import { LaunchBlocksError } from "../errors";
+import type { ContractArtifact } from "./types";
+import { CONTRACT_NAME_PATTERN } from "./types";
 
 /**
  * Compiled contracts from the project's Hardhat package, for the
@@ -10,19 +11,8 @@ import { LaunchBlocksError } from "../errors";
  * which `yarn hardhat:compile` writes.
  */
 
-export type ContractArtifact = {
-  contractName: string;
-  /** `contracts/TokenLock.sol` */
-  sourceName: string;
-  abi: Abi;
-  bytecode: `0x${string}`;
-};
-
 const ARTIFACTS_FROM_ROOT = path.join("packages", "hardhat", "artifacts", "contracts");
 const COMPILE_HINT = "Compile the Hardhat contracts first with yarn hardhat:compile, then run again.";
-
-/** `TokenLock`, or `TokenLock.sol:TokenLock` when two files declare the same name. */
-export const CONTRACT_NAME_PATTERN = /^(?:[\w/.-]+\.sol:)?[A-Za-z_$][\w$]*$/;
 
 /**
  * The Hardhat artifacts directory: LAUNCHBLOCKS_ARTIFACTS_DIR when set, else

@@ -1,15 +1,22 @@
-import { ContractCreateFlow, ContractExecuteTransaction, ContractId, Hbar } from "@hiero-ledger/sdk";
+import {
+  ContractCreateFlow,
+  ContractCreateTransaction,
+  ContractExecuteTransaction,
+  ContractId,
+  Hbar,
+} from "@hiero-ledger/sdk";
 import type { AbiFunction, AbiParameter } from "viem";
-import { decodeFunctionResult, encodeAbiParameters, encodeFunctionData, hexToBytes, parseAbiItem, toHex } from "viem";
+import { concat, decodeFunctionResult, encodeAbiParameters, encodeFunctionData, hexToBytes, parseAbiItem } from "viem";
 
-import type { ContractArtifact } from "../../contracts/artifacts";
+import type { ContractArtifact } from "../../contracts/types";
 import { LaunchBlocksError } from "../../errors";
 import { entityIdToEvmAddress } from "../abi";
 import type { DecimalAmount } from "../amounts";
 import { toLong, toUnits } from "../amounts";
 import type { HederaContext } from "../context";
 import { translateHederaError } from "../errors";
-import { fetchAccount, readContract, waitForMirror } from "../mirror";
+import { fetchAccount, fetchContractResult, readContract, waitForMirror } from "../mirror";
+import { sendContract } from "./submit";
 
 /** Measured: deploying TokenLock used well under this on testnet. Hedera charges at least 80% of the limit. */
 export const DEFAULT_DEPLOY_GAS = 1_000_000;
@@ -193,9 +200,15 @@ export type DeployContractResult = {
   gasUsed: number;
 };
 
+/** Bytecode that fits a single ContractCreate transaction (Hedera caps transactions at 6 KB). */
+export const INLINE_BYTECODE_LIMIT = 4096;
+
 /**
- * Deploy a compiled contract with ContractCreateFlow: the bytecode goes to a
- * file (FileCreate + FileAppend), then ContractCreate runs the constructor.
+ * Deploy a compiled contract. An operator context uses ContractCreateFlow:
+ * the bytecode goes to a file (FileCreate + FileAppend), then ContractCreate
+ * runs the constructor. A wallet context sends small contracts, such as
+ * TokenLock, as one ContractCreate with the bytecode inline, so the deploy is
+ * one approval; larger ones go through the flow, one approval per transaction.
  */
 export async function deployContract(
   hedera: HederaContext,
@@ -208,32 +221,67 @@ export async function deployContract(
   const values = await toAbiValues(hedera, inputs, params.args ?? [], signal);
   const encoded = inputs.length ? encodeAbiParameters(inputs, values) : "0x";
 
-  const flow = new ContractCreateFlow()
-    .setBytecode(artifact.bytecode.replace(/^0x/, ""))
-    .setGas(params.gas ?? DEFAULT_DEPLOY_GAS)
-    .setConstructorParameters(hexToBytes(encoded));
-  if (params.autoAssociations) flow.setMaxAutomaticTokenAssociations(params.autoAssociations);
-  if (params.adminKey) flow.setAdminKey(hedera.operatorKey.publicKey);
-  if (params.initialHbar !== undefined)
-    flow.setInitialBalance(Hbar.fromTinybars(toLong(toUnits(params.initialHbar, 8))));
-  if (params.memo) flow.setContractMemo(params.memo);
-
-  try {
-    const response = await flow.execute(hedera.client);
-    const record = await response.getRecord(hedera.client);
-    const contractId = record.receipt.contractId?.toString();
+  const context = `Deploying ${artifact.contractName}`;
+  const bytecode = hexToBytes(artifact.bytecode);
+  const configure = <T extends ContractCreateFlow | ContractCreateTransaction>(create: T): T => {
+    create.setGas(params.gas ?? DEFAULT_DEPLOY_GAS);
+    if (params.autoAssociations) create.setMaxAutomaticTokenAssociations(params.autoAssociations);
+    if (params.adminKey) create.setAdminKey(hedera.operatorPublicKey);
+    if (params.initialHbar !== undefined) {
+      create.setInitialBalance(Hbar.fromTinybars(toLong(toUnits(params.initialHbar, 8))));
+    }
+    if (params.memo) create.setContractMemo(params.memo);
+    return create;
+  };
+  const deployed = (contractId: string | undefined, transactionId: string, gasUsed: number) => {
     if (!contractId) throw new LaunchBlocksError("CONTRACT_NO_ID", "The deployment returned no contract id");
     return {
       contract: artifact.contractName,
       contractId,
       accountId: contractId,
       evmAddress: entityIdToEvmAddress(contractId),
-      transactionId: response.transactionId.toString(),
-      gasUsed: Number(record.contractFunctionResult?.gasUsed ?? 0),
+      transactionId,
+      gasUsed,
     };
+  };
+
+  // Inline initcode runs exactly as given: the node appends constructorParameters
+  // only to bytecode it reads from a file. So the arguments go on the end, as in
+  // an Ethereum deploy, or the constructor finds none and reverts.
+  const initcode = concat([bytecode, hexToBytes(encoded)]);
+  if (hedera.signer && initcode.length <= INLINE_BYTECODE_LIMIT) {
+    const create = configure(new ContractCreateTransaction().setBytecode(initcode));
+    const outcome = await sendContract(hedera, create, context, signal);
+    return deployed(outcome.receipt.contractId?.toString(), outcome.transactionId, outcome.gasUsed);
+  }
+  // The flow uploads the bytecode to a file, which must hold it as hex text.
+  const flow = configure(
+    new ContractCreateFlow().setBytecode(artifact.bytecode.replace(/^0x/, "")),
+  ).setConstructorParameters(hexToBytes(encoded));
+  if (hedera.signer) {
+    try {
+      const response = await flow.executeWithSigner(hedera.signer);
+      const receipt = await response.getReceipt(hedera.client);
+      const transactionId = response.transactionId.toString();
+      const { gasUsed } = await fetchContractResult(hedera, transactionId, signal ? { signal } : {});
+      return deployed(receipt.contractId?.toString(), transactionId, gasUsed);
+    } catch (error) {
+      if (error instanceof LaunchBlocksError) throw error;
+      throw translateHederaError(error, context);
+    }
+  }
+
+  try {
+    const response = await flow.execute(hedera.client);
+    const record = await response.getRecord(hedera.client);
+    return deployed(
+      record.receipt.contractId?.toString(),
+      response.transactionId.toString(),
+      Number(record.contractFunctionResult?.gasUsed ?? 0),
+    );
   } catch (error) {
     if (error instanceof LaunchBlocksError) throw error;
-    throw translateHederaError(error, `Deploying ${artifact.contractName}`);
+    throw translateHederaError(error, context);
   }
 }
 
@@ -308,21 +356,22 @@ export async function callContract(
     transaction.setPayableAmount(Hbar.fromTinybars(toLong(toUnits(params.payableHbar, 8))));
   }
   try {
-    const response = await transaction.execute(hedera.client);
-    const record = await response.getRecord(hedera.client);
-    const bytes = record.contractFunctionResult?.bytes;
-    const decoded = bytes && bytes.length ? decode(toHex(bytes)) : [];
+    const outcome = await sendContract(hedera, transaction, `Calling ${fn.name} on ${params.contractId}`, signal);
+    const decoded = decode(outcome.output);
     return {
       contractId: params.contractId,
       function: fn.name,
       mode: "write",
       result: renderResult(decoded),
       values: decoded,
-      transactionId: response.transactionId.toString(),
-      gasUsed: Number(record.contractFunctionResult?.gasUsed ?? 0),
+      transactionId: outcome.transactionId,
+      gasUsed: outcome.gasUsed,
     };
   } catch (error) {
-    const translated = translateHederaError(error, `Calling ${fn.name} on ${params.contractId}`);
+    const translated =
+      error instanceof LaunchBlocksError
+        ? error
+        : translateHederaError(error, `Calling ${fn.name} on ${params.contractId}`);
     throw new LaunchBlocksError(translated.code, translated.message, {
       cause: error,
       hint:

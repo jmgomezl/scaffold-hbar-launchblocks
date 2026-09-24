@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { RunContext, RunEvent } from "@sh/launchblocks";
-import { runFlow } from "@sh/launchblocks";
+import { loadHardhatArtifact, runFlow } from "@sh/launchblocks";
 import { errorResponse, getRegistry, guardRun, operatorContext, readJsonBody } from "~~/services/launchblocks/server";
 
 export const runtime = "nodejs";
@@ -37,6 +37,7 @@ export async function POST(req: Request) {
         if (level === "error" || level === "warn") console[level](`[launchblocks:${flow.id}] ${message}`, meta ?? "");
       },
       signal: req.signal,
+      artifacts: name => loadHardhatArtifact(name),
     };
 
     if (req.headers.get("accept")?.includes(NDJSON)) {

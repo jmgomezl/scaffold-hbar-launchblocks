@@ -54,7 +54,7 @@ describe("buildTokenCreate()", () => {
 
   it("sets only the enabled keys, all to the operator's public key", () => {
     const tx = buildTokenCreate(hedera, { ...base, keys: { ...noKeys, supply: true, freeze: true } });
-    const operator = hedera.operatorKey.publicKey.toString();
+    const operator = hedera.operatorPublicKey.toString();
     expect(tx.supplyKey?.toString()).toBe(operator);
     expect(tx.freezeKey?.toString()).toBe(operator);
     expect(tx.adminKey).toBeNull();

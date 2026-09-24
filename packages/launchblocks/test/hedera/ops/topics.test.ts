@@ -9,7 +9,7 @@ afterAll(() => hedera.client.close());
 describe("buildTopicCreate()", () => {
   it("sets memo and keys from the params", () => {
     const tx = buildTopicCreate(hedera, { memo: "launch log", adminKey: true, submitKey: true });
-    const operator = hedera.operatorKey.publicKey.toString();
+    const operator = hedera.operatorPublicKey.toString();
     expect(tx.topicMemo).toBe("launch log");
     expect(tx.adminKey?.toString()).toBe(operator);
     expect(tx.submitKey?.toString()).toBe(operator);

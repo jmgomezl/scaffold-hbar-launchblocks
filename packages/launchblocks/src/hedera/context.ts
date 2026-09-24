@@ -1,17 +1,30 @@
-import type { AccountId, Client, PrivateKey } from "@hiero-ledger/sdk";
+import type { AccountId, Client, PrivateKey, PublicKey, Signer } from "@hiero-ledger/sdk";
 
 import type { Network } from "../flow/schema";
 
 /**
- * Everything a step needs to talk to Hedera. Built once per run by the API
- * route (or the generated launch script) and handed to every executor.
+ * Everything a step needs to talk to Hedera, handed to every executor. Two
+ * kinds exist: an operator context on the server (the API route, the CLI, a
+ * generated launch script), whose client holds the operator key and signs;
+ * and a wallet context in the browser, where a connected wallet signs each
+ * transaction and the client only runs free queries.
  */
 export type HederaContext = {
   network: Network;
-  /** SDK client with the operator already set; signs with the operator key. */
+  /**
+   * SDK client. In an operator context it carries the operator and signs; in
+   * a wallet context it has no operator and only freezes transactions and
+   * reads receipts, which are free.
+   */
   client: Client;
+  /** The account that pays for and signs every step. */
   operatorId: AccountId;
-  operatorKey: PrivateKey;
+  /** That account's public key: the key a flow gives the tokens, topics, contracts and schedules it creates. */
+  operatorPublicKey: PublicKey;
+  /** Operator contexts only: the private key the client signs with. Never serialized. */
+  operatorKey?: PrivateKey;
+  /** Wallet contexts only: signs and submits every transaction, one approval each. */
+  signer?: Signer;
   /** Mirror node REST base URL without trailing slash, e.g. https://testnet.mirrornode.hedera.com */
   mirrorBaseUrl: string;
 };

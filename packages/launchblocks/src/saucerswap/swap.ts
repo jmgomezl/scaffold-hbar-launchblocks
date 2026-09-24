@@ -7,6 +7,7 @@ import { fromUnits, toLong, toUnits } from "../hedera/amounts";
 import type { HederaContext } from "../hedera/context";
 import { translateHederaError } from "../hedera/errors";
 import { readContract, resolveEvmAddress } from "../hedera/mirror";
+import { sendContract } from "../hedera/ops/submit";
 import { getTokenInfo } from "../hedera/ops/tokens";
 import { SELECTORS, SWAP_GAS, saucerswapFor } from "./config";
 import { applySlippage } from "./pool";
@@ -118,7 +119,7 @@ export async function swapHbarForTokens(
   const deadline = Math.floor(Date.now() / 1000) + params.deadlineSeconds;
 
   try {
-    const response = await new ContractExecuteTransaction()
+    const swap = new ContractExecuteTransaction()
       .setContractId(ContractId.fromString(v1Router))
       .setGas(params.gasLimit ?? SWAP_GAS)
       .setPayableAmount(Hbar.fromTinybars(toLong(hbarInTinybar)))
@@ -129,17 +130,14 @@ export async function swapHbarForTokens(
           .addAddressArray([entityIdToEvmAddress(whbarToken), entityIdToEvmAddress(params.tokenId)])
           .addAddress(recipient)
           .addUint256(deadline),
-      )
-      .execute(hedera.client);
-    const record = await response.getRecord(hedera.client);
-    const result = record.contractFunctionResult;
-    if (!result) throw new LaunchBlocksError("CONTRACT_NO_RESULT", "The swap produced no contract result");
+      );
+    const outcome = await sendContract(hedera, swap, `Swapping HBAR for ${params.tokenId}`, signal);
 
     // uint256[] return: [offset, length, amountIn, amountOut]
-    const tokensOutUnits = BigInt(result.getUint256(3).toString());
+    const tokensOutUnits = decodeUint(outcome.output, 3);
     return {
       tokenId: params.tokenId,
-      transactionId: response.transactionId.toString(),
+      transactionId: outcome.transactionId,
       hbarInTinybar: hbarInTinybar.toString(),
       tokensOutUnits: tokensOutUnits.toString(),
       tokensOut: fromUnits(tokensOutUnits, decimals),
@@ -147,6 +145,7 @@ export async function swapHbarForTokens(
       effectivePriceHbar: effectivePrice(hbarInTinybar, tokensOutUnits, decimals),
     };
   } catch (error) {
+    if (error instanceof LaunchBlocksError) throw error;
     throw translateHederaError(error, `Swapping HBAR for ${params.tokenId}`);
   }
 }

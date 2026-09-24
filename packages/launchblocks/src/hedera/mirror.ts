@@ -1,5 +1,6 @@
 import { LaunchBlocksError } from "../errors";
 import type { HederaContext } from "./context";
+import { normalizeTransactionId } from "./context";
 
 /**
  * Minimal mirror node reads. The mirror node lags consensus by a few
@@ -60,7 +61,7 @@ export async function fetchTopicMessages(
   return (data.messages ?? []).map(message => ({
     sequenceNumber: message.sequence_number,
     consensusTimestamp: message.consensus_timestamp,
-    contents: Buffer.from(message.message, "base64").toString("utf8"),
+    contents: new TextDecoder().decode(Uint8Array.from(atob(message.message), char => char.charCodeAt(0))),
   }));
 }
 
@@ -184,6 +185,107 @@ export async function waitForMirror(
     if (Date.now() >= deadline) return false;
     await new Promise(resolve => setTimeout(resolve, options.intervalMs ?? 1000));
   }
+}
+
+type RetryOptions = { attempts?: number; delayMs?: number; signal?: AbortSignal };
+
+/** GET `url`, retrying while the mirror node answers 404 because it has not ingested the record yet. */
+async function mirrorFetchAfterWrite(url: string, what: string, options: RetryOptions): Promise<unknown> {
+  const attempts = options.attempts ?? 15;
+  for (let attempt = 1; ; attempt += 1) {
+    const body = await mirrorFetch(url, options.signal);
+    if (body !== null) return body;
+    if (attempt >= attempts) {
+      throw new LaunchBlocksError("MIRROR_TIMEOUT", `The mirror node has no record of ${what} yet`, {
+        hint: "The transaction went through; the mirror node is lagging. Check it on HashScan in a minute.",
+      });
+    }
+    await new Promise(resolve => setTimeout(resolve, options.delayMs ?? 1500));
+  }
+}
+
+export type MirrorContractResult = {
+  /** ABI-encoded return data, `0x` when the call returned nothing. */
+  callResult: `0x${string}`;
+  gasUsed: number;
+};
+
+/**
+ * What a contract transaction returned and the gas it used, from the mirror
+ * node. A wallet context reads this instead of the transaction record, which
+ * is a paid query the wallet would have to approve.
+ */
+export async function fetchContractResult(
+  hedera: Pick<HederaContext, "mirrorBaseUrl">,
+  transactionId: string,
+  options: RetryOptions = {},
+): Promise<MirrorContractResult> {
+  const id = normalizeTransactionId(transactionId);
+  const body = (await mirrorFetchAfterWrite(
+    `${hedera.mirrorBaseUrl}/api/v1/contracts/results/${encodeURIComponent(id)}`,
+    `contract transaction ${id}`,
+    options,
+  )) as { call_result?: string | null; gas_used?: number | null };
+  const callResult = body.call_result && body.call_result !== "0x" ? body.call_result : "0x";
+  return { callResult: callResult as `0x${string}`, gasUsed: Number(body.gas_used ?? 0) };
+}
+
+export type MirrorTokenTransfer = { tokenId: string; accountId: string; amount: bigint };
+
+/** The token movements a transaction made, from the mirror node, retried until it has the transaction. */
+export async function fetchTokenTransfers(
+  hedera: Pick<HederaContext, "mirrorBaseUrl">,
+  transactionId: string,
+  options: RetryOptions = {},
+): Promise<MirrorTokenTransfer[]> {
+  const id = normalizeTransactionId(transactionId);
+  const body = (await mirrorFetchAfterWrite(
+    `${hedera.mirrorBaseUrl}/api/v1/transactions/${encodeURIComponent(id)}`,
+    `transaction ${id}`,
+    options,
+  )) as { transactions?: { token_transfers?: { token_id: string; account: string; amount: number | string }[] }[] };
+  return (body.transactions?.[0]?.token_transfers ?? []).map(transfer => ({
+    tokenId: transfer.token_id,
+    accountId: transfer.account,
+    amount: BigInt(transfer.amount),
+  }));
+}
+
+export type MirrorToken = {
+  tokenId: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+  totalSupplyUnits: string;
+  treasuryAccountId: string | null;
+};
+
+/** Token metadata from the mirror node, after it has caught up with a token created moments ago. */
+export async function fetchToken(
+  hedera: Pick<HederaContext, "mirrorBaseUrl">,
+  tokenId: string,
+  options: RetryOptions = {},
+): Promise<MirrorToken> {
+  const body = (await mirrorFetchAfterWrite(
+    `${hedera.mirrorBaseUrl}/api/v1/tokens/${encodeURIComponent(tokenId)}`,
+    `token ${tokenId}`,
+    options,
+  )) as {
+    token_id: string;
+    name: string;
+    symbol: string;
+    decimals: string | number;
+    total_supply: string | number;
+    treasury_account_id?: string | null;
+  };
+  return {
+    tokenId: body.token_id,
+    name: body.name,
+    symbol: body.symbol,
+    decimals: Number(body.decimals),
+    totalSupplyUnits: String(body.total_supply),
+    treasuryAccountId: body.treasury_account_id ?? null,
+  };
 }
 
 /**

@@ -21,15 +21,17 @@ import type { DecimalAmount } from "../amounts";
 import { fromUnits, toLong, toUnits } from "../amounts";
 import type { HederaContext } from "../context";
 import { translateHederaError } from "../errors";
-import { submit, submitForRecord } from "./submit";
+import { fetchToken, fetchTokenTransfers } from "../mirror";
+import { send, submit } from "./submit";
 
 /**
  * Hedera Token Service operations behind the `hts.*` blocks.
  *
  * Every operation has a pure `build*` function (unit-testable, no network)
- * and an async function that submits it with the operator. The operator is
- * always the treasury and the holder of every enabled key: this template
- * signs with one key on purpose, so a flow never needs a second signer.
+ * and an async function that submits it as the context's account: the
+ * operator on the server, or a connected wallet. That account is always the
+ * treasury and the holder of every enabled key: this template signs with one
+ * key on purpose, so a flow never needs a second signer.
  */
 
 export type TokenKeys = {
@@ -91,7 +93,7 @@ export type CreateFungibleTokenResult = {
 };
 
 export function buildTokenCreate(hedera: HederaContext, params: CreateFungibleTokenParams): TokenCreateTransaction {
-  const operatorPublicKey = hedera.operatorKey.publicKey;
+  const { operatorPublicKey } = hedera;
   const initialSupplyUnits = toUnits(params.initialSupply, params.decimals);
 
   const tx = new TokenCreateTransaction()
@@ -169,13 +171,13 @@ export async function createFungibleToken(
   const initialSupplyUnits = tx.initialSupply?.toString() ?? "0";
   const maxSupplyUnits = params.supplyType === "finite" ? (tx.maxSupply?.toString() ?? null) : null;
 
-  return submit(hedera.client, tx, `Creating token ${params.symbol}`, (receipt, response) => {
+  return submit(hedera, tx, `Creating token ${params.symbol}`, (receipt, transactionId) => {
     if (!receipt.tokenId) {
       throw new LaunchBlocksError("RECEIPT_INCOMPLETE", "Token creation succeeded but the receipt has no token id");
     }
     return {
       tokenId: receipt.tokenId.toString(),
-      transactionId: response.transactionId.toString(),
+      transactionId,
       treasuryAccountId: hedera.operatorId.toString(),
       symbol: params.symbol,
       decimals: params.decimals,
@@ -196,8 +198,13 @@ export type TokenInfoSummary = {
   treasuryAccountId: string | null;
 };
 
-/** Read token metadata from a consensus node (immediate, unlike the mirror node). */
+/**
+ * Token metadata. An operator context asks a consensus node (immediate, unlike
+ * the mirror node). A wallet context asks the mirror node, retrying until it
+ * has caught up: a TokenInfoQuery is a paid query the wallet would have to approve.
+ */
 export async function getTokenInfo(hedera: HederaContext, tokenId: string): Promise<TokenInfoSummary> {
+  if (hedera.signer) return fetchToken(hedera, tokenId);
   try {
     const info = await new TokenInfoQuery().setTokenId(TokenId.fromString(tokenId)).execute(hedera.client);
     return {
@@ -232,14 +239,14 @@ export function buildTokenMint(params: MintParams, decimals: number): TokenMintT
 export async function mintFungibleToken(hedera: HederaContext, params: MintParams): Promise<MintResult> {
   const { decimals } = await getTokenInfo(hedera, params.tokenId);
   const tx = buildTokenMint(params, decimals);
-  return submit(hedera.client, tx, `Minting ${params.amount} of ${params.tokenId}`, (receipt, response) => {
+  return submit(hedera, tx, `Minting ${params.amount} of ${params.tokenId}`, (receipt, transactionId) => {
     if (!receipt.totalSupply) {
       throw new LaunchBlocksError("RECEIPT_INCOMPLETE", "Mint succeeded but the receipt has no total supply");
     }
     const total = receipt.totalSupply.toString();
     return {
       tokenId: params.tokenId,
-      transactionId: response.transactionId.toString(),
+      transactionId,
       mintedUnits: tx.amount?.toString() ?? "0",
       newTotalSupplyUnits: total,
       newTotalSupply: fromUnits(total, decimals),
@@ -269,14 +276,14 @@ export async function transferFungibleToken(hedera: HederaContext, params: Trans
   const { decimals } = await getTokenInfo(hedera, params.tokenId);
   const tx = buildTokenTransfer(hedera, params, decimals);
   return submit(
-    hedera.client,
+    hedera,
     tx,
     `Transferring ${params.amount} of ${params.tokenId} to ${params.to}`,
-    (_, response) => ({
+    (_, transactionId) => ({
       tokenId: params.tokenId,
       to: params.to,
       amountUnits: toUnits(params.amount, decimals).toString(),
-      transactionId: response.transactionId.toString(),
+      transactionId,
     }),
   );
 }
@@ -328,13 +335,34 @@ export async function airdropFungibleToken(hedera: HederaContext, params: Airdro
   const { decimals } = await getTokenInfo(hedera, params.tokenId);
   const tx = buildTokenAirdrop(hedera, params, decimals);
   const totalUnits = params.recipients.reduce((sum, r) => sum + toUnits(r.amount, decimals), 0n).toString();
-  return submitForRecord(hedera.client, tx, `Airdropping ${params.tokenId}`, (record, response) => ({
+  const context = `Airdropping ${params.tokenId}`;
+  const result = (transactionId: string, pendingCount: number): AirdropResult => ({
     tokenId: params.tokenId,
-    transactionId: response.transactionId.toString(),
+    transactionId,
     recipientCount: params.recipients.length,
     totalUnits,
-    pendingCount: record.newPendingAirdrops.length,
-  }));
+    pendingCount,
+  });
+  if (hedera.signer) {
+    // The record would be a paid query through the wallet; the mirror node shows who received instead.
+    const { transactionId } = await send(hedera, tx, context);
+    const transfers = await fetchTokenTransfers(hedera, transactionId);
+    const sender = hedera.operatorId.toString();
+    const received = new Set(
+      transfers
+        .filter(t => t.tokenId === params.tokenId && t.amount > 0n && t.accountId !== sender)
+        .map(t => t.accountId),
+    );
+    return result(transactionId, Math.max(0, params.recipients.length - received.size));
+  }
+  try {
+    const response = await tx.execute(hedera.client);
+    // getRecord throws on a failed receipt status, so success is implied here.
+    const record = await response.getRecord(hedera.client);
+    return result(response.transactionId.toString(), record.newPendingAirdrops.length);
+  } catch (error) {
+    throw translateHederaError(error, context);
+  }
 }
 
 export type AssociateResult = {
@@ -352,17 +380,12 @@ export function buildTokenAssociate(hedera: HederaContext, tokenId: string): Tok
 export async function associateOperator(hedera: HederaContext, tokenId: string): Promise<AssociateResult> {
   const accountId = hedera.operatorId.toString();
   try {
-    return await submit(
-      hedera.client,
-      buildTokenAssociate(hedera, tokenId),
-      `Associating ${tokenId}`,
-      (_, response) => ({
-        tokenId,
-        accountId,
-        transactionId: response.transactionId.toString(),
-        alreadyAssociated: false,
-      }),
-    );
+    return await submit(hedera, buildTokenAssociate(hedera, tokenId), `Associating ${tokenId}`, (_, transactionId) => ({
+      tokenId,
+      accountId,
+      transactionId,
+      alreadyAssociated: false,
+    }));
   } catch (error) {
     if (error instanceof Error && "status" in error && error.status === "TOKEN_ALREADY_ASSOCIATED_TO_ACCOUNT") {
       return { tokenId, accountId, transactionId: null, alreadyAssociated: true };
