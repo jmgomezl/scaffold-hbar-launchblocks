@@ -9,7 +9,7 @@ import { getMetadata } from "~~/utils/scaffold-hbar/getMetadata";
 export const metadata = getMetadata({
   title: "LaunchBlocks",
   description:
-    "Launch a Hedera token and give it a market, block by block: HTS token, HCS launch log, SaucerSwap pool and first trade, run on testnet or exported as code.",
+    "A visual token launchpad for Hedera. Snap together an HTS token, an HCS launch log, a SaucerSwap pool, locked liquidity and scheduled unlocks, then run it on testnet or export it as code.",
 });
 
 const ScaffoldHbarApp = ({ children }: { children: React.ReactNode }) => {

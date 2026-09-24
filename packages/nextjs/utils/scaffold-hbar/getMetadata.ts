@@ -5,16 +5,29 @@ const baseUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
   : `http://localhost:${process.env.PORT || 3000}`;
 const titleTemplate = "%s | LaunchBlocks";
 
+/** The default share image; its source is docs/images/thumbnail.html. */
+const THUMBNAIL = {
+  path: "/thumbnail.jpg",
+  width: 1200,
+  height: 630,
+  alt: "LaunchBlocks: launch a token, give it a market, block by block. A launch built from Hedera blocks, each marked done.",
+};
+
 export const getMetadata = ({
   title,
   description,
-  imageRelativePath = "/thumbnail.jpg",
+  imageRelativePath = THUMBNAIL.path,
 }: {
   title: string;
   description: string;
   imageRelativePath?: string;
 }): Metadata => {
   const imageUrl = `${baseUrl}${imageRelativePath}`;
+  // Sizes let Facebook and LinkedIn show the image on a link's first share.
+  const image =
+    imageRelativePath === THUMBNAIL.path
+      ? { url: imageUrl, width: THUMBNAIL.width, height: THUMBNAIL.height, alt: THUMBNAIL.alt }
+      : { url: imageUrl };
 
   return {
     metadataBase: new URL(baseUrl),
@@ -29,11 +42,9 @@ export const getMetadata = ({
         template: titleTemplate,
       },
       description: description,
-      images: [
-        {
-          url: imageUrl,
-        },
-      ],
+      siteName: "LaunchBlocks",
+      type: "website",
+      images: [image],
     },
     twitter: {
       title: {
@@ -41,7 +52,7 @@ export const getMetadata = ({
         template: titleTemplate,
       },
       description: description,
-      images: [imageUrl],
+      images: [image],
     },
     icons: {
       icon: [

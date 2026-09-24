@@ -1,0 +1,93 @@
+<!doctype html>
+<!--
+  Source of packages/nextjs/public/thumbnail.jpg, the Open Graph image (1200×630).
+  Render it in a browser at 1200×630 with a device scale factor of 2, screenshot
+  the page, and downscale to 1200×630 as a JPEG (quality ~88, under 300 KB).
+  The block drawing mirrors app/_components/home/LaunchIllustration.tsx and the
+  mark mirrors components/LaunchBlocksMark.tsx; keep them in step.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@font-face {
+  font-family: "Styrene A Web";
+  src: url("https://db.onlinewebfonts.com/t/819f612977ba7ba86c14b739b908c73f.woff2") format("woff2"),
+       url("https://db.onlinewebfonts.com/t/819f612977ba7ba86c14b739b908c73f.woff") format("woff");
+  font-weight: 400;
+}
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=block");
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 1200px; height: 630px; }
+body {
+  font-family: "Styrene A Web", "Montserrat", sans-serif;
+  color: #fff;
+  background: linear-gradient(135deg, #8259ef 0%, #0031ff 100%);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 36px;
+  align-items: center;
+  padding: 0 52px 0 68px;
+  overflow: hidden;
+  position: relative;
+}
+.left { display: flex; flex-direction: column; height: 630px; padding: 56px 0 48px; min-width: 0; }
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand svg { width: 58px; height: 58px; padding: 8px; border-radius: 14px; background: rgba(12,14,24,0.55); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); }
+.brand .name { font-size: 32px; font-weight: 600; letter-spacing: -0.01em; line-height: 1; }
+.brand .sub { font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.75; margin-top: 6px; }
+h1 { font-size: 54px; line-height: 1.06; font-weight: 700; letter-spacing: -0.02em; margin-top: 40px; }
+.lede { font-size: 21px; line-height: 1.38; opacity: 0.88; margin-top: 20px; max-width: 500px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+.chip { font-size: 14px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,0.14); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.22); }
+
+/* The home page's LaunchIllustration, enlarged. */
+.card { zoom: 1.12; width: max-content;
+  border-radius: 12px; background: rgba(0,0,0,0.22); padding: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.1); font-weight: 500; }
+.launch { background: #3c3c3c; border-radius: 6px; font-size: 13px; }
+.launch .head { display: flex; align-items: center; gap: 7px; padding: 8px 10px; }
+.field { background: rgba(255,255,255,0.9); color: #262626; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+.rows { padding: 0 8px 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.row { display: flex; align-items: center; gap: 6px; }
+.block { display: flex; align-items: center; gap: 6px; border-radius: 6px; padding: 5px 8px; font-size: 12px; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+.block .field { font-size: 11px; padding: 0 4px; }
+.check { font-size: 10px; }
+.rep { border-radius: 6px; padding: 3px 7px; font-size: 11px; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+.hts { background: #5b8da6; } .hcs { background: #9a5ba6; } .ss { background: #a6805b; }
+.as { opacity: 0.8; }
+</style>
+</head>
+<body>
+  <div class="left">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <path fill="#5b8da6" d="M5 4H17Q19 4 19 6V10Q19 12 17 12H13L11.5 14H8.5L7 12H5Q3 12 3 10V6Q3 4 5 4Z"/>
+        <path fill="#9a5ba6" d="M5 12H7L8.5 14H11.5L13 12H23Q25 12 25 14V18Q25 20 23 20H13L11.5 22H8.5L7 20H5Q3 20 3 18V14Q3 12 5 12Z"/>
+        <path fill="#a6805b" d="M5 20H7L8.5 22H11.5L13 20H27Q29 20 29 22V26Q29 28 27 28H5Q3 28 3 26V22Q3 20 5 20Z"/>
+      </svg>
+      <div>
+        <div class="name">LaunchBlocks</div>
+        <div class="sub">Scaffold-HBAR template for Hedera</div>
+      </div>
+    </div>
+    <h1>Launch a token.<br>Give it a market.<br>Block by block.</h1>
+    <p class="lede">Snap blocks together, run them on testnet, export them as code.</p>
+    <div class="chips">
+      <span class="chip">HTS</span><span class="chip">HCS</span><span class="chip">Schedule Service</span>
+      <span class="chip">Smart contracts</span><span class="chip">SaucerSwap</span><span class="chip">Hedera wallets</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="launch">
+      <div class="head"><span>🚀</span><span>Launch</span><span class="field">My token launch</span><span class="as">on testnet</span></div>
+      <div class="rows">
+        <div class="row"><div class="block hts"><span class="check">✅</span>Create HTS token <span class="as">as</span><span class="field">createToken</span></div></div>
+        <div class="row"><div class="block hcs"><span class="check">✅</span>Create HCS topic <span class="as">as</span><span class="field">createLog</span></div></div>
+        <div class="row"><div class="block ss"><span class="check">✅</span>Seed SaucerSwap pool <span class="as">as</span><span class="field">seedPool</span></div><span class="rep hts">createToken ▸ Token</span></div>
+        <div class="row"><div class="block ss"><span class="check">✅</span>Buy with HBAR <span class="as">as</span><span class="field">firstTrade</span></div><span class="rep hts">createToken ▸ Token</span></div>
+        <div class="row"><div class="block hcs"><span class="check">✅</span>Log to HCS topic <span class="as">as</span><span class="field">recordMarket</span></div><span class="rep hcs">createLog ▸ Topic</span></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
