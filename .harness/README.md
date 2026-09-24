@@ -62,7 +62,9 @@ the template with no env files:
 ### The full run
 
 `yarn harness:run` in a fresh clone of the template (commit `1c68a17`,
-2026-09-24) **passed**: 16 findings fixed, none open.
+2026-09-24) **passed**: 16 findings fixed, none open. The agent's work is on the
+[`harness/run-launchblocks-hts-burn-06e832`](https://github.com/jmgomezl/scaffold-hbar-launchblocks/tree/harness/run-launchblocks-hts-burn-06e832)
+branch, as the harness committed it ([diff](https://github.com/jmgomezl/scaffold-hbar-launchblocks/commit/2dd34dd08f44f34e990230ac1153b5403d31a624)).
 
 - **The agent** (Claude Code) built the step in one pass of about five minutes,
   following AGENTS.md: the operation, the step and its registration, unit tests,
