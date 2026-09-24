@@ -2,12 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ApiError } from "../_lib/api";
-import { exportHarnessRecipe, generateScript } from "../_lib/api";
+import { exportHarnessRecipe, generateScript, toApiError } from "../_lib/api";
 import type { FlowInput, HarnessRecipe } from "@sh/launchblocks/editor";
 import { strToU8, zipSync } from "fflate";
 import { notification } from "~~/utils/scaffold-hbar";
 
 type Tab = "json" | "script" | "harness";
+
+const EXPORT_TABS: { id: Tab; label: string }[] = [
+  { id: "json", label: "flow.json" },
+  { id: "script", label: "launch.ts" },
+  { id: "harness", label: "Harness recipe" },
+];
 
 const DESCRIPTION: Record<Tab, string> = {
   json: "The flow document: open it again here, run it with the core:run script, or commit it next to your app.",
@@ -51,21 +57,29 @@ export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: b
 
   useEffect(() => {
     if (!open || tab !== "script") return;
+    let cancelled = false;
     setScript({});
     generateScript(flow).then(
-      source => setScript({ source }),
-      (error: ApiError) => setScript({ error }),
+      source => !cancelled && setScript({ source }),
+      error => !cancelled && setScript({ error: toApiError(error) }),
     );
+    return () => {
+      cancelled = true;
+    };
   }, [open, tab, flow]);
 
   useEffect(() => {
     if (!open || tab !== "harness") return;
     setRecipe({});
+    let cancelled = false;
     setRecipeFile(0);
     exportHarnessRecipe(flow).then(
-      value => setRecipe({ value }),
-      (error: ApiError) => setRecipe({ error }),
+      value => !cancelled && setRecipe({ value }),
+      error => !cancelled && setRecipe({ error: toApiError(error) }),
     );
+    return () => {
+      cancelled = true;
+    };
   }, [open, tab, flow]);
 
   const shownRecipeFile = recipe.value?.files[recipeFile];
@@ -88,20 +102,19 @@ export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: b
     <dialog ref={dialog} className="modal" onClose={onClose}>
       <div className="modal-box max-w-4xl">
         <h3 className="text-lg font-bold">Export {flow.name}</h3>
-        <div role="tablist" className="tabs tabs-bordered my-3">
-          <button role="tab" className={`tab ${tab === "json" ? "tab-active" : ""}`} onClick={() => setTab("json")}>
-            flow.json
-          </button>
-          <button role="tab" className={`tab ${tab === "script" ? "tab-active" : ""}`} onClick={() => setTab("script")}>
-            launch.ts
-          </button>
-          <button
-            role="tab"
-            className={`tab ${tab === "harness" ? "tab-active" : ""}`}
-            onClick={() => setTab("harness")}
-          >
-            Harness recipe
-          </button>
+        <div role="tablist" aria-label="Export format" className="tabs tabs-bordered my-3">
+          {EXPORT_TABS.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              className={`tab ${tab === id ? "tab-active" : ""}`}
+              onClick={() => setTab(id)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
         <p className="mb-2 text-xs opacity-70">{DESCRIPTION[tab]}</p>
         {tab === "harness" && recipe.value && (
@@ -183,6 +196,7 @@ function RecipeSummary({
         {recipe.files.map((file, index) => (
           <button
             key={file.path}
+            type="button"
             role="tab"
             aria-selected={index === selected}
             className={`btn btn-xs font-mono ${index === selected ? "btn-primary" : "btn-ghost"}`}

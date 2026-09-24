@@ -38,6 +38,21 @@ export type RunEvent =
 
 const BASE = "/api/launchblocks";
 
+/**
+ * Anything thrown during a request or run as an ApiError: the server's errors
+ * and the core's LaunchBlocksErrors keep their code and hint; anything else
+ * (a dropped connection, say) keeps its message under `fallbackCode`.
+ */
+export function toApiError(error: unknown, fallbackCode = "REQUEST_FAILED"): ApiError {
+  const candidate = (error ?? {}) as Partial<ApiError>;
+  return {
+    code: typeof candidate.code === "string" ? candidate.code : fallbackCode,
+    message: typeof candidate.message === "string" ? candidate.message : String(error),
+    ...(typeof candidate.hint === "string" ? { hint: candidate.hint } : {}),
+    ...(Array.isArray(candidate.issues) ? { issues: candidate.issues } : {}),
+  };
+}
+
 async function json<T>(response: Response): Promise<T> {
   const body = (await response.json().catch(() => ({}))) as T & { error?: ApiError };
   if (!response.ok && body && typeof body === "object" && "error" in body && body.error) throw body.error;

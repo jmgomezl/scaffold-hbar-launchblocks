@@ -107,18 +107,22 @@ export function StudioPanel({ mode, onModeChange, tab, onTabChange, problemCount
 
   return (
     <aside className="flex w-full flex-col border-t border-base-300 bg-base-100 lg:min-h-0 lg:w-[380px] lg:border-l lg:border-t-0">
-      <div role="tablist" className="tabs tabs-bordered items-center px-2 pt-1">
-        {TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            role="tab"
-            className={`tab ${tab === id ? "tab-active" : ""}`}
-            onClick={() => onTabChange(id)}
-          >
-            {label}
-            {id === "problems" && problemCount > 0 ? ` (${problemCount})` : ""}
-          </button>
-        ))}
+      <div className="flex items-center px-2 pt-1">
+        <div role="tablist" aria-label="Studio panel" className="tabs tabs-bordered">
+          {TABS.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              className={`tab ${tab === id ? "tab-active" : ""}`}
+              onClick={() => onTabChange(id)}
+            >
+              {label}
+              {id === "problems" && problemCount > 0 ? ` (${problemCount})` : ""}
+            </button>
+          ))}
+        </div>
         <div className="ml-auto flex items-center">
           <button
             className="btn btn-ghost btn-xs btn-square"

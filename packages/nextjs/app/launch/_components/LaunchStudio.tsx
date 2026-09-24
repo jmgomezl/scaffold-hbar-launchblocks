@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import type { ApiError, FlowIssue, GalleryEntry, StepRecord } from "../_lib/api";
-import { fetchCatalog, fetchGallery, fetchOperator, runFlowStream, validateFlow } from "../_lib/api";
+import type { FlowIssue, GalleryEntry, StepRecord } from "../_lib/api";
+import { fetchCatalog, fetchGallery, fetchOperator, runFlowStream, toApiError, validateFlow } from "../_lib/api";
 import type { StepStatus, WorkspaceState } from "../_lib/blocks";
 import { useHederaWallet } from "../_lib/wallet";
 import { runFlowWithWallet } from "../_lib/walletRun";
@@ -140,8 +140,12 @@ export function LaunchStudio() {
   // Catalog and gallery, then: an example requested with ?example=<id>, else
   // the saved flow, else the hero example.
   useEffect(() => {
+    // In development React runs this effect twice; only the second load may
+    // open a flow, or it would replace the ?example= the first one consumed.
+    let cancelled = false;
     Promise.all([fetchCatalog(), fetchGallery()]).then(
       ([steps, flows]) => {
+        if (cancelled) return;
         const cat = indexCatalog(steps);
         setEntries(steps);
         setGallery(flows);
@@ -176,8 +180,11 @@ export function LaunchStudio() {
         const initial = saved ?? (flows.find(entry => entry.id === HERO_FLOW) ?? flows[0])?.flow;
         if (initial) openFlow(initial, cat);
       },
-      (error: ApiError) => setLoadError(error.message ?? "Could not load the step catalog"),
+      error => !cancelled && setLoadError(toApiError(error).message || "Could not load the step catalog"),
     );
+    return () => {
+      cancelled = true;
+    };
   }, [openFlow]);
 
   useEffect(() => {
@@ -219,12 +226,14 @@ export function LaunchStudio() {
     const controller = new AbortController();
     setValidating(true);
     const timer = setTimeout(() => {
+      // A superseded check must not clear `validating` for the one after it.
       validateFlow(flow, controller.signal).then(
         result => {
+          if (controller.signal.aborted) return;
           setIssues(result.issues);
           setValidating(false);
         },
-        () => setValidating(false),
+        () => !controller.signal.aborted && setValidating(false),
       );
     }, 350);
     return () => {
@@ -290,9 +299,11 @@ export function LaunchStudio() {
       flow.steps.map(step => [step.id, { id: step.id, type: step.type, status: "pending" as const, links: [] }]),
     );
     setRun({ phase: "running", records: { ...records } });
+    let ended = false;
     try {
       const events = walletSigner ? runFlowWithWallet(flow, walletSigner) : runFlowStream(flow, { runToken });
       for await (const event of events) {
+        if (event.type === "flow:end" || event.type === "error") ended = true;
         if (event.type === "step:start" || event.type === "step:success" || event.type === "step:error") {
           records[event.step.id] = event.step;
           setRun({ phase: "running", records: { ...records } });
@@ -305,8 +316,19 @@ export function LaunchStudio() {
           setRun({ phase: "error", records: { ...records }, error: event.error });
         }
       }
+      if (!ended) {
+        setRun({
+          phase: "error",
+          records: { ...records },
+          error: {
+            code: "RUN_INTERRUPTED",
+            message: "The run stopped before it finished: the connection closed.",
+            hint: "Steps marked done are on-chain; open their HashScan links before running again.",
+          },
+        });
+      }
     } catch (raw) {
-      const error = raw as ApiError;
+      const error = toApiError(raw, "RUN_FAILED");
       if (error.code === "RUN_TOKEN_REQUIRED" && !runToken && !walletSigner) {
         const token = window.prompt("This deployment needs a run token to spend its testnet operator's HBAR:");
         if (token) {

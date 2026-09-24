@@ -1,4 +1,4 @@
-import type { ApiError, RunEvent } from "./api";
+import { type ApiError, type RunEvent, toApiError } from "./api";
 import type { Signer } from "@hiero-ledger/sdk";
 import type { PythPriceUpdates } from "@sh/launchblocks/browser";
 import type { FlowInput } from "@sh/launchblocks/editor";
@@ -29,16 +29,6 @@ async function pythPriceUpdates(flow: FlowInput): Promise<PythPriceUpdates | und
       throw Object.assign(new Error(body?.error?.message ?? "Could not get a Pyth price update"), body?.error ?? {});
     }
     return body.updates;
-  };
-}
-
-function toApiError(error: unknown): ApiError {
-  const candidate = error as Partial<ApiError> & { issues?: ApiError["issues"] };
-  return {
-    code: typeof candidate?.code === "string" ? candidate.code : "WALLET_RUN_FAILED",
-    message: error instanceof Error ? error.message : String(error),
-    ...(candidate?.hint ? { hint: candidate.hint } : {}),
-    ...(candidate?.issues ? { issues: candidate.issues } : {}),
   };
 }
 
@@ -84,7 +74,7 @@ export async function* runFlowWithWallet(flow: FlowInput, signer: Signer): Async
         notify();
       });
   } catch (error) {
-    throw toApiError(error);
+    throw toApiError(error, "WALLET_RUN_FAILED");
   }
 
   for (;;) {
@@ -98,5 +88,5 @@ export async function* runFlowWithWallet(flow: FlowInput, signer: Signer): Async
       wake = resolve;
     });
   }
-  if (failure) throw toApiError(failure);
+  if (failure) throw toApiError(failure, "WALLET_RUN_FAILED");
 }

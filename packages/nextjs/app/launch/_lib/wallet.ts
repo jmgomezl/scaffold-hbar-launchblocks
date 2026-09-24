@@ -69,6 +69,24 @@ function accountOf(connector: DAppConnector): string | null {
   return connector.signers[0]?.getAccountId().toString() ?? null;
 }
 
+/**
+ * Call `listener` when the wallet ends or changes the session from its side
+ * (disconnect in the wallet, account switch). The connector registered its
+ * own handlers first, so its signers are current by the time this runs.
+ */
+function onSessionChange(connector: DAppConnector, listener: () => void): () => void {
+  const client = connector.walletConnectClient;
+  if (!client) return () => undefined;
+  const events = ["session_delete", "session_update", "session_event"] as const;
+  const later = () => setTimeout(listener, 0);
+  events.forEach(event => client.on(event, later));
+  client.core.events.on("session_delete", later);
+  return () => {
+    events.forEach(event => client.removeListener(event, later));
+    client.core.events.removeListener("session_delete", later);
+  };
+}
+
 function messageOf(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);
   return /reject|closed|cancel/i.test(text)
@@ -90,21 +108,26 @@ export function useHederaWallet(enabled: boolean) {
   }, []);
 
   useEffect(() => {
-    if (!enabled || connector.current) return;
+    if (!enabled) return;
     let cancelled = false;
-    setState({ status: "loading" });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let unsubscribe: () => void = () => undefined;
+    if (!connector.current) setState({ status: "loading" });
     loadConnector().then(
       loaded => {
         if (cancelled) return;
         connector.current = loaded;
         refresh();
         // Browser extensions announce themselves shortly after the connector starts listening.
-        setTimeout(refresh, 800);
+        timer = setTimeout(refresh, 800);
+        unsubscribe = onSessionChange(loaded, refresh);
       },
       error => !cancelled && setState({ status: "error", message: messageOf(error), extensions: [] }),
     );
     return () => {
       cancelled = true;
+      clearTimeout(timer);
+      unsubscribe();
     };
   }, [enabled, refresh]);
 
