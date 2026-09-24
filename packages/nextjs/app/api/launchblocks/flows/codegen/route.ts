@@ -4,7 +4,7 @@ import { errorResponse, getRegistry, readJsonBody } from "~~/services/launchbloc
 
 export const runtime = "nodejs";
 
-/** Render a flow as a standalone launch.ts. */
+/** Render a flow as a launch.ts script. */
 export async function POST(req: Request) {
   try {
     const document = await readJsonBody(req);

@@ -34,7 +34,7 @@
               "command": "cp packages/nextjs/.env.example packages/nextjs/.env"
             },
             {
-              "text": "Paste HEDERA_OPERATOR_ID and HEDERA_OPERATOR_KEY into that file. A full launch costs about 60 HBAR on testnet: the SaucerSwap pool and the token's creation fee are most of it."
+              "text": "Paste HEDERA_OPERATOR_ID and HEDERA_OPERATOR_KEY into that file. A full launch costs 60–80 HBAR on testnet: the SaucerSwap pool and the token's creation fee are most of it."
             }
           ]
         },
@@ -42,8 +42,16 @@
           "title": "Check the setup before spending anything",
           "steps": [
             {
+              "label": "Compile the contracts the Deploy contract block uses",
+              "command": "{run:hardhat:compile}"
+            },
+            {
               "label": "Verify the operator, network and balance",
               "command": "{run:core:doctor}"
+            },
+            {
+              "label": "Validate a launch without sending anything",
+              "command": "{run:core:check} hts-launch-saucerswap"
             }
           ]
         },
@@ -59,11 +67,7 @@
               "command": "{run:next:dev}"
             },
             {
-              "url": "http://localhost:3000"
-            },
-            {
-              "label": "Before using the Deploy contract block, compile the contracts",
-              "command": "{run:hardhat:compile}"
+              "url": "http://localhost:3000/launch"
             }
           ]
         },

@@ -2,7 +2,7 @@
 
 Briefing for coding agents in this app (Cursor, Claude Code, Codex). Claude Code loads it through `CLAUDE.md`.
 
-This is **LaunchBlocks**, a Scaffold-HBAR template: a visual, block-based HTS token launchpad on Hedera. A launch is a *flow* (ordered JSON steps) that the app renders as Blockly blocks, runs from Next.js API routes with an operator key (or in the page, signed by a visitor's Hedera wallet), and exports as a standalone `launch.ts`. Next.js App Router, wallet connect, Debug Contracts, and Hedera networks (testnet, mainnet, local fork). The CLI may have left only Hardhat or only Foundry.
+This is **LaunchBlocks**, a Scaffold-HBAR template: a visual, block-based HTS token launchpad on Hedera. A launch is a *flow* (ordered JSON steps) that the app renders as Blockly blocks, runs from Next.js API routes with an operator key (or in the page, signed by a visitor's Hedera wallet), and exports as a `launch.ts` script that calls the core's operations. Next.js App Router, wallet connect, Debug Contracts, and Hedera networks (testnet, mainnet, local fork). The CLI may have left only Hardhat or only Foundry.
 
 Use the package manager this project was created with — see `packageManager` in the root `package.json`, or the lockfile. The command examples below are written for the package manager this copy was scaffolded with; run the same script names through whichever one the project uses.
 

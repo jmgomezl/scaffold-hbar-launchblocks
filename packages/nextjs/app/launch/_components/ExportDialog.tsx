@@ -12,7 +12,7 @@ type Tab = "json" | "script" | "harness";
 const DESCRIPTION: Record<Tab, string> = {
   json: "The flow document: open it again here, run it with the core:run script, or commit it next to your app.",
   script:
-    "A standalone script that performs the same steps with the Hedera SDK, calling the same functions the runner uses.",
+    "A TypeScript script that performs the same steps by calling the functions the runner uses. Save it in packages/launchblocks and run it with npx tsx --env-file=../nextjs/.env launch.ts.",
   harness:
     "A Hedera Harness recipe: a coding agent adds this launch to your app's examples, unchanged, and the harness grades the work itself, up to running the launch on testnet with its own funded account.",
 };
@@ -34,7 +34,7 @@ function recipeZip(recipe: HarnessRecipe): Blob {
 
 /**
  * Export the flow as JSON (re-importable, runnable with core:run), as a
- * standalone launch.ts, or as a Hedera Harness recipe.
+ * launch.ts script, or as a Hedera Harness recipe.
  */
 export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: boolean; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);

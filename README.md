@@ -10,7 +10,7 @@
 ![Node ≥ 20.18.3](https://img.shields.io/badge/node-%E2%89%A5%2020.18.3-339933)
 ![Hedera testnet](https://img.shields.io/badge/Hedera-testnet-8259EF)
 
-A [Scaffold-HBAR](https://docs.hedera.com/solutions/tools/scaffold-hbar/index) template for launching a token and giving it a market in one go. Snap blocks together — **create an HTS token → open a public HCS launch log → seed a SaucerSwap pool → make the first trade** — press Run, and watch each block turn green as its transaction reaches consensus. Then lock the pool's liquidity in a contract, or schedule supply unlocks the network runs on a date. The same launch runs from the terminal, exports as a standalone `launch.ts`, and is stored as a plain JSON file you can review and commit.
+A [Scaffold-HBAR](https://docs.hedera.com/solutions/tools/scaffold-hbar/index) template for launching a token and giving it a market in one go. Snap blocks together — **create an HTS token → open a public HCS launch log → seed a SaucerSwap pool → make the first trade** — press Run, and watch each block turn green as its transaction reaches consensus. Then lock the pool's liquidity in a contract, or schedule supply unlocks the network runs on a date. The same launch runs from the terminal, exports as a `launch.ts` script, and is stored as a plain JSON file you can review and commit.
 
 **[Try it live at launchblocks.aivylabs.xyz](https://launchblocks.aivylabs.xyz/launch)**, on Hedera testnet. The app's funded account signs every run, so there is nothing to install, connect or fund; you can also connect your own testnet wallet in the Run panel.
 
@@ -21,6 +21,8 @@ npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblock
 ![A live testnet run in the Launch Studio, at three times speed: nine blocks get a tick in turn as each transaction reaches consensus, from creating the token and its SaucerSwap pool to deploying a TokenLock, locking the LP tokens in it, reading the lock back and logging it, while the run log fills with succeeded steps, signed by the default account](docs/images/studio-run.gif)
 
 *A real run of `hts-launch-locked-liquidity` on testnet, started from the Launch Studio: a token, its launch log, a SaucerSwap pool, a `TokenLock` contract holding the pool's LP tokens, and two reads of the lock, in 36 seconds. Shown at three times speed.*
+
+**Contents:** [What you get](#what-you-get) · [Quick start](#quick-start) · [See it in action](#see-it-in-action) · [Verified on testnet](#verified-on-testnet) · [How it works](#how-it-works) · [Steps](#steps) · [SaucerSwap](#the-saucerswap-integration) · [Locking and unlocks](#locking-liquidity-and-scheduling-unlocks) · [Pyth](#pricing-a-launch-in-us-dollars-with-pyth) · [Adding a step](#adding-a-step-type) · [Hedera Harness](#extending-it-with-hedera-harness) · [Deploying](#deploying-the-studio) · [Troubleshooting](#troubleshooting)
 
 ## What you get
 
@@ -34,6 +36,71 @@ npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblock
 - **The app's account or yours** — by default the server's operator account signs and pays, so anyone can press Run with nothing to set up. A visitor can instead connect their own testnet wallet (HashPack, Kabila, or any wallet through [hedera-wallet-connect](https://github.com/hashgraph/hedera-wallet-connect)) and approve each transaction; the launch then runs in their browser, and nothing they create belongs to the app.
 - **A terminal runner** with dry runs, code generation, and a JSON record of every run, plus `core:doctor`, which checks your operator account before you spend anything.
 - **Guards for a public demo** — mainnet stays off unless you turn it on, plus an optional run token and a per-client rate limit.
+
+## Quick start
+
+**You need:** Node.js ≥ 20.18.3, Git, and a Hedera testnet account with 60–80 ℏ for a full launch ([what it costs](#what-a-launch-costs)).
+
+1. **Scaffold the project** (the CLI asks which package manager to use; both work) and go into it:
+
+   ```bash
+   npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblocks
+   cd <your-project>
+   ```
+
+2. **Fund an operator.** Create a testnet account at [portal.hedera.com](https://portal.hedera.com/) and top it up from the [faucet](https://portal.hedera.com/faucet).
+
+3. **Configure it:**
+
+   ```bash
+   cp packages/nextjs/.env.example packages/nextjs/.env
+   ```
+
+   Set `HEDERA_OPERATOR_ID` and `HEDERA_OPERATOR_KEY`. If the key is raw hex rather than DER, also set `HEDERA_OPERATOR_KEY_TYPE` (`ecdsa` or `ed25519`).
+
+4. **Compile the contracts.** The **Deploy contract** block deploys contracts from `packages/hardhat`, and a run that needs one refuses to start until it is compiled:
+
+   ```bash
+   yarn hardhat:compile
+   ```
+
+5. **Check everything before spending anything:**
+
+   ```bash
+   yarn core:doctor
+   yarn core:check hts-launch-saucerswap
+   ```
+
+   `core:doctor` confirms the key parses and controls the account (it compares the public key with the one the mirror node reports), that the account exists on testnet, and that the balance is enough; it never prints the key. `core:check` validates a flow and lists its steps without sending anything.
+
+6. **Launch.** From the terminal:
+
+   ```bash
+   yarn core:run hts-launch-saucerswap
+   ```
+
+   Or visually: start the app, open **Launch Studio**, and press **Run on testnet**.
+
+   ```bash
+   yarn next:dev
+   ```
+
+   Then open [http://localhost:3000/launch](http://localhost:3000/launch).
+
+### What a launch costs
+
+One run of `hts-launch-saucerswap`, measured from the mirror node's records of the run in [Verified on testnet](#verified-on-testnet):
+
+| Part of the launch | ℏ |
+| --- | --- |
+| SaucerSwap pool creation (SaucerSwap's fee, creating the pool's LP token, gas) | 32.85 |
+| HTS token creation | 12.82 |
+| Deposit into the pool — stays yours as liquidity | 10.00 + 1.06 gas |
+| First trade — you get the tokens | 1.00 + 0.20 gas |
+| Router allowance, HCS topic and messages | 1.18 |
+| **Total** | **≈ 59** |
+
+Network fees are priced in USD, so the HBAR amounts move with the exchange rate (these were at about 7.7¢ per ℏ). The other gallery flows, as the fee table in `src/harness/recipe.ts` estimates them: `hts-launch-locked-liquidity` about 77 ℏ (deploying the lock adds about 16), `hts-launch-usd-price` about 62, `hts-launch-basic` about 27 (no pool, but its token carries a 1% fee, and a token with custom fees costs twice as much to create: 26.02 ℏ measured, against 12.82 ℏ without) and `hts-launch-scheduled-unlocks` about 14.
 
 ## See it in action
 
@@ -57,7 +124,7 @@ npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblock
   <tr>
     <td width="50%" valign="top">
       <img src="docs/images/export-launch-ts.png" alt="The Export dialog on the launch.ts tab, showing a generated TypeScript script that imports createFungibleToken, createPoolWithHbar, createTopic and the other operations the runner uses"><br>
-      <b>Export it as code.</b> A standalone <code>launch.ts</code> that calls the same functions the runner uses, next to the flow JSON that <code>core:run</code> takes.
+      <b>Export it as code.</b> A <code>launch.ts</code> that calls the same functions the runner uses, next to the flow JSON that <code>core:run</code> takes.
     </td>
     <td width="50%" valign="top">
       <img src="docs/images/export-harness-recipe.png" alt="The Export dialog on the Harness recipe tab: an estimate of 61.1 ℏ per run, the eight recipe files, and the spec with its baseline commands and validators"><br>
@@ -117,63 +184,6 @@ What those runs left on-chain, as other apps show it:
     </td>
   </tr>
 </table>
-
-## Quick start
-
-**You need:** Node.js ≥ 20.18.3, Git, and a Hedera testnet account with about 60 ℏ per full launch. Here is what one launch cost, measured from the mirror node's records of the verified run above:
-
-| Part of the launch | ℏ |
-| --- | --- |
-| SaucerSwap pool creation (SaucerSwap's fee, creating the pool's LP token, gas) | 32.85 |
-| HTS token creation | 12.82 |
-| Deposit into the pool — stays yours as liquidity | 10.00 + 1.06 gas |
-| First trade — you get the tokens | 1.00 + 0.20 gas |
-| Router allowance, HCS topic and messages | 1.18 |
-| **Total** | **≈ 59** |
-
-Network fees are priced in USD, so the HBAR amounts move with the exchange rate (these were at about 7.7¢ per ℏ). The cheaper gallery flow, `hts-launch-basic`, has no pool and costs about 27 ℏ: its token carries a 1% fee, and a token with custom fees costs twice as much to create (26.02 ℏ measured, against 12.82 ℏ without).
-
-1. **Scaffold the project** (the CLI asks which package manager to use; both work):
-
-   ```bash
-   npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblocks
-   ```
-
-2. **Fund an operator.** Create a testnet account at [portal.hedera.com](https://portal.hedera.com/) and top it up from the [faucet](https://portal.hedera.com/faucet).
-
-3. **Configure it:**
-
-   ```bash
-   cp packages/nextjs/.env.example packages/nextjs/.env
-   ```
-
-   Set `HEDERA_OPERATOR_ID` and `HEDERA_OPERATOR_KEY`. If the key is raw hex rather than DER, also set `HEDERA_OPERATOR_KEY_TYPE` (`ecdsa` or `ed25519`).
-
-4. **Check the setup before spending anything:**
-
-   ```bash
-   yarn core:doctor
-   ```
-
-   This confirms the key parses, that it controls the account (it compares the public key with the one the mirror node reports), that the account exists on testnet, and that the balance is enough. It never prints the key.
-
-5. **Launch.** From the terminal:
-
-   ```bash
-   yarn core:run hts-launch-saucerswap
-   ```
-
-   Or visually: start the app, open **Launch Studio**, and press **Run on testnet**.
-
-   ```bash
-   yarn next:dev
-   ```
-
-   Then open [http://localhost:3000/launch](http://localhost:3000/launch).
-
-   The **Deploy contract** block deploys contracts compiled from `packages/hardhat`, so compile them first with `yarn hardhat:compile`.
-
-To try it without spending, `yarn core:run hts-launch-saucerswap --dry-run` validates the flow and lists the steps. With npm, put `--` before script arguments so npm does not take the flags itself: `npm run core:run -- hts-launch-saucerswap --dry-run`.
 
 ## Environment variables
 
@@ -327,7 +337,8 @@ It refuses a price older than `maxAgeSeconds` (120 by default; 0 accepts any age
 | Command | What it does |
 | --- | --- |
 | `yarn core:doctor` | Check the operator (key, account, network, balance) without spending anything. |
-| `yarn core:run <flow.json \| gallery-id>` | Run a flow. Add `--dry-run` to validate only, `--codegen out.ts` to write the script, `--wallet` to sign through a `Signer` as a browser wallet would. Each run's full result is saved under `packages/launchblocks/runs/`. |
+| `yarn core:check <flow.json \| gallery-id>` | Validate a flow and list its steps; nothing is sent. |
+| `yarn core:run <flow.json \| gallery-id>` | Run a flow. Add `--codegen out.ts` to write the script, `--wallet` to sign through a `Signer` as a browser wallet would. Each run's full result is saved under `packages/launchblocks/runs/`. |
 | `yarn next:dev` | Start the app with the Launch Studio at `/launch`. |
 | `yarn core:test` | The core unit tests (vitest). No network. |
 | `yarn core:docs` | Regenerate the step table in this README. |
@@ -335,9 +346,11 @@ It refuses a price older than `maxAgeSeconds` (120 by default; 0 accepts any age
 | `yarn harness:doctor` · `yarn harness:validate` · `yarn harness:run` | The [Hedera Harness recipe](#extending-it-with-hedera-harness). |
 | `yarn lint` · `yarn check-types` · `yarn test` | Everything, across packages. |
 
-Gallery flows live in `packages/launchblocks/flows/`: `hts-launch-saucerswap` (the full launch), `hts-launch-locked-liquidity` (the launch with its LP tokens locked in a `TokenLock` for 30 days; about 64 ℏ), `hts-launch-usd-price` (the pool opened at a dollar price from Pyth; about 60 ℏ), `hts-launch-scheduled-unlocks` (a reserve that unlocks in two scheduled tranches; about 14 ℏ) and `hts-launch-basic` (token with a 1% fee, HCS log and reserve mint; no pool, about 27 ℏ).
+Gallery flows live in `packages/launchblocks/flows/`: `hts-launch-saucerswap` (the full launch), `hts-launch-locked-liquidity` (the launch with its LP tokens locked in a `TokenLock` for 30 days; about 77 ℏ), `hts-launch-usd-price` (the pool opened at a dollar price from Pyth; about 60 ℏ), `hts-launch-scheduled-unlocks` (a reserve that unlocks in two scheduled tranches; about 14 ℏ) and `hts-launch-basic` (token with a 1% fee, HCS log and reserve mint; no pool, about 27 ℏ).
 
-With npm, put `--` before script arguments: `npm run core:run -- <flow> --dry-run`.
+With npm, put `--` before flags meant for the script, or npm takes them itself: `npm run core:run -- <flow> --codegen out.ts`.
+
+An exported `launch.ts` calls this package's operations, so it runs inside the repo: save it in `packages/launchblocks/` and run `npx tsx --env-file=../nextjs/.env launch.ts`.
 
 ## Adding a step type
 
@@ -410,7 +423,7 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 | --- | --- |
 | `OPERATOR_MISSING` | `HEDERA_OPERATOR_ID` or `HEDERA_OPERATOR_KEY` is empty. Run `yarn core:doctor`. |
 | `INVALID_SIGNATURE`, or doctor says the key does not control the account | Wrong key for the account, or a raw hex key read as the wrong curve. Set `HEDERA_OPERATOR_KEY_TYPE`. |
-| `INSUFFICIENT_PAYER_BALANCE` | Top up at the [faucet](https://portal.hedera.com/faucet). A full launch needs about 60 ℏ. |
+| `INSUFFICIENT_PAYER_BALANCE` | Top up at the [faucet](https://portal.hedera.com/faucet). A full launch needs 60–80 ℏ. |
 | `PUBLIC_RUN_REFUSED` | The deployment runs the public-run policy and the flow sends value to something it did not create, attaches HBAR to a contract, or moves too much HBAR at once. Wire the target from an earlier step, or run on your own deployment or with your own wallet. |
 | `PUBLIC_BUDGET_SPENT` or `RUN_IN_PROGRESS` | The public demo's hourly HBAR budget is used up, or your previous run is still going. Wait, or sign with your own wallet. |
 | `PYTH_PRICE_STALE` | Pyth's HBAR/USD on Hedera is older than **Max age**. Set Max age to 0 to accept the price as it is; fresh prices need `PYTH_API_KEY` and a Pyth contract on Hedera that accepts current updates. |
