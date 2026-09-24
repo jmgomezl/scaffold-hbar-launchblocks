@@ -51,7 +51,7 @@ const STEPS = [
   {
     Icon: CodeBracketIcon,
     title: "Export",
-    body: "Download the flow as JSON for the CLI, or as a standalone launch.ts that calls the same functions.",
+    body: "Download the flow as JSON for the CLI, or as a launch.ts script that calls the same functions.",
   },
 ];
 
@@ -268,9 +268,10 @@ const Home: NextPage = () => {
             </h2>
             <p className="mb-4 opacity-75">
               The template ships a Hedera Harness recipe. It asks a coding agent to add a Burn tokens step by following
-              AGENTS.md, then grades the work itself, up to burning real supply on testnet. The checks were tried both
-              ways: 15 findings on the template as shipped, none on a correct implementation. Any launch you build can
-              become a recipe of its own: in the studio, choose Export, then Harness recipe.
+              AGENTS.md, then grades the work itself, up to burning real supply on testnet. A full run passed: the agent
+              built the step in about five minutes without touching the frontend, the harness&apos;s reviewer passed
+              every acceptance check in the running studio, and its own account burned 100,000 tokens on testnet. Any
+              launch you build can become a recipe of its own: in the studio, choose Export, then Harness recipe.
             </p>
             <CopyCommand command="yarn harness:run" />
             <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
@@ -290,6 +291,15 @@ const Home: NextPage = () => {
                 className="link link-primary inline-flex items-center gap-1"
               >
                 What the agent is asked to build
+                <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
+              </a>
+              <a
+                href={`${REPO}/commit/2dd34dd08f44f34e990230ac1153b5403d31a624`}
+                target="_blank"
+                rel="noreferrer"
+                className="link link-primary inline-flex items-center gap-1"
+              >
+                What the agent built
                 <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
               </a>
             </div>
