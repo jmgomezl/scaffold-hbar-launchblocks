@@ -23,7 +23,7 @@ const json = (body: unknown, status = 200) =>
   ({ ok: status < 300, status, json: async () => body, text: async () => JSON.stringify(body) }) as Response;
 
 /** The mirror node and Pyth's contract, as far as these steps use them. */
-function mockPyth(prices: OnChain[], fee = 1n) {
+function mockPyth(prices: OnChain[], fee = 1n, updateRevert?: string) {
   const reads: string[] = [];
   const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
@@ -39,7 +39,14 @@ function mockPyth(prices: OnChain[], fee = 1n) {
         reads.push("getUpdateFee");
         return json({ result: encodeFunctionResult({ abi: ABI, functionName: "getUpdateFee", result: fee }) });
       }
+      if (data.startsWith(toFunctionSelector(ABI[2]))) {
+        reads.push("rehearse updatePriceFeeds");
+        return updateRevert
+          ? json({ _status: { messages: [{ message: "CONTRACT_REVERT_EXECUTED", data: updateRevert }] } }, 400)
+          : json({ result: "0x" });
+      }
     }
+    if (url.includes("/api/v1/accounts/")) return json({ account: "0.0.4242", evm_address: null });
     if (url.includes("/api/v1/blocks")) return json({ blocks: [{ timestamp: { to: String(now() + 5) } }] });
     throw new Error(`unexpected fetch ${url}`);
   });
@@ -156,13 +163,34 @@ describe("priceInUsd() with a price source", () => {
     try {
       const result = await priceInUsd(hedera, { tokenAmount: "50000", tokenPriceUsd: "0.00002" });
       expect(updates).toHaveBeenCalledWith([PYTH_FEEDS.hbarUsd], undefined);
-      expect(reads).toEqual(["getUpdateFee", "getPriceUnsafe"]);
+      expect(reads).toEqual(["getUpdateFee", "rehearse updatePriceFeeds", "getPriceUnsafe"]);
       const [update] = sent as ContractExecuteTransaction[];
       expect(update).toBeInstanceOf(ContractExecuteTransaction);
       expect(update?.contractId?.toString()).toBe("0.0.3042133");
       expect(update?.payableAmount?.toTinybars().toString()).toBe("1");
       expect(toHex(update?.functionParameters ?? new Uint8Array()).slice(0, 10)).toBe(toFunctionSelector(ABI[2]));
       expect(result).toMatchObject({ source: "posted", updateTransactionId: "0.0.4242@1790000000.000000001" });
+    } finally {
+      hedera.client.close();
+    }
+  });
+});
+
+describe("priceInUsd() when Pyth's contract will not take the update", () => {
+  it("stops after a free rehearsal, names Pyth's error, and sends nothing", async () => {
+    mockPyth([HBAR_USD(now())], 1n, "0x2acbe915");
+    const hedera: HederaContext = {
+      ...offlineHederaContext(),
+      pythPriceUpdates: async () => ["0xdeadbeef"] as `0x${string}`[],
+    };
+    const execute = vi.spyOn(Transaction.prototype, "execute");
+    try {
+      await expect(priceInUsd(hedera, { tokenAmount: "1", tokenPriceUsd: "1" })).rejects.toMatchObject({
+        code: "PYTH_UPDATE_REJECTED",
+        message: expect.stringContaining("InvalidWormholeVaa"),
+        hint: expect.stringContaining("Unset PYTH_API_KEY"),
+      });
+      expect(execute).not.toHaveBeenCalled();
     } finally {
       hedera.client.close();
     }

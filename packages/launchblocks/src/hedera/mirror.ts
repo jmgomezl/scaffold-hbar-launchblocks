@@ -165,6 +165,48 @@ export async function readContract(
   return body.result;
 }
 
+export type SimulatedCall =
+  | { reverted: false; result: string }
+  | { reverted: true; revertData: string; message: string };
+
+/**
+ * Simulate a state-changing contract call through the mirror node, for
+ * free, to learn whether it would revert and with what data before paying
+ * for the transaction. `value` is what the call would carry.
+ */
+export async function simulateContractCall(
+  hedera: Pick<HederaContext, "mirrorBaseUrl">,
+  args: { to: string; data: string; from?: string; value?: bigint; gas?: number },
+  signal?: AbortSignal,
+): Promise<SimulatedCall> {
+  const url = `${hedera.mirrorBaseUrl}/api/v1/contracts/call`;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      ...(signal ? { signal } : {}),
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({
+        to: args.to,
+        data: args.data,
+        estimate: false,
+        ...(args.from ? { from: args.from } : {}),
+        ...(args.value !== undefined ? { value: Number(args.value) } : {}),
+        ...(args.gas !== undefined ? { gas: args.gas } : {}),
+      }),
+    });
+  } catch (cause) {
+    throw new LaunchBlocksError("MIRROR_UNREACHABLE", `Could not reach the mirror node at ${url}`, { cause });
+  }
+  const body = (await response.json().catch(() => ({}))) as {
+    result?: string;
+    _status?: { messages?: { message?: string; data?: string }[] };
+  };
+  if (response.ok && body.result !== undefined) return { reverted: false, result: body.result };
+  const first = body._status?.messages?.[0];
+  return { reverted: true, revertData: first?.data ?? "0x", message: first?.message ?? `HTTP ${response.status}` };
+}
+
 /**
  * Wait until the mirror node has ingested a block that closes at or after
  * `sinceMs`. Every transaction that reached consensus before then is

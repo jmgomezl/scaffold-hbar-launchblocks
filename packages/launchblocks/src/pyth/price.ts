@@ -5,7 +5,7 @@ import { LaunchBlocksError } from "../errors";
 import type { DecimalAmount } from "../hedera/amounts";
 import { fromUnits, numberToDecimalString, toLong } from "../hedera/amounts";
 import type { HederaContext } from "../hedera/context";
-import { readContract, waitForMirror } from "../hedera/mirror";
+import { readContract, resolveEvmAddress, simulateContractCall, waitForMirror } from "../hedera/mirror";
 import { sendContract } from "../hedera/ops/submit";
 import { PYTH_FEEDS, PYTH_UPDATE_GAS, pythFor } from "./config";
 
@@ -54,6 +54,13 @@ export async function readPythPrice(hedera: HederaContext, feedId: string, signa
 
 export type PostedUpdate = { transactionId: string; feeTinybar: string; gasUsed: number };
 
+/** Pyth's custom errors that mean the contract will not take an update, by selector. */
+const PYTH_UPDATE_ERRORS: Readonly<Record<string, string>> = {
+  "0x2acbe915": "InvalidWormholeVaa",
+  "0xe69ffece": "InvalidUpdateData",
+  "0xe60dce71": "InvalidUpdateDataSource",
+};
+
 /**
  * Post fresh signed prices to Pyth's contract: fetch them from the context's
  * price source, ask the contract for its fee (1 tinybar per update on
@@ -78,13 +85,40 @@ export async function postPythUpdate(
   );
   // Hedera's EVM counts msg.value in tinybars.
   const fee = decodeFunctionResult({ abi: PYTH_ABI, functionName: "getUpdateFee", data: feeRaw as `0x${string}` });
+  const callData = encodeFunctionData({ abi: PYTH_ABI, functionName: "updatePriceFeeds", args: [updates] });
+
+  // Rehearse the update for free first: if Pyth's contract would reject it, say why and spend nothing.
+  const rehearsal = await simulateContractCall(
+    hedera,
+    {
+      to: evmAddress,
+      data: callData,
+      from: await resolveEvmAddress(hedera, hedera.operatorId.toString(), signal),
+      value: fee,
+      gas: PYTH_UPDATE_GAS,
+    },
+    signal,
+  );
+  const rejection = rehearsal.reverted
+    ? PYTH_UPDATE_ERRORS[rehearsal.revertData.slice(0, 10).toLowerCase()]
+    : undefined;
+  if (rejection) {
+    throw new LaunchBlocksError(
+      "PYTH_UPDATE_REJECTED",
+      `Pyth's contract on ${hedera.network} rejects the signed update from its price service (${rejection}); nothing was sent`,
+      {
+        hint:
+          "Pyth's contracts on Hedera do not accept the updates its price service has issued since its 2026-08-26 upgrade. " +
+          "Unset PYTH_API_KEY to use the price already on Hedera, with Max age (s) 0 to accept its age.",
+      },
+    );
+  }
+
   const transaction = new ContractExecuteTransaction()
     .setContractId(ContractId.fromString(contractId))
     .setGas(PYTH_UPDATE_GAS)
     .setPayableAmount(Hbar.fromTinybars(toLong(fee)))
-    .setFunctionParameters(
-      hexToBytes(encodeFunctionData({ abi: PYTH_ABI, functionName: "updatePriceFeeds", args: [updates] })),
-    );
+    .setFunctionParameters(hexToBytes(callData));
   const outcome = await sendContract(hedera, transaction, "Posting a Pyth price update", signal);
   return { transactionId: outcome.transactionId, feeTinybar: fee.toString(), gasUsed: outcome.gasUsed };
 }
