@@ -53,6 +53,11 @@ export async function fetchGallery(): Promise<GalleryEntry[]> {
   return (await json<{ flows: GalleryEntry[] }>(await fetch(`${BASE}/gallery`))).flows;
 }
 
+/** The account that signs when no wallet is connected: its id only, never its key. */
+export async function fetchOperator(): Promise<{ accountId: string | null; network: string }> {
+  return json(await fetch(`${BASE}/operator`));
+}
+
 export async function validateFlow(
   flow: FlowInput,
   signal?: AbortSignal,

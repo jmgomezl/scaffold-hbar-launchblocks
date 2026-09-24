@@ -23,6 +23,8 @@ type Props = {
   steps: { id: string; type: string; label: string }[];
   run: RunState;
   hasPool: boolean;
+  /** Who signs, for the idle summary: the default account or the connected wallet. */
+  signedBy: string;
 };
 
 /**
@@ -30,7 +32,7 @@ type Props = {
  * id and timing; expanding one shows its explorer links and details. Failed
  * steps start expanded so an error is never hidden behind a click.
  */
-export function RunPanel({ steps, run, hasPool }: Props) {
+export function RunPanel({ steps, run, hasPool, signedBy }: Props) {
   const records = run.phase === "idle" ? {} : run.records;
   // Explicit user choices per step; unset rows follow the default (open only when failed).
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -42,7 +44,7 @@ export function RunPanel({ steps, run, hasPool }: Props) {
       <div className="space-y-3 text-sm">
         <p>
           <strong>{steps.length}</strong> step{steps.length === 1 ? "" : "s"} will run in order on{" "}
-          <strong>testnet</strong>, signed by the server&apos;s operator account.
+          <strong>testnet</strong>, signed by {signedBy}.
         </p>
         {hasPool && (
           <div className="alert alert-info py-2 text-xs">

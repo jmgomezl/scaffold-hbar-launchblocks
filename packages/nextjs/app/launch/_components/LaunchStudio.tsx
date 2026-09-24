@@ -3,13 +3,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { ApiError, FlowIssue, GalleryEntry, StepRecord } from "../_lib/api";
-import { fetchCatalog, fetchGallery, runFlowStream, validateFlow } from "../_lib/api";
+import { fetchCatalog, fetchGallery, fetchOperator, runFlowStream, validateFlow } from "../_lib/api";
 import type { StepStatus, WorkspaceState } from "../_lib/blocks";
+import { useHederaWallet } from "../_lib/wallet";
+import { runFlowWithWallet } from "../_lib/walletRun";
 import type { LoadRequest } from "./BlockEditor";
 import { ExportDialog } from "./ExportDialog";
 import { OutputsPanel } from "./OutputsPanel";
 import type { RunState } from "./RunPanel";
 import { RunPanel } from "./RunPanel";
+import type { SignerMode } from "./SignerPicker";
+import { SignerPicker, walletApprovals } from "./SignerPicker";
 import type { PanelMode, RunSummary } from "./StudioPanel";
 import { StudioPanel } from "./StudioPanel";
 import type { Catalog, EditorDocument, FlowInput, StepCatalogEntry } from "@sh/launchblocks/editor";
@@ -37,6 +41,7 @@ const EDITOR_HEIGHT: Record<PanelMode, string> = {
 };
 const TOKEN_KEY = "launchblocks.runToken";
 const PANEL_KEY = "launchblocks.panel";
+const SIGNER_KEY = "launchblocks.signer";
 const HERO_FLOW = "hts-launch-saucerswap";
 const POOL_STEP = "saucerswap.createPool";
 
@@ -97,6 +102,10 @@ export function LaunchStudio() {
   const [runKey, setRunKey] = useState(0);
   // The Run / Problems / Outputs panel: open, collapsed to a slim bar, or closed.
   const [panelMode, setPanelMode] = useState<PanelMode>("open");
+  // Who signs runs: the app's operator account unless the visitor picks their wallet.
+  const [signerMode, setSignerMode] = useState<SignerMode>("operator");
+  const [operatorAccountId, setOperatorAccountId] = useState<string | null>(null);
+  const wallet = useHederaWallet(signerMode === "wallet");
   const fileInput = useRef<HTMLInputElement>(null);
   const nonce = useRef(0);
 
@@ -173,7 +182,17 @@ export function LaunchStudio() {
 
   useEffect(() => {
     setPanelMode(parsePanelMode(readStorage(PANEL_KEY, () => window.localStorage)));
+    if (readStorage(SIGNER_KEY, () => window.localStorage) === "wallet") setSignerMode("wallet");
+    fetchOperator().then(
+      operator => setOperatorAccountId(operator.accountId),
+      () => undefined,
+    );
   }, []);
+
+  const changeSignerMode = (mode: SignerMode) => {
+    setSignerMode(mode);
+    writeStorage(SIGNER_KEY, mode, () => window.localStorage);
+  };
 
   const changePanelMode = (mode: PanelMode) => {
     setPanelMode(mode);
@@ -259,7 +278,9 @@ export function LaunchStudio() {
   }, [run]);
 
   const running = run.phase === "running";
-  const canRun = !!flow && flow.steps.length > 0 && issues.length === 0 && !validating && !running;
+  const walletSigner = signerMode === "wallet" && wallet.state.status === "connected" ? wallet.signer() : null;
+  const signerReady = signerMode === "operator" || !!walletSigner;
+  const canRun = !!flow && flow.steps.length > 0 && issues.length === 0 && !validating && !running && signerReady;
 
   const startRun = async (runToken?: string) => {
     if (!flow) return;
@@ -270,7 +291,8 @@ export function LaunchStudio() {
     );
     setRun({ phase: "running", records: { ...records } });
     try {
-      for await (const event of runFlowStream(flow, { runToken })) {
+      const events = walletSigner ? runFlowWithWallet(flow, walletSigner) : runFlowStream(flow, { runToken });
+      for await (const event of events) {
         if (event.type === "step:start" || event.type === "step:success" || event.type === "step:error") {
           records[event.step.id] = event.step;
           setRun({ phase: "running", records: { ...records } });
@@ -285,7 +307,7 @@ export function LaunchStudio() {
       }
     } catch (raw) {
       const error = raw as ApiError;
-      if (error.code === "RUN_TOKEN_REQUIRED" && !runToken) {
+      if (error.code === "RUN_TOKEN_REQUIRED" && !runToken && !walletSigner) {
         const token = window.prompt("This deployment needs a run token to spend its testnet operator's HBAR:");
         if (token) {
           writeStorage(TOKEN_KEY, token, () => window.sessionStorage);
@@ -394,10 +416,11 @@ export function LaunchStudio() {
         <button
           className="btn btn-primary btn-sm"
           disabled={!canRun}
+          title={signerReady ? undefined : "Connect a wallet in the Run panel, or switch back to the default account"}
           onClick={() => void startRun(readStorage(TOKEN_KEY, () => window.sessionStorage) ?? undefined)}
         >
           {running ? <span className="loading loading-spinner loading-xs" /> : null}
-          {running ? "Running…" : "Run on testnet"}
+          {running ? "Running…" : signerMode === "wallet" ? "Run with your wallet" : "Run on testnet"}
         </button>
       </div>
 
@@ -427,12 +450,33 @@ export function LaunchStudio() {
           runSummary={runSummary}
         >
           {tab === "run" && (
-            <RunPanel
-              key={runKey}
-              steps={steps}
-              run={run}
-              hasPool={workspace.steps.some(step => step.type === POOL_STEP)}
-            />
+            <>
+              <SignerPicker
+                mode={signerMode}
+                onModeChange={changeSignerMode}
+                operatorAccountId={operatorAccountId}
+                wallet={wallet.state}
+                onConnect={extensionId => void wallet.connect(extensionId)}
+                onDisconnect={() => void wallet.disconnect()}
+                approvals={walletApprovals(flow ?? undefined)}
+                disabled={running}
+              />
+              <RunPanel
+                key={runKey}
+                steps={steps}
+                run={run}
+                hasPool={workspace.steps.some(step => step.type === POOL_STEP)}
+                signedBy={
+                  signerMode === "wallet"
+                    ? wallet.state.status === "connected"
+                      ? `your wallet account ${wallet.state.accountId}, one approval per transaction`
+                      : "your wallet, once it is connected"
+                    : operatorAccountId
+                      ? `the default account ${operatorAccountId}`
+                      : "the app's operator account"
+                }
+              />
+            </>
           )}
           {tab === "problems" &&
             (issues.length || workspace.detachedIds.length ? (

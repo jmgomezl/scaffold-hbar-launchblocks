@@ -1,6 +1,18 @@
 import type { NextConfig } from "next";
 import path from "path";
 
+/**
+ * One copy of the Hedera SDK in the browser. The SDK has a peer dependency
+ * (bn.js), so package managers may install the same version in several
+ * folders, and the wallet connector checks SDK classes by identity
+ * (`instanceof TransactionReceiptQuery`). Every browser import of the SDK is
+ * pointed at the root copy's browser build, the one its exports map selects.
+ */
+const HEDERA_SDK_BROWSER = path.join(
+  path.dirname(require.resolve("@hiero-ledger/sdk/package.json", { paths: [path.join(__dirname, "../..")] })),
+  "lib/browser.js",
+);
+
 const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(__dirname, "../.."),
   reactStrictMode: true,
@@ -13,8 +25,9 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: process.env.NEXT_PUBLIC_IGNORE_BUILD_ERROR === "true",
   },
-  webpack: (config, { dev }) => {
+  webpack: (config, { dev, isServer }) => {
     config.resolve.fallback = { fs: false, net: false, tls: false };
+    if (!isServer) config.resolve.alias = { ...config.resolve.alias, "@hiero-ledger/sdk$": HEDERA_SDK_BROWSER };
     // @coinbase/cdp-sdk (pulled in transitively by RainbowKit -> wagmi ->
     // @base-org/account) imports optional @x402 entrypoints that are not
     // installed. Yarn's hoisting hides this; an npm install surfaces it as a
