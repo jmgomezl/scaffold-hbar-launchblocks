@@ -27,7 +27,7 @@ npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblock
 - **Launch Studio** (`/launch`) — a block editor in the style of App Inventor. Id and amount inputs are sockets: type a value, or drag in an output from an earlier step, such as `createToken ▸ Token` or `seedPool ▸ LP tokens received`. Problems show up on the block they belong to; runs stream live.
 - **Flows as JSON** — the editor, the CLI and the API all run the same document. Nothing the editor can do is missing from the JSON.
 - **A SaucerSwap integration that gets the details right** — exact opening prices, the EVM-alias recipient, fee conversion, measured gas limits. See [what makes it hard](#the-saucerswap-integration).
-- **Prices in US dollars from Pyth** — **Price in USD with Pyth** works out the HBAR to pair with your tokens so the pool opens at a dollar price, from Pyth's HBAR/USD feed on Hedera. With a Hermes API key it posts a fresh signed price first. See [pricing in US dollars](#pricing-a-launch-in-us-dollars-with-pyth).
+- **Prices in US dollars from Pyth** — **Price in USD with Pyth** works out the HBAR to pair with your tokens so the pool opens at a dollar price, from Pyth's HBAR/USD feed on Hedera. It can post a fresh signed price first, and rehearses that for free, because Pyth's Hedera contracts currently refuse fresh updates. See [pricing in US dollars](#pricing-a-launch-in-us-dollars-with-pyth).
 - **Your contracts as blocks** — **Deploy contract** and **Call contract** work with any contract in `packages/hardhat`. The included `TokenLock` locks a pool's LP tokens for a set time, so holders can see the liquidity cannot be pulled.
 - **Scheduled transactions** — **Schedule token transfer** and **Schedule a mint** use the Schedule Service's long-term schedules (HIP-423): vesting and supply unlocks that the network runs on their date with nobody online.
 - **Fourteen step types** across HTS, HCS, the Schedule Service, smart contracts, SaucerSwap, Pyth and the mirror node, each one schema-checked, documented, tested, and exportable as code.
@@ -300,12 +300,14 @@ Two things holders of a new token ask: can the team pull the liquidity, and when
 
 A pool's opening price is the ratio of what goes into it. **Price in USD with Pyth** lets you set it in dollars instead: give it the tokens you will deposit and the price of one token in US dollars, and it reads HBAR/USD from [Pyth](https://pyth.network) and outputs **Tokens** and **HBAR** to wire into **Seed SaucerSwap pool**. HBAR = tokens × price ÷ HBAR/USD, in exact decimal arithmetic, rounded down to a tinybar.
 
-Pyth is a pull oracle. Its contract on Hedera (`0.0.3042133` on testnet, `0.0.4622850` on mainnet) holds the last price anyone posted, and anyone can post a fresher one:
+Pyth is a pull oracle. Its contract on Hedera (`0.0.3042133` on testnet, `0.0.4622850` on mainnet) holds the last price anyone posted, and anyone can post a fresher one with a signed update from Hermes, Pyth's price service. The step does both:
 
-- **With `PYTH_API_KEY`**, the step fetches a signed HBAR/USD update from Hermes, Pyth's price service, asks the contract for its fee (1 tinybar per update on testnet), posts it with `updatePriceFeeds`, waits for the mirror node, and reads the price back, seconds old. In a wallet run the wallet pays for the update, and the key stays on the server behind `GET /api/launchblocks/pyth/updates`.
-- **Without a key**, it reads the price already on-chain through the mirror node, for free. Since 26 August 2026 Hermes answers only requests with a key, and nobody has posted HBAR/USD to testnet since 23 August, so that price is weeks old.
+- **With `PYTH_API_KEY`**, it fetches a signed HBAR/USD update from Hermes, asks the contract for its fee (1 tinybar per update on testnet), rehearses `updatePriceFeeds` for free through the mirror node, then sends it, waits for the mirror node, and reads the price back. In a wallet run the wallet pays, and the key stays on the server behind `GET /api/launchblocks/pyth/updates`.
+- **Without a key**, it reads the price already on-chain through the mirror node, for free.
 
-Either way, the step refuses a price older than `maxAgeSeconds` (120 by default; 0 accepts any age) and one whose confidence interval is wider than `maxConfidenceBps` of it (1% by default). In `hts-launch-usd-price` the price comes first, so a refusal stops the launch before anything is spent. The run in [Verified on testnet](#verified-on-testnet) accepted the on-chain price and recorded where it came from: its log says `"priceSource": "Pyth on-chain"`, with the price's publish time, and 0.00024829 ℏ a token at $0.08055012 is exactly $0.00002.
+It refuses a price older than `maxAgeSeconds` (120 by default; 0 accepts any age) and one whose confidence interval is wider than `maxConfidenceBps` of it (1% by default), before anything is spent.
+
+**What works on Hedera today (checked 2026-09-24).** Only the on-chain read. Since its 26 August upgrade, Hermes answers only requests with an API key, and the updates it issues are refused by Pyth's contracts on Hedera, testnet and mainnet alike, with `InvalidWormholeVaa()`: [a real update on testnet](https://hashscan.io/testnet/transaction/0.0.7231440-1790279760-915729876) reverted that way, and a mirror-node rehearsal on mainnet did the same. Nobody has posted HBAR/USD to testnet since 23 August. So the step rehearses first and stops with `PYTH_UPDATE_REJECTED`, having sent nothing, and `hts-launch-usd-price` sets Max age to 0: it opens the pool from the last on-chain price and writes that price's publish time to the launch log. The run in [Verified on testnet](#verified-on-testnet) did exactly that: its log says `"priceSource": "Pyth on-chain"`, and 0.00024829 ℏ a token at $0.08055012 is exactly $0.00002. When Pyth upgrades its Hedera contracts, setting `PYTH_API_KEY` (with a plan that covers HBAR/USD) turns on fresh prices with no code change.
 
 ## Hedera services used
 
@@ -402,7 +404,9 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 | `OPERATOR_MISSING` | `HEDERA_OPERATOR_ID` or `HEDERA_OPERATOR_KEY` is empty. Run `yarn core:doctor`. |
 | `INVALID_SIGNATURE`, or doctor says the key does not control the account | Wrong key for the account, or a raw hex key read as the wrong curve. Set `HEDERA_OPERATOR_KEY_TYPE`. |
 | `INSUFFICIENT_PAYER_BALANCE` | Top up at the [faucet](https://portal.hedera.com/faucet). A full launch needs about 60 ℏ. |
-| `PYTH_PRICE_STALE` | Pyth's HBAR/USD on Hedera is older than **Max age**. Set `PYTH_API_KEY` so the step posts a fresh price, or set Max age to 0 to accept the price as it is. |
+| `PYTH_PRICE_STALE` | Pyth's HBAR/USD on Hedera is older than **Max age**. Set Max age to 0 to accept the price as it is; fresh prices need `PYTH_API_KEY` and a Pyth contract on Hedera that accepts current updates. |
+| `PYTH_UPDATE_REJECTED` | Pyth's contract on Hedera would reject the signed update (`InvalidWormholeVaa`); nothing was sent. Unset `PYTH_API_KEY` to use the on-chain price. |
+| `PYTH_NOT_ENTITLED` | The key's Pyth plan does not cover HBAR/USD (crypto spot). Add it in Pyth Terminal, or unset `PYTH_API_KEY`. |
 | `PYTH_API_KEY_REJECTED` | Hermes refused the key. Check it in Pyth Terminal; keys are sent only to Hermes, as a Bearer token. |
 | `Safe token transfer failed!` from a SaucerSwap contract | Almost always a long-zero recipient for an alias account (see [the integration](#the-saucerswap-integration)). Check the transaction's child records for the real status. |
 | `Safe multiple associations failed!` | Out of gas inside the pool contracts. Raise the step's gas limit. |

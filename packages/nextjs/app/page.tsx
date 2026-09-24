@@ -67,7 +67,7 @@ const UNDER_THE_HOOD = [
   },
   {
     name: "Pyth",
-    body: "Open the pool at a US dollar price, from Pyth's HBAR/USD feed on Hedera, posting a fresh signed update when you have a Hermes key.",
+    body: "Open the pool at a US dollar price, from Pyth's HBAR/USD feed on Hedera. Every price is checked for age and confidence before anything is spent.",
   },
   {
     name: "Schedule Service",

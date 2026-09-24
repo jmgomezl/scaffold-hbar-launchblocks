@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hts-launch-usd-price",
   "name": "Token launch priced in USD",
-  "description": "Open a SaucerSwap market at a US dollar price: Pyth's HBAR/USD feed on Hedera sets how much HBAR goes next to the tokens, then the token, its launch log and the pool follow. The price comes first, so a stale price stops the launch before anything is spent.",
+  "description": "Open a SaucerSwap market at a US dollar price: Pyth's HBAR/USD feed on Hedera sets how much HBAR goes next to the tokens, then the token, its launch log and the pool follow. Pyth's Hedera contracts do not accept fresh updates at the moment, so this example accepts the price already on-chain (Max age 0) and records its publish time on the log.",
   "network": "testnet",
   "steps": [
     {
@@ -12,7 +12,7 @@
       "params": {
         "tokenAmount": "50000",
         "tokenPriceUsd": "0.00002",
-        "maxAgeSeconds": 120,
+        "maxAgeSeconds": 0,
         "maxConfidenceBps": 100
       }
     },
