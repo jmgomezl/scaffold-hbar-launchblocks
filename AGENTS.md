@@ -80,7 +80,9 @@ src/
   hedera/     context.ts (HederaContext, hashscanUrl), client.ts (createHederaContext, hederaContextFromEnv),
               wallet.ts (walletHederaContext: a connected wallet signs), mirror.ts (mirror node reads),
               ops/submit.ts (send, submit, sendContract: operator or wallet), errors.ts (translate statuses and wallet refusals)
-  steps/      one folder per namespace (hts/, hcs/, hss/, saucerswap/, contract/), one file per step type
+  saucerswap/ config.ts (deployments), pool.ts, swap.ts: the SaucerSwap V1 operations
+  pyth/       config.ts (Pyth's Hedera contract, feed ids), hermes.ts (signed updates, API key), price.ts (priceInUsd)
+  steps/      one folder per namespace (hts/, hcs/, hss/, pyth/, saucerswap/, contract/), one file per step type
   errors.ts   LaunchBlocksError subclasses with stable `code`s
   browser.ts  the entry for wallet runs in the page (no Node built-ins); editor/ is the editor's entry
 test/         mirrors src/; test/helpers/fake-steps.ts has network-free steps for runner/registry tests
