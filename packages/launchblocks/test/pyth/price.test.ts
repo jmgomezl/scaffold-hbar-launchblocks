@@ -182,6 +182,21 @@ describe("hermesPriceUpdates()", () => {
     expect(init.redirect).toBe("error");
   });
 
+  it("names the feed when the key's plan does not cover it", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({}),
+      text: async () =>
+        "Not entitled: feed 3728e5… (no grant accepts this feed (asset type 'crypto', instrument type 'spot'))",
+    } as Response);
+    await expect(hermesPriceUpdates({ apiKey: "k" })([PYTH_FEEDS.hbarUsd])).rejects.toMatchObject({
+      code: "PYTH_NOT_ENTITLED",
+      message: expect.stringContaining("instrument type 'spot'"),
+      hint: expect.stringContaining("crypto spot"),
+    });
+  });
+
   it("explains a rejected key", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(json("unauthorized", 401));
     await expect(hermesPriceUpdates({ apiKey: "wrong" })([PYTH_FEEDS.hbarUsd])).rejects.toMatchObject({

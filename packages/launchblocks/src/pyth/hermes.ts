@@ -31,9 +31,24 @@ export function hermesPriceUpdates(options: HermesOptions): PythPriceUpdates {
       throw new LaunchBlocksError("PYTH_UNREACHABLE", `Could not reach Pyth's price service at ${base}`, { cause });
     }
     if (response.status === 401 || response.status === 403) {
-      throw new LaunchBlocksError("PYTH_API_KEY_REJECTED", "Pyth's price service refused the API key", {
-        hint: "Check PYTH_API_KEY: Hermes keys come from Pyth Terminal (https://docs.pyth.network/price-feeds/core/upgrade/preparing).",
-      });
+      // Hermes says why in plain text, e.g. which feed the key's plan does not cover. It never echoes the key.
+      const reason = (await response.text().catch(() => "")).trim().slice(0, 300);
+      if (/not entitled/i.test(reason)) {
+        throw new LaunchBlocksError(
+          "PYTH_NOT_ENTITLED",
+          `Your Pyth API key's plan does not cover this feed: ${reason}`,
+          {
+            hint: "In Pyth Terminal, add crypto spot feeds (HBAR/USD) to the key's plan, or unset PYTH_API_KEY to use the price already on Hedera.",
+          },
+        );
+      }
+      throw new LaunchBlocksError(
+        "PYTH_API_KEY_REJECTED",
+        `Pyth's price service refused the API key${reason ? `: ${reason}` : ""}`,
+        {
+          hint: "Check PYTH_API_KEY: Hermes keys come from Pyth Terminal (https://docs.pyth.network/price-feeds/core/upgrade/preparing).",
+        },
+      );
     }
     if (!response.ok) {
       throw new LaunchBlocksError("PYTH_UPDATE_FAILED", `Pyth's price service answered ${response.status}`);
