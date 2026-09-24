@@ -46,7 +46,7 @@ const STEPS = [
   {
     Icon: PlayIcon,
     title: "Run",
-    body: "Steps execute on testnet in order. Each block turns green as its transaction reaches consensus, with HashScan links.",
+    body: "Steps execute on testnet in order, signed by the app's account or your own wallet. Each block turns green as its transaction reaches consensus, with HashScan links.",
   },
   {
     Icon: CodeBracketIcon,
@@ -125,6 +125,10 @@ const Home: NextPage = () => {
                 View on GitHub
               </a>
             </div>
+            <p className="mt-4 max-w-xl text-sm text-white/75">
+              No wallet needed: the app&apos;s testnet account signs every run. Prefer your own? Connect a Hedera wallet
+              in the studio and approve each transaction.
+            </p>
           </div>
           <div className="flex justify-center lg:justify-end">
             <LaunchIllustration />
