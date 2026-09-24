@@ -2,7 +2,7 @@
 
 Briefing for coding agents in this app (Cursor, Claude Code, Codex). Claude Code loads it through `CLAUDE.md`.
 
-This is **LaunchBlocks**, a Scaffold-HBAR template: a visual, block-based HTS token launchpad on Hedera. A launch is a *flow* (ordered JSON steps) that the app renders as Blockly blocks, runs from Next.js API routes with an operator key (or in the page, signed by a visitor's Hedera wallet), and exports as a `launch.ts` script that calls the core's operations. Next.js App Router, wallet connect, Debug Contracts, and Hedera networks (testnet, mainnet, local fork). The CLI may have left only Hardhat or only Foundry.
+This is **LaunchBlocks**, a Scaffold-HBAR template: a visual, block-based HTS token launchpad on Hedera. A launch is a *flow* (ordered JSON steps) that the app renders as Blockly blocks, runs from Next.js API routes with an operator key (or in the page, signed by a visitor's Hedera wallet), and exports as a `launch.ts` script that calls the core's operations. Next.js App Router, wallet connect, Debug Contracts, and Hedera networks (testnet, mainnet, local fork). Contracts use Hardhat.
 
 Use the package manager this project was created with — see `packageManager` in the root `package.json`, or the lockfile. The command examples below are written for the package manager this copy was scaffolded with; run the same script names through whichever one the project uses.
 
@@ -10,7 +10,7 @@ Use the package manager this project was created with — see `packageManager` i
 
 - `packages/launchblocks` (`@sh/launchblocks`) — framework-agnostic core: flow schema, step registry, runner, codegen, Hedera client factory. No React, no Next. Unit-tested with vitest.
 - `packages/nextjs` — the frontend (App Router, RainbowKit, Wagmi, Viem, DaisyUI) plus the API routes that run flows.
-- `packages/hardhat` exists → Hardhat (`hardhat-deploy`); `packages/foundry` exists → Foundry (Forge scripts). Follow only the flavor that is present.
+- `packages/hardhat` — Hardhat (`hardhat-deploy`): the starter's contracts plus `TokenLock`, which the Deploy contract block deploys from the compiled artifacts.
 
 Product rules that shape every change:
 
@@ -28,8 +28,6 @@ Package-prefixed scripts for package-specific work. Keep only truly cross-worksp
 # Local chain + deploy + frontend (separate terminals)
 yarn hardhat:chain    # Hedera-forked Hardhat node on 8545
 yarn hardhat:deploy --network localhost
-yarn foundry:chain    # Anvil from the Foundry package
-yarn foundry:deploy
 yarn next:start       # http://localhost:3000
 
 # Frontend only
@@ -42,7 +40,6 @@ yarn test             # core (vitest) + hardhat
 yarn format
 yarn next:build
 yarn hardhat:compile
-yarn foundry:compile
 
 # Core package only
 yarn core:test
@@ -50,12 +47,13 @@ yarn core:test:coverage
 yarn core:lint
 yarn core:check-types
 yarn core:harness <flow.json>   # export a flow as a Hedera Harness recipe into .harness/
+yarn core:check <flow>          # validate a flow and list its steps; sends nothing
+yarn core:run <flow>            # run a flow on testnet (spends HBAR)
+yarn core:doctor                # check the operator before spending anything
 
 # Live networks
 yarn hardhat:deploy --network hederaTestnet   # or hederaMainnet
-yarn foundry:deploy --network hedera_testnet  # or hedera_mainnet
 yarn hardhat:verify:testnet
-yarn foundry:verify:testnet
 
 # Deployer account
 yarn hardhat:account:generate
@@ -99,17 +97,23 @@ A **step definition** (`defineStep({...})`) bundles, in one object:
 | `outputExample` | a complete, realistic output — used to type-check wiring before running and as the docs example |
 | `ui` | label, category, colour, `fields` (param → editor field) and `outputs` (what later steps may reference) |
 | `docs` | one-line summary, markdown details, Hedera services and integrations touched |
-| `execute(input, ctx)` | the SDK calls; throw `StepExecutionError` with a `hint` for user-fixable failures |
+| `execute(input, ctx)` | calls the step's operation (the SDK work lives in `src/hedera/ops/` or the integration's module); throw a `LaunchBlocksError` with a `hint` for user-fixable failures |
+| `preflight(params, ctx)` | optional: checks what the step will need before the flow's first step runs (Deploy contract checks its artifact is compiled) |
 | `codegen(ctx)` | body of an async function that does the same with the SDK and `return`s the outputs; use `ctx.expr(key)` for params and `ctx.addImport()` for imports |
 
 #### Adding a step type
 
-1. Create `packages/launchblocks/src/steps/<namespace>/<action>.ts` exporting `defineStep({...})`. Reuse the field kinds in `registry/types.ts` (`tokenId`, `accountId`, `topicId`, `amount`, …) — kinds drive which earlier outputs the editor offers to an input. Entity ids, `amount` and `value` are sockets; a `value` socket takes any output, for generic inputs like contract arguments.
-2. Register it in `packages/launchblocks/src/steps/index.ts` (the built-in registry).
-3. Add `test/steps/<namespace>/<action>.test.ts`: validate `input`/`outputExample`, run `codegen` and assert the body, and test `execute` against a stubbed `HederaContext` — no network in unit tests. If the step reads anything back, cover the wallet path as `test/hedera/wallet.test.ts` does.
-4. If it produces on-chain entities, list them in `ui.outputs` with the right kind so the runner emits Hashscan links.
-5. If its network fee is not small, add it to `STEP_FEE_HBAR` in `src/harness/recipe.ts`; exported recipes fund on-chain checks from that table, and unlisted types count as 2 ℏ.
-6. Run `yarn core:test && yarn core:lint --max-warnings=0 && yarn core:check-types`.
+Model a new step on **Mint tokens**: `mintFungibleToken` in `src/hedera/ops/tokens.ts` and `src/steps/hts/mint.ts`.
+
+1. Write the operation in `packages/launchblocks/src/hedera/ops/<area>.ts` (or the integration's module, like `src/saucerswap/`) and export it through that folder's `index.ts`, so a generated `launch.ts` can import it. Send transactions through `send`, `submit` or `sendContract` (rule 5), and give it a `build…` function that returns the unsent transaction, for tests.
+2. Create `packages/launchblocks/src/steps/<namespace>/<action>.ts` exporting `defineStep({...})`: `execute` calls the operation, and `codegen` is `ctx => callOperation(ctx, "<operation>", [<param keys>])` from `steps/shared.ts`. Reuse the field kinds in `registry/types.ts` (`tokenId`, `accountId`, `topicId`, `amount`, …): kinds drive which earlier outputs the editor offers to an input. Entity ids, `amount` and `value` are sockets; a `value` socket takes any output, for generic inputs like contract arguments.
+3. Register it in `packages/launchblocks/src/steps/index.ts`, in `BUILT_IN_STEPS` and the named exports.
+4. Test it without a network: in `test/steps/<namespace>.test.ts`, parse `input` and `outputExample` and assert the `codegen` body; in `test/hedera/ops/<area>.test.ts`, check the `build…` transaction. If the step reads anything back, cover the wallet path as `test/hedera/wallet.test.ts` does. Every registered step is also checked by the invariants in `test/steps/built-in-steps.test.ts`.
+5. If it produces on-chain entities, list them in `ui.outputs` with the right kind so the runner emits HashScan links.
+6. If its network fee is not small, add it to `STEP_FEE_HBAR` in `src/harness/recipe.ts`: exported recipes fund on-chain checks from that table, the public-run policy budgets with it, and unlisted types count as 2 ℏ.
+7. Optionally, add a gallery flow: `packages/launchblocks/flows/<id>.json` and an entry at the end of `GALLERY` in `src/gallery.ts`. Tests check that every gallery flow passes the public-run policy and that its exported `launch.ts` type-checks.
+8. Regenerate the README's step table with `yarn core:docs` (CI runs `yarn core:docs --check`).
+9. Run `yarn core:test && yarn core:lint --max-warnings=0 && yarn core:check-types`.
 
 The editor and API discover steps through the registry; there is nothing to register in `packages/nextjs`.
 
@@ -125,19 +129,13 @@ The editor and API discover steps through the registry; there is nothing to regi
 - Config: `packages/hardhat/hardhat.config.ts`
 - Tagged deploy: if `deployHederaToken.tags = ["HederaToken"]`, run `yarn hardhat:deploy --tags HederaToken`
 
-### Foundry
-
-- Contracts: `packages/foundry/contracts/`
-- Deploy scripts: `packages/foundry/script/` (`Deploy.s.sol`, `DeployHederaToken.s.sol`, `DeployHtsTokenCreator.s.sol`)
-- Tests: `packages/foundry/test/`
-- Config: `packages/foundry/foundry.toml`
-- One contract: `yarn foundry:deploy --file DeployHederaToken.s.sol`
-
 ### After deploy
 
-ABIs and addresses are written to `packages/nextjs/contracts/deployedContracts.ts`. Put third-party contracts in `packages/nextjs/contracts/externalContracts.ts`.
+`yarn hardhat:deploy` writes ABIs and addresses to `packages/nextjs/contracts/deployedContracts.ts`, which Debug Contracts uses. Put third-party contracts in `packages/nextjs/contracts/externalContracts.ts`.
 
-Sample contracts on this starter: `HederaToken` (ERC-20) and `HtsTokenCreator` (HTS precompile at `0x167`).
+The **Deploy contract** block does not use either file: it deploys from the compiled artifacts in `packages/hardhat/artifacts`. To make a new contract deployable from a flow, add its `.sol` file to `packages/hardhat/contracts/`, run `yarn hardhat:compile`, and put its name in the block.
+
+Contracts on this starter: `HederaToken` (ERC-20), `HtsTokenCreator` (HTS precompile at `0x167`) and `TokenLock` (holds a token, such as a pool's LP tokens, until a release time).
 
 ## Frontend contract interaction
 
@@ -180,7 +178,6 @@ Use DaisyUI classes, not raw Tailwind when a DaisyUI component exists:
 ### Networks
 
 - Hardhat: `packages/hardhat/hardhat.config.ts` (`hederaTestnet` 296, `hederaMainnet` 295)
-- Foundry: `packages/foundry/foundry.toml` (`hedera_testnet`, `hedera_mainnet`)
 - Next.js: `packages/nextjs/scaffold.config.ts` (target networks, polling, RPC overrides, WalletConnect)
 
 ## Style
@@ -190,7 +187,7 @@ Use DaisyUI classes, not raw Tailwind when a DaisyUI component exists:
 | `UpperCamelCase` | types, components |
 | `lowerCamelCase` | variables, functions |
 | `CONSTANT_CASE` | constants |
-| `snake_case` | Hardhat deploy files and Foundry scripts |
+| `snake_case` | Hardhat deploy files |
 
 Next.js imports use the `~~` alias:
 

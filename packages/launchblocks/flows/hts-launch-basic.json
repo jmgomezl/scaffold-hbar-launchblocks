@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hts-launch-basic",
   "name": "HTS token launch with HCS log",
-  "description": "Create a fungible token with a 1% fractional fee, open a public launch log on HCS, record the launch, and airdrop to early supporters.",
+  "description": "Create a fungible token with a 1% fractional fee, open a public launch log on HCS, record the launch, then mint a reserve and record it.",
   "network": "testnet",
   "steps": [
     {

@@ -36,9 +36,9 @@ yarn harness:run        # the full run: agent, repairs, all tiers
   treasury of the token it creates, and Hedera does not delete a treasury
   account, so the harness's sweep-back fails and the rest (about 32 ℏ) stays
   there. Budget the full 45 ℏ per run.
-- **Tiers 2 and 3 need Playwright:** `yarn add -D playwright` and
-  `npx playwright install chromium`. The agent (`claude` by default) must be on
-  your `PATH`.
+- **Tiers 2 and 3 need Playwright's Chromium:** `npx playwright install chromium`
+  (Playwright itself is already a dev dependency). The agent (`claude` by
+  default) must be on your `PATH`.
 
 ## How the recipe was verified
 

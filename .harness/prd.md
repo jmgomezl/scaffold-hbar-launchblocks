@@ -68,8 +68,8 @@ Register it in `packages/launchblocks/src/steps/index.ts`: put it in
 - In `packages/launchblocks/test/hedera/ops/tokens.test.ts`, a `buildTokenBurn()`
   test showing the amount is scaled by the token's decimals.
 
-The existing contract test (`test/steps/contract.test.ts`) already checks
-every registered step's invariants, so the new step must pass it unchanged.
+The existing invariant test (`test/steps/built-in-steps.test.ts`) already
+checks every registered step, so the new step must pass it unchanged.
 
 ### 4. The gallery example — `packages/launchblocks/flows/hts-launch-burn.json`
 
@@ -85,8 +85,8 @@ on testnet, with these steps in order:
    "newTotalSupply": "{{steps.burnReserve.newTotalSupply}}",
    "burnTx": "{{steps.burnReserve.transactionId}}" }`.
 
-Register it in `packages/launchblocks/src/gallery.ts`, **after** the two
-existing entries, with the title `Token launch with a supply burn` and a one-line blurb.
+Register it in `packages/launchblocks/src/gallery.ts`, **at the end of**
+`GALLERY`, with the title `Token launch with a supply burn` and a one-line blurb.
 
 ### 5. Docs
 

@@ -252,7 +252,7 @@ The terminal can exercise the same path: `yarn core:run <flow> --wallet` runs wi
 
 | Package | What it holds |
 | --- | --- |
-| `packages/launchblocks` | The core, with no framework: flow schema, step registry, runner, codegen, Hedera and SaucerSwap operations, the terminal scripts, and ~380 unit tests. It has two browser entries: `@sh/launchblocks/editor` for the block editor, which a test keeps free of zod and the Hedera SDK, and `@sh/launchblocks/browser` for wallet runs, which a test keeps free of Node built-ins. |
+| `packages/launchblocks` | The core, with no framework: flow schema, step registry, runner, codegen, Hedera and SaucerSwap operations, the terminal scripts, and about 420 unit tests. It has two browser entries: `@sh/launchblocks/editor` for the block editor, which a test keeps free of zod and the Hedera SDK, and `@sh/launchblocks/browser` for wallet runs, which a test keeps free of Node built-ins. |
 | `packages/nextjs` | The Launch Studio (`app/launch`), API routes (`app/api/launchblocks`), and the Scaffold-HBAR app shell. |
 | `packages/hardhat` | The starter's contracts, tests and deploy scripts. |
 
@@ -374,6 +374,8 @@ The validators were checked in both directions. On the template as shipped they 
 ![The Launch Studio during the harness's Tier 3 check: the Tokens · HTS toolbox is open, and below Create HTS token and Mint tokens is the agent-built Burn tokens block, with Token and Amount inputs](docs/images/harness-burn-block.png)
 
 *The **Burn tokens** block the agent added, in the studio's toolbox, as the harness's validator saw it. No frontend code changed: the studio found the step in the registry.*
+
+Before a run: the harness refuses env files in the workspace, so move `packages/nextjs/.env` aside and export `HEDERA_OPERATOR_ID` and an ECDSA `HEDERA_OPERATOR_KEY` in your shell instead; install Playwright's browser with `npx playwright install chromium`; and use Yarn, which the recipe assumes. `harness:doctor` checks all of it.
 
 ```bash
 yarn harness:doctor     # prerequisites and the recipe
