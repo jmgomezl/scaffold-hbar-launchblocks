@@ -191,6 +191,9 @@ All live in `packages/nextjs/.env` and are read on the server only. None of them
 | `LAUNCHBLOCKS_ALLOW_MAINNET` | no | `false` | The run API refuses mainnet flows unless this is exactly `true`. |
 | `LAUNCHBLOCKS_RUN_TOKEN` | no | — | If set, runs through the API need an `x-launchblocks-token` header; the studio asks for it. |
 | `LAUNCHBLOCKS_RUNS_PER_HOUR` | no | `20` | Per-client run limit for a public deployment; `0` turns it off. |
+| `LAUNCHBLOCKS_PUBLIC_DEMO` | no | `false` | `true` applies the [public-run policy](#deploying-the-studio) for a deployment whose operator pays for anonymous visitors. |
+| `LAUNCHBLOCKS_PUBLIC_HBAR_PER_HOUR` | no | `400` | With the policy on: the most HBAR all visitors' runs may cost in an hour, counted at each run's worst case. |
+| `LAUNCHBLOCKS_PUBLIC_MAX_HBAR_PER_STEP` | no | `25` | With the policy on: the most HBAR one step may deposit or trade. |
 
 The one public variable is Scaffold-HBAR's `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`, used by RainbowKit and by the studio's wallet option. It falls back to a shared development id; set your own from [WalletConnect Cloud](https://cloud.reown.com) before you deploy.
 
@@ -392,9 +395,13 @@ npx hedera-harness run .harness/my-launch.spec.yaml         # the agent, then ev
 The app is a standard Next.js server; flows run in its API routes with the operator key from the environment. For a public demo:
 
 - Leave `LAUNCHBLOCKS_ALLOW_MAINNET` unset, and consider `LAUNCHBLOCKS_RUN_TOKEN`: every run spends the operator's HBAR.
-- Without a run token, `LAUNCHBLOCKS_RUNS_PER_HOUR` (default 20) is the only brake: it counts runs per visitor, per server instance. It identifies visitors by `X-Real-IP`, which the proxy must set (`proxy_set_header X-Real-IP $remote_addr;` in nginx), rather than by the first `X-Forwarded-For` entry, which visitors can forge.
+- Without a run token, set `LAUNCHBLOCKS_PUBLIC_DEMO=true`. Anyone can otherwise write a flow that sends the operator's HBAR away: a **Call contract** with HBAR attached to their own contract, or a pool or trade of a token they hold. The policy (`src/runner/public-policy.ts`) lets every gallery launch run, and refuses the rest before or during the run:
+  - value only goes to tokens and contracts the same run creates, and no contract call or deployment carries HBAR;
+  - at most `LAUNCHBLOCKS_PUBLIC_MAX_HBAR_PER_STEP` per deposit or trade, and 25 steps per flow;
+  - one run at a time per visitor, and at most `LAUNCHBLOCKS_PUBLIC_HBAR_PER_HOUR` across all visitors, counted at each run's worst case.
+- `LAUNCHBLOCKS_RUNS_PER_HOUR` (default 20) then limits each visitor: it counts runs per visitor, per server instance, and IPv6 visitors by their /64. It identifies visitors by `X-Real-IP`, which the proxy must set (`proxy_set_header X-Real-IP $remote_addr;` in nginx), rather than by the first `X-Forwarded-For` entry, which visitors can forge.
 - Behind nginx, keep response buffering off for `/api/launchblocks/flows/run`. The route already sends `X-Accel-Buffering: no` so run events stream.
-- A full launch takes about a minute; the route allows up to 120 s.
+- A full launch takes about a minute; the route stops a run after 180 s.
 - Wallet runs happen in the visitor's browser and spend their HBAR, so the run token and rate limit do not apply to them. Set your own `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`.
 
 ## Troubleshooting
@@ -404,6 +411,8 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 | `OPERATOR_MISSING` | `HEDERA_OPERATOR_ID` or `HEDERA_OPERATOR_KEY` is empty. Run `yarn core:doctor`. |
 | `INVALID_SIGNATURE`, or doctor says the key does not control the account | Wrong key for the account, or a raw hex key read as the wrong curve. Set `HEDERA_OPERATOR_KEY_TYPE`. |
 | `INSUFFICIENT_PAYER_BALANCE` | Top up at the [faucet](https://portal.hedera.com/faucet). A full launch needs about 60 ℏ. |
+| `PUBLIC_RUN_REFUSED` | The deployment runs the public-run policy and the flow sends value to something it did not create, attaches HBAR to a contract, or moves too much HBAR at once. Wire the target from an earlier step, or run on your own deployment or with your own wallet. |
+| `PUBLIC_BUDGET_SPENT` or `RUN_IN_PROGRESS` | The public demo's hourly HBAR budget is used up, or your previous run is still going. Wait, or sign with your own wallet. |
 | `PYTH_PRICE_STALE` | Pyth's HBAR/USD on Hedera is older than **Max age**. Set Max age to 0 to accept the price as it is; fresh prices need `PYTH_API_KEY` and a Pyth contract on Hedera that accepts current updates. |
 | `PYTH_UPDATE_REJECTED` | Pyth's contract on Hedera would reject the signed update (`InvalidWormholeVaa`); nothing was sent. Unset `PYTH_API_KEY` to use the on-chain price. |
 | `PYTH_NOT_ENTITLED` | The key's Pyth plan does not cover HBAR/USD (crypto spot). Add it in Pyth Terminal, or unset `PYTH_API_KEY`. |

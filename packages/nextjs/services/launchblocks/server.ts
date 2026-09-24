@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
-import type { HederaContext, StepRegistry } from "@sh/launchblocks";
+import type { BeforeStep, Flow, HederaContext, PublicRunLimits, StepRegistry } from "@sh/launchblocks";
 import {
+  DEFAULT_PUBLIC_RUN_LIMITS,
   FlowValidationError,
   LaunchBlocksError,
+  checkPublicFlow,
   createDefaultRegistry,
   hederaContextFromEnv,
   packageManagerFromUserAgent,
+  publicRunHbarEstimate,
+  publicStepGuard,
 } from "@sh/launchblocks";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -78,44 +82,121 @@ export async function readJsonBody(req: Request): Promise<unknown> {
 
 const RUN_TOKEN_HEADER = "x-launchblocks-token";
 const DEFAULT_RUNS_PER_HOUR = 20;
+const DEFAULT_PUBLIC_HBAR_PER_HOUR = 400;
+const HOUR_MS = 60 * 60 * 1000;
 
 type Window = { count: number; resetAt: number };
 const windows = new Map<string, Window>();
+/** Visitors with a run in progress; public deployments allow one each. */
+const activeRuns = new Set<string>();
+/** Worst-case HBAR of the public runs started in the last hour. */
+let publicSpend: { at: number; hbar: number }[] = [];
+
+export type RunGuard = { refused: NextResponse } | { release: () => void; beforeStep?: BeforeStep };
+
+const envNumber = (name: string, fallback: number) => {
+  const value = Number(process.env[name] ?? fallback);
+  return Number.isFinite(value) ? value : fallback;
+};
 
 /**
- * Refuse runs that the deployment has not opted into: mainnet without an
- * explicit flag, missing shared token when one is configured, and more
- * runs per hour from one client than allowed (in-memory, per instance).
+ * Decide whether a run may start. Every deployment refuses mainnet without an
+ * explicit flag, a missing shared token when one is set, and more runs per
+ * hour per visitor than allowed (in memory, per instance).
+ *
+ * A public deployment (`LAUNCHBLOCKS_PUBLIC_DEMO=true`), whose operator pays
+ * for anonymous visitors, also applies the core's public-run policy: value
+ * only goes to tokens and contracts the run creates, capped per step; one run
+ * at a time per visitor; and an hourly HBAR budget across all visitors.
+ *
+ * The caller must call `release()` when the run ends.
  */
-export function guardRun(req: Request, network: string): NextResponse | null {
-  if (network === "mainnet" && process.env.LAUNCHBLOCKS_ALLOW_MAINNET !== "true") {
-    return jsonError(403, "MAINNET_DISABLED", "Mainnet runs are disabled on this deployment", {
-      hint: "Set LAUNCHBLOCKS_ALLOW_MAINNET=true on the server to allow them.",
-    });
+export function guardRun(req: Request, flow: Flow): RunGuard {
+  if (flow.network === "mainnet" && process.env.LAUNCHBLOCKS_ALLOW_MAINNET !== "true") {
+    return {
+      refused: jsonError(403, "MAINNET_DISABLED", "Mainnet runs are disabled on this deployment", {
+        hint: "Set LAUNCHBLOCKS_ALLOW_MAINNET=true on the server to allow them.",
+      }),
+    };
   }
 
   const requiredToken = process.env.LAUNCHBLOCKS_RUN_TOKEN;
   if (requiredToken && req.headers.get(RUN_TOKEN_HEADER) !== requiredToken) {
-    return jsonError(401, "RUN_TOKEN_REQUIRED", `Runs on this deployment need the ${RUN_TOKEN_HEADER} header`);
+    return {
+      refused: jsonError(401, "RUN_TOKEN_REQUIRED", `Runs on this deployment need the ${RUN_TOKEN_HEADER} header`),
+    };
   }
 
-  const limit = Number(process.env.LAUNCHBLOCKS_RUNS_PER_HOUR ?? DEFAULT_RUNS_PER_HOUR);
-  if (Number.isFinite(limit) && limit > 0) {
-    const key = clientKey(req);
+  const key = clientKey(req);
+  const isPublic = process.env.LAUNCHBLOCKS_PUBLIC_DEMO === "true";
+  const limits: PublicRunLimits = {
+    maxSteps: DEFAULT_PUBLIC_RUN_LIMITS.maxSteps,
+    maxHbarPerStep: envNumber("LAUNCHBLOCKS_PUBLIC_MAX_HBAR_PER_STEP", DEFAULT_PUBLIC_RUN_LIMITS.maxHbarPerStep),
+  };
+  let cost = 0;
+  if (isPublic) {
+    const issues = checkPublicFlow(flow, limits);
+    if (issues.length) {
+      return {
+        refused: jsonError(403, "PUBLIC_RUN_REFUSED", "This flow does more than this public demo runs", {
+          issues,
+          hint: "The demo only sends value to tokens and contracts the launch creates. Run it on your own deployment, or sign with your own wallet.",
+        }),
+      };
+    }
+    if (activeRuns.has(key)) {
+      return {
+        refused: jsonError(429, "RUN_IN_PROGRESS", "Your previous run is still going", {
+          hint: "Wait for it to finish, then run again.",
+        }),
+      };
+    }
     const now = Date.now();
+    publicSpend = publicSpend.filter(entry => entry.at > now - HOUR_MS);
+    const spent = publicSpend.reduce((sum, entry) => sum + entry.hbar, 0);
+    const budget = envNumber("LAUNCHBLOCKS_PUBLIC_HBAR_PER_HOUR", DEFAULT_PUBLIC_HBAR_PER_HOUR);
+    cost = publicRunHbarEstimate(flow, limits);
+    if (spent + cost > budget) {
+      const retryIn = Math.ceil(((publicSpend[0]?.at ?? now) + HOUR_MS - now) / 60_000);
+      return {
+        refused: jsonError(429, "PUBLIC_BUDGET_SPENT", "This demo's HBAR budget for the hour is spent", {
+          hint: `It frees up in about ${retryIn} minutes. You can also sign with your own testnet wallet.`,
+        }),
+      };
+    }
+  }
+
+  const limit = envNumber("LAUNCHBLOCKS_RUNS_PER_HOUR", DEFAULT_RUNS_PER_HOUR);
+  if (limit > 0) {
+    const now = Date.now();
+    if (windows.size > 10_000) for (const [k, w] of windows) if (w.resetAt <= now) windows.delete(k);
     const window = windows.get(key);
     if (!window || window.resetAt <= now) {
-      windows.set(key, { count: 1, resetAt: now + 60 * 60 * 1000 });
+      windows.set(key, { count: 1, resetAt: now + HOUR_MS });
     } else if (window.count >= limit) {
       const retryIn = Math.ceil((window.resetAt - now) / 1000);
-      return jsonError(429, "RATE_LIMITED", `Run limit of ${limit} per hour reached`, {
-        hint: `Try again in ${retryIn} seconds, or run the flow locally with yarn core:run.`,
-      });
+      return {
+        refused: jsonError(429, "RATE_LIMITED", `Run limit of ${limit} per hour reached`, {
+          hint: `Try again in ${retryIn} seconds, or run the flow locally with yarn core:run.`,
+        }),
+      };
     } else {
       window.count += 1;
     }
   }
-  return null;
+
+  if (!isPublic) return { release: () => undefined };
+  publicSpend.push({ at: Date.now(), hbar: cost });
+  activeRuns.add(key);
+  let released = false;
+  return {
+    beforeStep: publicStepGuard(flow, limits),
+    release: () => {
+      if (released) return;
+      released = true;
+      activeRuns.delete(key);
+    },
+  };
 }
 
 /**
@@ -126,5 +207,7 @@ export function guardRun(req: Request, network: string): NextResponse | null {
  */
 function clientKey(req: Request): string {
   const forwarded = req.headers.get("x-forwarded-for");
-  return req.headers.get("x-real-ip")?.trim() || forwarded?.split(",").pop()?.trim() || "local";
+  const address = req.headers.get("x-real-ip")?.trim() || forwarded?.split(",").pop()?.trim() || "local";
+  // One IPv6 host usually holds a whole /64; count it as one visitor.
+  return address.includes(":") ? address.split(":").slice(0, 4).join(":") : address;
 }
