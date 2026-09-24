@@ -332,7 +332,13 @@ Each step is one file under `packages/launchblocks/src/steps/<namespace>/`. The 
 | 3 | In the running studio, **Burn tokens** is in the toolbox, the new example loads as valid, and export generates the call. |
 | 3.5 | The new flow burns supply **on testnet**, run as the harness's funded throwaway account. That account is passed to the flow runner only through environment variables. |
 
-The validators were checked in both directions. On the template as shipped they fail with 15 findings, all about the missing step. On a correct implementation they pass with none, and the on-chain check burned real supply. Details, and how to run it, are in [.harness/README.md](.harness/README.md).
+The validators were checked in both directions. On the template as shipped they fail with 15 findings, all about the missing step. On a correct implementation they pass with none.
+
+**A full run passed.** `yarn harness:run` on a fresh clone had Claude Code build the step from `prd.md` in about five minutes, touching nothing under `packages/nextjs`. The harness then graded every tier: tests, lint, types and the build; the booted app; all five acceptance assertions in the running studio; and, on testnet, its own funded account created token [`0.0.10700526`](https://hashscan.io/testnet/token/0.0.10700526) and burned 100,000 of its 1,000,000 tokens. Details, and how to run it, are in [.harness/README.md](.harness/README.md).
+
+![The Launch Studio during the harness's Tier 3 check: the Tokens · HTS toolbox is open, and below Create HTS token and Mint tokens is the agent-built Burn tokens block, with Token and Amount inputs](docs/images/harness-burn-block.png)
+
+*The **Burn tokens** block the agent added, in the studio's toolbox, as the harness's validator saw it. No frontend code changed: the studio found the step in the registry.*
 
 ```bash
 yarn harness:doctor     # prerequisites and the recipe

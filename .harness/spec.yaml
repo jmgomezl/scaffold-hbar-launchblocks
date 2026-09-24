@@ -32,8 +32,9 @@ contract: .harness/acceptance-contract.json
 validator:
   enabled: true
 
-# Tier 3.5. LaunchBlocks signs flows with a server-side operator rather than
-# a browser wallet, so the funded ephemeral account is handed to the flow
+# Tier 3.5. LaunchBlocks signs flows with a server-side operator, or in the
+# studio with a Hedera wallet over WalletConnect, not with the harness's EVM
+# burner wallet. So the funded ephemeral account is handed to the flow
 # runner as its operator — through environment variables only, never a file —
 # and the new flow runs on testnet before the app is graded. The runner exits
 # non-zero if any step fails, which fails the attempt.
