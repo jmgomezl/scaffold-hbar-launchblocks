@@ -20,9 +20,9 @@ import { LaunchBlocksError } from "../../errors";
 import type { DecimalAmount } from "../amounts";
 import { fromUnits, toLong, toUnits } from "../amounts";
 import type { HederaContext } from "../context";
-import { translateHederaError } from "../errors";
+import { HederaError, STATUS_HINTS, translateHederaError } from "../errors";
 import { fetchToken, fetchTokenTransfers } from "../mirror";
-import { send, submit } from "./submit";
+import { send, sendWithRecord, submit } from "./submit";
 
 /**
  * Hedera Token Service operations behind the `hts.*` blocks.
@@ -200,11 +200,20 @@ export type TokenInfoSummary = {
 
 /**
  * Token metadata. An operator context asks a consensus node (immediate, unlike
- * the mirror node). A wallet context asks the mirror node, retrying until it
- * has caught up: a TokenInfoQuery is a paid query the wallet would have to approve.
+ * the mirror node). A wallet context asks the mirror node, waiting for it to
+ * catch up: a TokenInfoQuery is a paid query the wallet would have to approve.
  */
 export async function getTokenInfo(hedera: HederaContext, tokenId: string): Promise<TokenInfoSummary> {
-  if (hedera.signer) return fetchToken(hedera, tokenId);
+  if (hedera.signer) {
+    const token = await fetchToken(hedera, tokenId);
+    if (token) return token;
+    // The same error a TokenInfoQuery gives, so both contexts read alike.
+    throw new HederaError({
+      message: `Reading token ${tokenId}: no such token on ${hedera.network}`,
+      status: "INVALID_TOKEN_ID",
+      hint: STATUS_HINTS.INVALID_TOKEN_ID ?? "",
+    });
+  }
   try {
     const info = await new TokenInfoQuery().setTokenId(TokenId.fromString(tokenId)).execute(hedera.client);
     return {
@@ -355,14 +364,8 @@ export async function airdropFungibleToken(hedera: HederaContext, params: Airdro
     );
     return result(transactionId, Math.max(0, params.recipients.length - received.size));
   }
-  try {
-    const response = await tx.execute(hedera.client);
-    // getRecord throws on a failed receipt status, so success is implied here.
-    const record = await response.getRecord(hedera.client);
-    return result(response.transactionId.toString(), record.newPendingAirdrops.length);
-  } catch (error) {
-    throw translateHederaError(error, context);
-  }
+  const { transactionId, record } = await sendWithRecord(hedera, tx, context);
+  return result(transactionId, record.newPendingAirdrops.length);
 }
 
 export type AssociateResult = {

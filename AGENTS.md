@@ -18,7 +18,7 @@ Product rules that shape every change:
 2. **No general-purpose blocks.** No if/loop/variable blocks. Every block is exactly one step type in the registry.
 3. **One hero use case.** The HTS launch → SaucerSwap pool flow is the headline; other steps and gallery flows are "also included".
 4. **Never log or return an operator key.** `HederaContext` holds it; nothing serializes it.
-5. **Every step works with a wallet too.** A wallet context has `hedera.signer` and no `operatorKey`. Send transactions through `send`, `submit` or `sendContract` (`hedera/ops/submit.ts`), never `execute` directly, and when `hedera.signer` is set, read from the mirror node (`hedera/mirror.ts`) instead of paid queries such as `TokenInfoQuery`: the wallet would have to approve each one.
+5. **Every step works with a wallet too.** A wallet context has `hedera.signer` and no `operatorKey`. Send transactions through `send`, `submit`, `sendContract` or, for an operator that needs the record, `sendWithRecord` (`hedera/ops/submit.ts`), never `execute` directly (the one exception is `ContractCreateFlow`, several transactions in one), and when `hedera.signer` is set, read from the mirror node (`hedera/mirror.ts`) instead of paid queries such as `TokenInfoQuery`: the wallet would have to approve each one.
 
 ## Commands
 
@@ -77,7 +77,7 @@ src/
   harness/    recipe.ts (generateHarnessRecipe: a flow → a Hedera Harness recipe; STEP_FEE_HBAR cost table)
   hedera/     context.ts (HederaContext, hashscanUrl), client.ts (createHederaContext, hederaContextFromEnv),
               wallet.ts (walletHederaContext: a connected wallet signs), mirror.ts (mirror node reads),
-              ops/submit.ts (send, submit, sendContract: operator or wallet), errors.ts (translate statuses and wallet refusals)
+              ops/submit.ts (send, submit, sendContract: operator or wallet; sendWithRecord: operator), errors.ts (translate statuses and wallet refusals)
   saucerswap/ config.ts (deployments), pool.ts, swap.ts: the SaucerSwap V1 operations
   pyth/       config.ts (Pyth's Hedera contract, feed ids), hermes.ts (signed updates, API key), price.ts (priceInUsd)
   steps/      one folder per namespace (hts/, hcs/, hss/, pyth/, saucerswap/, contract/), one file per step type

@@ -1,6 +1,7 @@
 import type { Signer } from "@hiero-ledger/sdk";
 import {
   AccountId,
+  ContractCreateFlow,
   ContractCreateTransaction,
   ContractExecuteTransaction,
   ContractId,
@@ -131,6 +132,21 @@ describe("operations with a wallet", () => {
     expect(tokenQuery).not.toHaveBeenCalled();
   });
 
+  it("report a token the mirror node still lacks once it has caught up as a missing token", async () => {
+    const hedera = await walletContext();
+    const fetch = mockMirror({
+      "/tokens/0.0.404": null,
+      "/blocks": { blocks: [{ timestamp: { to: String(Date.now() / 1000 + 5) } }] },
+    });
+    const error = await getTokenInfo(hedera, "0.0.404").catch(e => e);
+    expect(error).toMatchObject({
+      code: "HEDERA_INVALID_TOKEN_ID",
+      message: "Reading token 0.0.404: no such token on testnet",
+    });
+    // Asked, checked the mirror node was current, asked again: no 20-second retry loop.
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
   it("count pending airdrops from who the mirror node shows receiving", async () => {
     const hedera = await walletContext();
     fakeWalletExecution();
@@ -241,6 +257,22 @@ describe("error handling with a wallet", () => {
     );
     expect(error).toMatchObject({ code: "HEDERA_INSUFFICIENT_PAYER_BALANCE" });
     expect(error.hint).toMatch(/wallet account/);
+  });
+
+  it("reports a large contract deploy declined in the wallet the same way", async () => {
+    const hedera = await walletContext();
+    vi.spyOn(ContractCreateFlow.prototype, "executeWithSigner").mockRejectedValue(
+      dappSignerFailure({ message: "User rejected the request.", code: 5000 }),
+    );
+    const artifact: ContractArtifact = {
+      contractName: "Big",
+      sourceName: "contracts/Big.sol",
+      abi: [],
+      // Past the inline limit, so the deploy goes through ContractCreateFlow.
+      bytecode: `0x${"60".repeat(8000)}`,
+    };
+    const error = await deployContract(hedera, { artifact }).catch(e => e);
+    expect(error).toMatchObject({ code: "WALLET_REJECTED", message: "Deploying Big: declined in the wallet" });
   });
 
   it("asks to reconnect when the wallet session is gone", async () => {

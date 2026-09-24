@@ -302,17 +302,31 @@ export type MirrorToken = {
   treasuryAccountId: string | null;
 };
 
-/** Token metadata from the mirror node, after it has caught up with a token created moments ago. */
+/**
+ * Token metadata from the mirror node, or `null` when there is no such token.
+ * A 404 can also mean the mirror node has not ingested a token created moments
+ * ago, so before answering `null` it waits for the mirror node to catch up
+ * with the time of the first request and asks once more.
+ */
 export async function fetchToken(
   hedera: Pick<HederaContext, "mirrorBaseUrl">,
   tokenId: string,
-  options: RetryOptions = {},
-): Promise<MirrorToken> {
-  const body = (await mirrorFetchAfterWrite(
-    `${hedera.mirrorBaseUrl}/api/v1/tokens/${encodeURIComponent(tokenId)}`,
-    `token ${tokenId}`,
-    options,
-  )) as {
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<MirrorToken | null> {
+  const url = `${hedera.mirrorBaseUrl}/api/v1/tokens/${encodeURIComponent(tokenId)}`;
+  const askedAt = Date.now();
+  let body = await mirrorFetch(url, options.signal);
+  if (body === null) {
+    const caughtUp = await waitForMirror(hedera, askedAt, options);
+    body = await mirrorFetch(url, options.signal);
+    if (body === null && !caughtUp) {
+      throw new LaunchBlocksError("MIRROR_TIMEOUT", `The mirror node has no record of token ${tokenId} yet`, {
+        hint: "The mirror node is lagging behind the network. Try again in a minute.",
+      });
+    }
+    if (body === null) return null;
+  }
+  const token = body as {
     token_id: string;
     name: string;
     symbol: string;
@@ -321,12 +335,12 @@ export async function fetchToken(
     treasury_account_id?: string | null;
   };
   return {
-    tokenId: body.token_id,
-    name: body.name,
-    symbol: body.symbol,
-    decimals: Number(body.decimals),
-    totalSupplyUnits: String(body.total_supply),
-    treasuryAccountId: body.treasury_account_id ?? null,
+    tokenId: token.token_id,
+    name: token.name,
+    symbol: token.symbol,
+    decimals: Number(token.decimals),
+    totalSupplyUnits: String(token.total_supply),
+    treasuryAccountId: token.treasury_account_id ?? null,
   };
 }
 

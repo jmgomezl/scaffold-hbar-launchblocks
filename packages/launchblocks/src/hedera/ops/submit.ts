@@ -1,4 +1,4 @@
-import type { Transaction, TransactionReceipt } from "@hiero-ledger/sdk";
+import type { Transaction, TransactionReceipt, TransactionRecord } from "@hiero-ledger/sdk";
 import { TransactionId } from "@hiero-ledger/sdk";
 import { toHex } from "viem";
 
@@ -40,6 +40,32 @@ export async function send(hedera: HederaContext, transaction: Transaction, cont
   }
 }
 
+/**
+ * Operator contexts only: send a transaction and read its record, for what a
+ * receipt does not carry (contract results, pending airdrops). A record is a
+ * paid query, which a wallet would have to approve, so wallet contexts read
+ * the mirror node instead and never come here.
+ */
+export async function sendWithRecord(
+  hedera: HederaContext,
+  transaction: Transaction,
+  context: string,
+): Promise<{ transactionId: string; record: TransactionRecord }> {
+  if (hedera.signer) {
+    throw new LaunchBlocksError("RECORD_NEEDS_OPERATOR", `${context} needs a transaction record, a paid query`, {
+      hint: "In a wallet context, read the mirror node instead.",
+    });
+  }
+  try {
+    const response = await transaction.execute(hedera.client);
+    // getRecord throws on a failed receipt status, so success is implied here.
+    const record = await response.getRecord(hedera.client);
+    return { transactionId: response.transactionId.toString(), record };
+  } catch (error) {
+    throw translateHederaError(error, context);
+  }
+}
+
 /** {@link send}, then build a result from the receipt and transaction id. */
 export async function submit<T>(
   hedera: HederaContext,
@@ -74,20 +100,13 @@ export async function sendContract(
     const result = await fetchContractResult(hedera, sent.transactionId, signal ? { signal } : {});
     return { ...sent, output: result.callResult, gasUsed: result.gasUsed };
   }
-  try {
-    const response = await transaction.execute(hedera.client);
-    // getRecord throws on a failed receipt status, so success is implied here.
-    const record = await response.getRecord(hedera.client);
-    const result = record.contractFunctionResult;
-    if (!result) throw new LaunchBlocksError("CONTRACT_NO_RESULT", `${context} produced no contract result`);
-    return {
-      transactionId: response.transactionId.toString(),
-      receipt: record.receipt,
-      output: result.bytes.length ? toHex(result.bytes) : "0x",
-      gasUsed: Number(result.gasUsed ?? 0),
-    };
-  } catch (error) {
-    if (error instanceof LaunchBlocksError) throw error;
-    throw translateHederaError(error, context);
-  }
+  const { transactionId, record } = await sendWithRecord(hedera, transaction, context);
+  const result = record.contractFunctionResult;
+  if (!result) throw new LaunchBlocksError("CONTRACT_NO_RESULT", `${context} produced no contract result`);
+  return {
+    transactionId,
+    receipt: record.receipt,
+    output: result.bytes.length ? toHex(result.bytes) : "0x",
+    gasUsed: Number(result.gasUsed ?? 0),
+  };
 }

@@ -14,7 +14,7 @@ import { entityIdToEvmAddress } from "../abi";
 import type { DecimalAmount } from "../amounts";
 import { toLong, toUnits } from "../amounts";
 import type { HederaContext } from "../context";
-import { translateHederaError } from "../errors";
+import { translateHederaError, translateWalletError } from "../errors";
 import { fetchAccount, fetchContractResult, readContract, waitForMirror } from "../mirror";
 import { sendContract } from "./submit";
 
@@ -258,9 +258,14 @@ export async function deployContract(
   const flow = configure(
     new ContractCreateFlow().setBytecode(artifact.bytecode.replace(/^0x/, "")),
   ).setConstructorParameters(hexToBytes(encoded));
+  // ContractCreateFlow sends several transactions (file create, appends, contract create), so it cannot go
+  // through send(); it translates wallet refusals the same way.
   if (hedera.signer) {
+    const signer = hedera.signer;
     try {
-      const response = await flow.executeWithSigner(hedera.signer);
+      const response = await flow.executeWithSigner(signer).catch((error: unknown) => {
+        throw translateWalletError(error, context);
+      });
       const receipt = await response.getReceipt(hedera.client);
       const transactionId = response.transactionId.toString();
       const { gasUsed } = await fetchContractResult(hedera, transactionId, signal ? { signal } : {});
@@ -271,6 +276,7 @@ export async function deployContract(
     }
   }
 
+  // An operator runs the whole flow and reads the record for the gas used.
   try {
     const response = await flow.execute(hedera.client);
     const record = await response.getRecord(hedera.client);
