@@ -16,6 +16,13 @@ describe("toUnits()", () => {
     expect(toUnits(1e18, 0)).toBe(1_000_000_000_000_000_000n);
   });
 
+  it("accepts small numbers that JavaScript writes in exponent form", () => {
+    // 2e-9 and 1.5e-7 stringify as exponents; they are still the decimals the author wrote.
+    expect(toUnits(2e-9, 9)).toBe(2n);
+    expect(toUnits(1.5e-7, 8)).toBe(15n);
+    expect(() => toUnits(1e-9, 8)).toThrow(/fractional digits/);
+  });
+
   it("ignores trailing zeros in the fraction", () => {
     expect(toUnits("1.500", 1)).toBe(15n);
   });

@@ -64,12 +64,25 @@ export function assertDecimals(decimals: number): void {
   }
 }
 
-/** Numbers like 1e21 stringify in exponent form; render them positionally instead. */
-function numberToDecimalString(value: number): string {
+/**
+ * Numbers like 1e21 and 2e-9 stringify in exponent form; render them
+ * positionally instead. JavaScript's shortest round-trip form is the decimal
+ * the author wrote, so shifting its point is exact.
+ */
+export function numberToDecimalString(value: number): string {
   if (!Number.isFinite(value)) return String(value);
   if (Number.isInteger(value) && Number.isSafeInteger(value)) return value.toString();
   const text = value.toString();
-  if (!/e/i.test(text)) return text;
-  // Only exact integers survive exponent notation faithfully; fractions there are already lossy.
-  return BigInt(value).toString();
+  const match = /^(-?)(\d+)(?:\.(\d+))?e([+-]\d+)$/i.exec(text);
+  if (!match) return text;
+  const [, sign = "", whole = "0", fraction = "", exponentText = "0"] = match;
+  const digits = `${whole}${fraction}`;
+  const point = whole.length + Number(exponentText);
+  const positional =
+    point <= 0
+      ? `0.${"0".repeat(-point)}${digits}`
+      : point >= digits.length
+        ? `${digits}${"0".repeat(point - digits.length)}`
+        : `${digits.slice(0, point)}.${digits.slice(point)}`;
+  return `${sign}${positional.replace(/^0+(?=\d)/, "")}`;
 }
