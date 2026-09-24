@@ -4,7 +4,7 @@ import { toHex } from "viem";
 
 import { LaunchBlocksError } from "../../errors";
 import type { HederaContext } from "../context";
-import { translateHederaError } from "../errors";
+import { translateHederaError, translateWalletError } from "../errors";
 import { fetchContractResult } from "../mirror";
 
 export type Sent = { transactionId: string; receipt: TransactionReceipt };
@@ -25,7 +25,9 @@ export async function send(hedera: HederaContext, transaction: Transaction, cont
       if (!transaction.isFrozen()) {
         transaction.setTransactionId(TransactionId.generate(hedera.operatorId)).freezeWith(hedera.client);
       }
-      const response = await transaction.executeWithSigner(hedera.signer);
+      const response = await transaction.executeWithSigner(hedera.signer).catch((error: unknown) => {
+        throw translateWalletError(error, context);
+      });
       const receipt = await response.getReceipt(hedera.client);
       return { transactionId: response.transactionId.toString(), receipt };
     }
@@ -33,6 +35,7 @@ export async function send(hedera: HederaContext, transaction: Transaction, cont
     const receipt = await response.getReceipt(hedera.client);
     return { transactionId: response.transactionId.toString(), receipt };
   } catch (error) {
+    if (error instanceof LaunchBlocksError) throw error;
     throw translateHederaError(error, context);
   }
 }

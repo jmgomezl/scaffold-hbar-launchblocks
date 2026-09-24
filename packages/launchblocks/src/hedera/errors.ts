@@ -1,4 +1,4 @@
-import { PrecheckStatusError, ReceiptStatusError, StatusError } from "@hiero-ledger/sdk";
+import { PrecheckStatusError, ReceiptStatusError, Status, StatusError } from "@hiero-ledger/sdk";
 
 import { LaunchBlocksError } from "../errors";
 
@@ -90,6 +90,80 @@ export function translateHederaError(error: unknown, context: string): HederaErr
       : {}),
     cause: error,
   });
+}
+
+/** Hints that name the wallet account rather than the operator. */
+const WALLET_STATUS_HINTS: Readonly<Record<string, string>> = {
+  INSUFFICIENT_PAYER_BALANCE: `Your wallet account cannot pay the fee. Fund it at ${FAUCET} (testnet).`,
+  INSUFFICIENT_ACCOUNT_BALANCE: `Your wallet account's balance is too low. Fund it at ${FAUCET} (testnet).`,
+};
+
+let statusNames: ReadonlySet<string> | null = null;
+function isStatusName(name: string): boolean {
+  statusNames ??= new Set(
+    Object.values(Status)
+      .filter((value): value is Status => value instanceof Status)
+      .map(String),
+  );
+  return statusNames.has(name);
+}
+
+/**
+ * The wallet's own words for a failed request. hedera-wallet-connect's
+ * DAppSigner reports one as an Error whose message is JSON holding the
+ * transaction attempt's error, the error of a query it retries the request
+ * as, and both stacks; wallets themselves reject with plain `{ code, message }`
+ * objects.
+ */
+function walletMessage(error: unknown): string {
+  const text =
+    error instanceof Error
+      ? error.message
+      : typeof (error as { message?: unknown } | null)?.message === "string"
+        ? (error as { message: string }).message
+        : String(error);
+  const start = text.indexOf("{");
+  if (start < 0) return text;
+  try {
+    const report = JSON.parse(text.slice(start)) as {
+      txError?: { message?: string };
+      queryError?: { message?: string };
+    };
+    return report.txError?.message ?? report.queryError?.message ?? "the wallet did not send the transaction";
+  } catch {
+    return text;
+  }
+}
+
+/**
+ * A wallet's refusal or failure to send a transaction: declined by the user,
+ * a lost session, or a status the network returned to the wallet.
+ */
+export function translateWalletError(error: unknown, context: string): LaunchBlocksError {
+  const message = walletMessage(error);
+  if (/reject|declin|denied|cancel/i.test(message)) {
+    return new LaunchBlocksError("WALLET_REJECTED", `${context}: declined in the wallet`, {
+      hint: "Run again and approve each transaction, or switch back to the default account.",
+      cause: error,
+    });
+  }
+  if (/session/i.test(message)) {
+    return new LaunchBlocksError("WALLET_DISCONNECTED", `${context}: ${message}`, {
+      hint: "Reconnect your wallet in the Run panel and run again.",
+      cause: error,
+    });
+  }
+  const status = message.match(/\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g)?.find(isStatusName);
+  if (status) {
+    const hint = WALLET_STATUS_HINTS[status] ?? STATUS_HINTS[status];
+    return new HederaError({
+      message: `${context}: ${status}`,
+      status,
+      ...(hint ? { hint } : {}),
+      cause: error,
+    });
+  }
+  return new HederaError({ message: `${context}: ${message}`, cause: error });
 }
 
 function statusOf(error: unknown): string | undefined {

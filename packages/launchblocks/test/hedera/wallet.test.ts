@@ -203,4 +203,49 @@ describe("error handling with a wallet", () => {
     expect(error).toBeInstanceOf(LaunchBlocksError);
     expect(String(error.message)).toMatch(/Creating topic/);
   });
+
+  /** A failed request as DAppSigner reports it: one Error wrapping JSON with both attempts and their stacks. */
+  function dappSignerFailure(walletError: Json) {
+    return new Error(
+      "Error executing transaction or query: \n" +
+        JSON.stringify(
+          {
+            txError: { name: undefined, stack: undefined, ...walletError },
+            queryError: {
+              name: "Error",
+              message: "Unsupported query type",
+              stack: "Error: Unsupported query type\n    at …",
+            },
+          },
+          null,
+          2,
+        ),
+    );
+  }
+
+  async function failWith(error: unknown) {
+    const hedera = await walletContext();
+    vi.spyOn(Transaction.prototype, "executeWithSigner").mockRejectedValue(error);
+    return send(hedera, new TopicCreateTransaction(), "Creating topic").catch(e => e);
+  }
+
+  it("reports a transaction declined in the wallet, without the signer's stack traces", async () => {
+    const error = await failWith(dappSignerFailure({ message: "User rejected the request.", code: 5000 }));
+    expect(error).toMatchObject({ code: "WALLET_REJECTED", message: "Creating topic: declined in the wallet" });
+    expect(error.hint).toMatch(/approve/);
+  });
+
+  it("reads a network status out of the wallet's message, with a hint about the wallet account", async () => {
+    const error = await failWith(
+      dappSignerFailure({ message: "transaction failed precheck with status INSUFFICIENT_PAYER_BALANCE" }),
+    );
+    expect(error).toMatchObject({ code: "HEDERA_INSUFFICIENT_PAYER_BALANCE" });
+    expect(error.hint).toMatch(/wallet account/);
+  });
+
+  it("asks to reconnect when the wallet session is gone", async () => {
+    const error = await failWith({ message: "Session no longer exists. Please reconnect to the wallet." });
+    expect(error).toMatchObject({ code: "WALLET_DISCONNECTED" });
+    expect(String(error.message)).not.toMatch(/queryError|stack/);
+  });
 });
