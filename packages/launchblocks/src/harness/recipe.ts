@@ -40,7 +40,7 @@ export type FeeEstimate = {
   /** Network fees plus HBAR the flow hands over (pool deposits, swaps), for one run. */
   perRunHbar: number;
   lines: FeeLine[];
-  /** Step ids whose `hbarAmount` is a reference, so the estimate leaves it out. */
+  /** Step ids whose HBAR amount is a reference, so the estimate leaves it out. */
   unknownAmounts: string[];
 };
 
@@ -102,7 +102,8 @@ export function estimateFlowFees(flow: Flow): FeeEstimate {
       feeHbar += CUSTOM_FEE_SURCHARGE_HBAR;
     }
     let spentHbar = 0;
-    const amount = step.params.hbarAmount;
+    // What the step hands over: a pool deposit or swap (hbarAmount), or a contract's initial balance.
+    const amount = step.params.hbarAmount ?? step.params.initialHbar;
     if (amount !== undefined) {
       const value = Number(amount);
       if (Number.isFinite(value) && value >= 0) spentHbar = value;

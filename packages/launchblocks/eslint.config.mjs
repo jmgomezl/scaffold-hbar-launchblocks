@@ -41,4 +41,9 @@ export default defineConfig([
       ],
     },
   },
+  {
+    // CommonJS launchers (bin/*.cjs) load modules with require.
+    files: ["**/*.cjs"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
 ]);

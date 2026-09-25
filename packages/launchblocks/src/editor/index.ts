@@ -5,6 +5,7 @@
  * in the Hedera SDK and zod; this module depends on neither.
  */
 export * from "./model";
+export { SHARE_FRAGMENT_KEY, decodeFlowFromLink, encodeFlowForLink, studioLinkFor } from "./share";
 export { GALLERY, galleryFlow } from "../gallery";
 export type { GalleryEntry } from "../gallery";
 export { findRefs, parseRef, ref } from "../flow/refs";

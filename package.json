@@ -18,6 +18,7 @@
     "core:format": "yarn workspace @sh/launchblocks format",
     "core:harness": "yarn workspace @sh/launchblocks harness-recipe",
     "core:lint": "yarn workspace @sh/launchblocks lint",
+    "core:mcp": "yarn workspace @sh/launchblocks mcp",
     "core:check": "yarn workspace @sh/launchblocks run-flow --dry-run",
     "core:run": "yarn workspace @sh/launchblocks run-flow",
     "core:test": "yarn workspace @sh/launchblocks test",

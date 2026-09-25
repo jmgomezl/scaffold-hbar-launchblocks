@@ -47,7 +47,12 @@ export async function fetchAccount(
   };
 }
 
-export type MirrorTopicMessage = { sequenceNumber: number; consensusTimestamp: string; contents: string };
+export type MirrorTopicMessage = {
+  sequenceNumber: number;
+  consensusTimestamp: string;
+  contents: string;
+  payerAccountId: string | null;
+};
 
 /** Read messages back from a topic to prove what consensus recorded. */
 export async function fetchTopicMessages(
@@ -59,12 +64,86 @@ export async function fetchTopicMessages(
   const url = `${hedera.mirrorBaseUrl}/api/v1/topics/${encodeURIComponent(topicId)}/messages?limit=${limit}&order=asc`;
   const response = await mirrorFetch(url, signal);
   if (response === null) return [];
-  const data = response as { messages?: { sequence_number: number; consensus_timestamp: string; message: string }[] };
+  const data = response as {
+    messages?: { sequence_number: number; consensus_timestamp: string; message: string; payer_account_id?: string }[];
+  };
   return (data.messages ?? []).map(message => ({
     sequenceNumber: message.sequence_number,
     consensusTimestamp: message.consensus_timestamp,
     contents: new TextDecoder().decode(Uint8Array.from(atob(message.message), char => char.charCodeAt(0))),
+    payerAccountId: message.payer_account_id ?? null,
   }));
+}
+
+export type MirrorTopic = { topicId: string; memo: string; createdTimestamp: string | null; deleted: boolean };
+
+/** A topic's memo and creation time, or `null` when there is no such topic. */
+export async function fetchTopic(
+  hedera: Pick<HederaContext, "mirrorBaseUrl">,
+  topicId: string,
+  signal?: AbortSignal,
+): Promise<MirrorTopic | null> {
+  const body = (await mirrorFetch(`${hedera.mirrorBaseUrl}/api/v1/topics/${encodeURIComponent(topicId)}`, signal)) as {
+    topic_id?: string;
+    memo?: string;
+    created_timestamp?: string | null;
+    deleted?: boolean;
+  } | null;
+  if (!body) return null;
+  return {
+    topicId: body.topic_id ?? topicId,
+    memo: body.memo ?? "",
+    createdTimestamp: body.created_timestamp ?? null,
+    deleted: body.deleted === true,
+  };
+}
+
+/** What an account or contract holds of each token it is associated with, in the token's smallest units. */
+export async function fetchTokenBalances(
+  hedera: Pick<HederaContext, "mirrorBaseUrl">,
+  accountId: string,
+  signal?: AbortSignal,
+): Promise<Map<string, bigint>> {
+  const url = `${hedera.mirrorBaseUrl}/api/v1/accounts/${encodeURIComponent(accountId)}/tokens?limit=100`;
+  const body = (await mirrorFetch(url, signal)) as { tokens?: { token_id: string; balance: number | string }[] } | null;
+  return new Map((body?.tokens ?? []).map(entry => [entry.token_id, BigInt(entry.balance)]));
+}
+
+export type MirrorSchedule = {
+  scheduleId: string;
+  memo: string;
+  executedTimestamp: string | null;
+  expirationTime: string | null;
+  deleted: boolean;
+};
+
+/** A scheduled transaction's state, or `null` when there is no such schedule. */
+export async function fetchSchedule(
+  hedera: Pick<HederaContext, "mirrorBaseUrl">,
+  scheduleId: string,
+  signal?: AbortSignal,
+): Promise<MirrorSchedule | null> {
+  const url = `${hedera.mirrorBaseUrl}/api/v1/schedules/${encodeURIComponent(scheduleId)}`;
+  const body = (await mirrorFetch(url, signal)) as {
+    schedule_id?: string;
+    memo?: string;
+    executed_timestamp?: string | null;
+    expiration_time?: string | null;
+    deleted?: boolean;
+  } | null;
+  if (!body) return null;
+  return {
+    scheduleId: body.schedule_id ?? scheduleId,
+    memo: body.memo ?? "",
+    executedTimestamp: body.executed_timestamp ?? null,
+    expirationTime: body.expiration_time ?? null,
+    deleted: body.deleted === true,
+  };
+}
+
+/** A mirror node timestamp (`seconds.nanoseconds`) as an ISO date. */
+export function mirrorTimestampToIso(timestamp: string): string {
+  return new Date(Number(timestamp.split(".")[0]) * 1000).toISOString();
 }
 
 /** GET a mirror node URL. Returns null on 404; throws with a code otherwise. */
@@ -309,11 +388,13 @@ export type MirrorToken = {
 export async function fetchToken(
   hedera: Pick<HederaContext, "mirrorBaseUrl">,
   tokenId: string,
-  options: { signal?: AbortSignal; timeoutMs?: number } = {},
+  /** `afterWrite: false` for a token that should exist already: a 404 then answers `null` straight away. */
+  options: { signal?: AbortSignal; timeoutMs?: number; afterWrite?: boolean } = {},
 ): Promise<MirrorToken | null> {
   const url = `${hedera.mirrorBaseUrl}/api/v1/tokens/${encodeURIComponent(tokenId)}`;
   const askedAt = Date.now();
   let body = await mirrorFetch(url, options.signal);
+  if (body === null && options.afterWrite === false) return null;
   if (body === null) {
     const caughtUp = await waitForMirror(hedera, askedAt, options);
     body = await mirrorFetch(url, options.signal);

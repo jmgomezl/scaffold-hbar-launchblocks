@@ -12,6 +12,18 @@ export const MIRROR_BASE_URL: Record<Network, string> = {
   localnet: "http://localhost:5551",
 };
 
+/** The network and mirror node the environment names, for reads that need no operator. */
+export function mirrorFromEnv(env: Record<string, string | undefined> = process.env): {
+  network: Network;
+  mirrorBaseUrl: string;
+} {
+  const network = parseNetwork(read(env, ENV_VARS.network));
+  return {
+    network,
+    mirrorBaseUrl: (read(env, ENV_VARS.mirrorBaseUrl) ?? MIRROR_BASE_URL[network]).replace(/\/+$/, ""),
+  };
+}
+
 export type OperatorKeyType = "ed25519" | "ecdsa";
 
 export type HederaContextOptions = {

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "launchblocks": {
+      "command": "node",
+      "args": ["packages/launchblocks/bin/mcp.cjs"]
+    }
+  }
+}
