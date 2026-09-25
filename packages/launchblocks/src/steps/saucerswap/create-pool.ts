@@ -66,13 +66,20 @@ export const saucerswapCreatePool = defineStep({
         kind: "amount",
         help: "Sets the opening price together with the token amount",
       },
-      { key: "slippageBps", label: "Slippage (bps)", kind: "number", help: "100 = 1% tolerated shortfall" },
-      { key: "deadlineSeconds", label: "Deadline (s)", kind: "number" },
+      {
+        key: "slippageBps",
+        label: "Slippage (bps)",
+        kind: "number",
+        help: "100 = 1% tolerated shortfall",
+        advanced: true,
+      },
+      { key: "deadlineSeconds", label: "Deadline (s)", kind: "number", advanced: true },
       {
         key: "gasLimit",
         label: "Gas limit",
         kind: "number",
         help: "Defaults to 5,000,000; the association path is gas-hungry",
+        advanced: true,
       },
     ],
     outputs: [

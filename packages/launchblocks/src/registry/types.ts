@@ -34,6 +34,8 @@ export type FieldSpec = {
   help?: string;
   /** Required for `select`. */
   options?: readonly { value: string; label: string }[];
+  /** A setting most launches leave at its default; editors may fold it away until asked. */
+  advanced?: boolean;
 };
 
 export type OutputSpec = {

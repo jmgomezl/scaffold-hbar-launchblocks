@@ -54,6 +54,32 @@ test("flags a problem as soon as a block's field is wrong, and blocks the run", 
   await expect(page.getByText(/createToken ·.*symbol/)).toBeVisible();
 });
 
+test("folds the settings most launches leave alone until asked", async ({ page }) => {
+  await page.goto("/launch?example=hts-launch-basic");
+  await expectValid(page, 5);
+  const canvas = page.locator(".blocklyBlockCanvas");
+  await expect(canvas.getByText("Fee numerator")).toHaveCount(0);
+
+  const more = canvas.locator(".blocklyLabelField", { hasText: "more settings (11)" });
+  await more.locator("xpath=preceding-sibling::*[1]").click();
+  await expect(canvas.getByText("Fee numerator")).toBeVisible();
+  // Folding is only a view: the flow is the same.
+  await expectValid(page, 5);
+});
+
+test("unfolds folded settings when one of them has a problem", async ({ page, request }) => {
+  const { flows } = (await (await request.get("/api/launchblocks/gallery")).json()) as { flows: GalleryEntry[] };
+  const flow = structuredClone(flows.find(entry => entry.id === "hts-launch-basic")!.flow) as GalleryEntry["flow"] & {
+    steps: { params: Record<string, unknown> }[];
+  };
+  flow.steps[0]!.params.fractionalFee = { numerator: 1, denominator: 0, assessment: "inclusive" };
+  await page.addInitScript(saved => localStorage.setItem("launchblocks.flow.v1", saved), JSON.stringify(flow));
+
+  await page.goto("/launch");
+  await expect(page.getByRole("button", { name: /1 problem/ })).toBeVisible();
+  await expect(page.locator(".blocklyBlockCanvas").getByText("Fee denominator")).toBeVisible();
+});
+
 test("exports the launch as flow JSON and as a launch.ts that calls the core", async ({ page }) => {
   await page.goto("/launch?example=hts-launch-basic");
   await expectValid(page, 5);

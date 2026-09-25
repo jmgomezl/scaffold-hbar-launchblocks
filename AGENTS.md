@@ -99,7 +99,7 @@ A **step definition** (`defineStep({...})`) bundles, in one object:
 | `type` | `namespace.action`, e.g. `hts.createToken` |
 | `input` / `output` | zod schemas; `input` is parsed after references resolve |
 | `outputExample` | a complete, realistic output — used to type-check wiring before running and as the docs example |
-| `ui` | label, category, colour, `fields` (param → editor field) and `outputs` (what later steps may reference) |
+| `ui` | label, category, colour, `fields` (param → editor field; `advanced: true` folds a rarely changed one behind the block's "more settings" box) and `outputs` (what later steps may reference) |
 | `docs` | one-line summary, markdown details, Hedera services and integrations touched |
 | `execute(input, ctx)` | calls the step's operation (the SDK work lives in `src/hedera/ops/` or the integration's module); throw a `LaunchBlocksError` with a `hint` for user-fixable failures |
 | `preflight(params, ctx)` | optional: checks what the step will need before the flow's first step runs (Deploy contract checks its artifact is compiled) |

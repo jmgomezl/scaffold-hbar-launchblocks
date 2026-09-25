@@ -43,6 +43,7 @@ const STEP_CHECK = "lb_step";
 const STEP_PREFIX = "lb_step_";
 const ID_FIELD = "__id";
 const STATUS_FIELD = "__status";
+const ADVANCED_FIELD = "__advanced";
 const NAME_FIELD = "NAME";
 const STEPS_INPUT = "STEPS";
 const LITERAL_FIELD = "VALUE";
@@ -56,6 +57,9 @@ type StepBlock = Blockly.Block & {
   lbStepType?: string;
   lbExtra?: Record<string, unknown>;
   lbLabel?: string;
+  /** The rows of settings marked `advanced`, shown only while "more settings" is ticked. */
+  lbAdvancedInputs?: Blockly.Input[];
+  lbAdvancedKeys?: string[];
 };
 
 export type RefState = { stepId: string; key: string; kind: string; label: string; colour: number };
@@ -144,6 +148,37 @@ function fieldFor(entry: StepCatalogEntry, field: FieldSpec): Blockly.Field {
   }
 }
 
+/** Append one row of fields to a step block and return its input. */
+function appendRow(block: Blockly.Block, entry: StepCatalogEntry, row: Row): Blockly.Input {
+  if (row.kind === "checks") {
+    const input = block.appendDummyInput();
+    if (row.title) input.appendField(row.title);
+    for (const field of row.fields) input.appendField(fieldFor(entry, field), field.key).appendField(shortLabel(field));
+    return input;
+  }
+  if (isReferenceKind(row.field.kind)) {
+    return block
+      .appendValueInput(row.field.key)
+      .setCheck(row.field.kind === "value" ? null : row.field.kind)
+      .setAlign(Blockly.inputs.Align.RIGHT)
+      .appendField(row.field.label);
+  }
+  return block
+    .appendDummyInput()
+    .setAlign(Blockly.inputs.Align.RIGHT)
+    .appendField(row.field.label)
+    .appendField(fieldFor(entry, row.field), row.field.key);
+}
+
+const isAdvancedRow = (row: Row) => (row.kind === "checks" ? row.fields.every(f => f.advanced) : !!row.field.advanced);
+
+/** Show or hide a step block's advanced rows; a checkbox validator, so it runs on every change. */
+function showAdvanced(this: Blockly.FieldCheckbox, value: boolean | string): undefined {
+  const block = this.getSourceBlock() as StepBlock | null;
+  for (const input of block?.lbAdvancedInputs ?? []) input.setVisible(value === true || value === "TRUE");
+  if (block instanceof Blockly.BlockSvg && block.rendered) block.queueRender();
+}
+
 function tooltipFor(entry: StepCatalogEntry): string {
   const helps = entry.ui.fields.filter(field => field.help).map(field => `• ${field.label}: ${field.help}`);
   return [entry.ui.tooltip ?? entry.docs.summary, ...(helps.length ? ["", ...helps] : [])].join("\n");
@@ -165,24 +200,17 @@ function stepDefinition(entry: StepCatalogEntry) {
         .appendField("as")
         .appendField(new Blockly.FieldTextInput(nextStepId(entry.type, []), idValidator), ID_FIELD);
 
-      for (const row of rowsFor(entry.ui.fields)) {
-        if (row.kind === "checks") {
-          const input = this.appendDummyInput();
-          if (row.title) input.appendField(row.title);
-          for (const field of row.fields) {
-            input.appendField(fieldFor(entry, field), field.key).appendField(shortLabel(field));
-          }
-        } else if (isReferenceKind(row.field.kind)) {
-          this.appendValueInput(row.field.key)
-            .setCheck(row.field.kind === "value" ? null : row.field.kind)
-            .setAlign(Blockly.inputs.Align.RIGHT)
-            .appendField(row.field.label);
-        } else {
-          this.appendDummyInput()
-            .setAlign(Blockly.inputs.Align.RIGHT)
-            .appendField(row.field.label)
-            .appendField(fieldFor(entry, row.field), row.field.key);
-        }
+      const rows = rowsFor(entry.ui.fields);
+      for (const row of rows.filter(row => !isAdvancedRow(row))) appendRow(this, entry, row);
+      // Settings most launches leave alone fold behind one checkbox, so a block opens short.
+      const advanced = entry.ui.fields.filter(field => field.advanced);
+      if (advanced.length) {
+        this.appendDummyInput("__more")
+          .appendField(new Blockly.FieldCheckbox("FALSE", showAdvanced), ADVANCED_FIELD)
+          .appendField(`more settings (${advanced.length})`);
+        this.lbAdvancedKeys = advanced.map(field => field.key);
+        this.lbAdvancedInputs = rows.filter(isAdvancedRow).map(row => appendRow(this, entry, row));
+        for (const input of this.lbAdvancedInputs) input.setVisible(false);
       }
     },
     saveExtraState(this: StepBlock) {
@@ -537,6 +565,10 @@ export function applyWarnings(workspace: Blockly.Workspace, warnings: ReadonlyMa
       }
       const messages = warnings.get(String(step.getFieldValue(ID_FIELD)));
       step.setWarningText(messages?.length ? messages.join("\n") : null);
+      // A problem in a folded setting unfolds it, so the field is there to fix.
+      if (messages?.some(message => step.lbAdvancedKeys?.some(key => message.startsWith(`${key}:`)))) {
+        step.setFieldValue("TRUE", ADVANCED_FIELD);
+      }
     }
   } finally {
     Blockly.Events.enable();

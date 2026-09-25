@@ -44,9 +44,10 @@ export const saucerswapSwap = defineStep({
         label: "Slippage (bps)",
         kind: "number",
         help: "Tolerated shortfall against the live quote",
+        advanced: true,
       },
-      { key: "deadlineSeconds", label: "Deadline (s)", kind: "number" },
-      { key: "gasLimit", label: "Gas limit", kind: "number", help: "Defaults to 2,000,000" },
+      { key: "deadlineSeconds", label: "Deadline (s)", kind: "number", advanced: true },
+      { key: "gasLimit", label: "Gas limit", kind: "number", help: "Defaults to 2,000,000", advanced: true },
     ],
     outputs: [
       { key: "transactionId", label: "Swap transaction", kind: "transactionId" },
