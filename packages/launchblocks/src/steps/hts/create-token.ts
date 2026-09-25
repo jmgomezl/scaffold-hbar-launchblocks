@@ -85,7 +85,8 @@ const InputSchema = z
     if (fee) {
       const min = units("fractionalFee.min", fee.min);
       const most = units("fractionalFee.max", fee.max);
-      if (fee.numerator > fee.denominator) {
+      // Only between valid numbers: a zero denominator already has its own issue.
+      if (fee.denominator > 0 && fee.numerator > fee.denominator) {
         ctx.addIssue({
           code: "custom",
           path: ["fractionalFee", "numerator"],
