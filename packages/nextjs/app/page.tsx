@@ -41,17 +41,17 @@ const STEPS = [
   {
     Icon: CheckBadgeIcon,
     title: "Check",
-    body: "Every param and every reference is validated against the step schemas before a single HBAR is spent.",
+    body: "Every param and every reference is validated against the step schemas, and the cost is shown, before a single HBAR is spent.",
   },
   {
     Icon: PlayIcon,
     title: "Run",
-    body: "Steps execute on testnet in order, signed by the app's account or your own wallet. Each block turns green as its transaction reaches consensus, with HashScan links.",
+    body: "Steps execute on testnet in order, signed by the app's account or your own wallet. Each block turns green as its transaction reaches consensus, and the launch gets a public page built from its HCS log.",
   },
   {
     Icon: CodeBracketIcon,
     title: "Export",
-    body: "Download the flow as JSON for the CLI, or as a launch.ts script that calls the same functions.",
+    body: "Share it as a link, download it as JSON for the CLI or as a launch.ts script, or let a coding agent build it over MCP.",
   },
 ];
 

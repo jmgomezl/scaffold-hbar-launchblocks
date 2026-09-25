@@ -3,7 +3,9 @@
 import { useState } from "react";
 import type { ApiError, RunResult, StepRecord } from "../_lib/api";
 import type { StepStatus } from "../_lib/blocks";
+import type { FeeEstimate } from "@sh/launchblocks/editor";
 import { ArrowTopRightOnSquareIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
+import { notification } from "~~/utils/scaffold-hbar";
 
 export type RunState =
   | { phase: "idle" }
@@ -22,17 +24,106 @@ const STATUS_BADGE: Record<StepStatus, string> = {
 type Props = {
   steps: { id: string; type: string; label: string }[];
   run: RunState;
-  hasPool: boolean;
+  /** What one run costs, once the flow is valid. */
+  estimate: FeeEstimate | null;
   /** Who signs, for the idle summary: the default account or the connected wallet. */
   signedBy: string;
+  /** Who pays, for the cost line: "the default account" or "your wallet". */
+  payer: string;
 };
+
+const hbar = (value: number) => `${value.toLocaleString("en-US", { maximumFractionDigits: 2 })} ℏ`;
+
+/** The run's cost, with a per-step breakdown one click away. */
+function CostSummary({ estimate, steps, payer }: { estimate: FeeEstimate; steps: Props["steps"]; payer: string }) {
+  const labels = new Map(steps.map(step => [step.id, step.label]));
+  return (
+    <details className="group rounded-lg border border-base-300 text-xs">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2">
+        <ChevronRightIcon className="h-3 w-3 shrink-0 transition-transform group-open:rotate-90" />
+        <span className="text-sm">
+          Costs about <strong>{hbar(estimate.perRunHbar)}</strong>, paid by {payer}
+        </span>
+      </summary>
+      <div className="border-t border-base-300 px-3 py-2">
+        <table className="w-full">
+          <thead className="opacity-60">
+            <tr>
+              <th className="text-left font-normal">Step</th>
+              <th className="text-right font-normal">Fee</th>
+              <th className="text-right font-normal">HBAR sent</th>
+            </tr>
+          </thead>
+          <tbody>
+            {estimate.lines.map(line => (
+              <tr key={line.stepId}>
+                <td className="truncate pr-2">
+                  <span className="font-mono">{line.stepId}</span>{" "}
+                  <span className="opacity-60">{labels.get(line.stepId)}</span>
+                </td>
+                <td className="text-right">{hbar(line.feeHbar)}</td>
+                <td className="text-right">{line.spentHbar ? hbar(line.spentHbar) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {estimate.unknownAmounts.length > 0 && (
+          <p className="mt-2 opacity-70">
+            Not included: the HBAR that {estimate.unknownAmounts.join(", ")} sends, which comes from an earlier step.
+          </p>
+        )}
+        <p className="mt-2 opacity-60">
+          From fees measured on testnet. Hedera prices fees in US dollars, so the HBAR amount moves with its price.
+        </p>
+      </div>
+    </details>
+  );
+}
+
+/** The topic a run opened for its launch log: its public page is rebuilt from it. */
+function launchLogTopic(records: Record<string, StepRecord>): string | null {
+  const record = Object.values(records).find(
+    candidate => candidate.type === "hcs.createTopic" && typeof candidate.outputs?.topicId === "string",
+  );
+  return (record?.outputs?.topicId as string | undefined) ?? null;
+}
+
+function LaunchPageCard({ topicId }: { topicId: string }) {
+  const path = `/launches/${topicId}`;
+  const copy = async () => {
+    const link = `${window.location.origin}${path}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      notification.success("Link to the launch page copied");
+    } catch {
+      window.prompt("Copy the link to the launch page:", link);
+    }
+  };
+  return (
+    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs">
+      <p className="text-sm font-semibold">This launch has a public page</p>
+      <p className="mt-0.5 opacity-70">
+        Rebuilt from its HCS log, with the token, the pool&apos;s price and any locks and schedules as they are now.
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <a className="btn btn-primary btn-xs" href={path} target="_blank" rel="noreferrer">
+          Open the launch page
+          <ArrowTopRightOnSquareIcon className="h-3 w-3" />
+        </a>
+        <button type="button" className="btn btn-xs" onClick={() => void copy()}>
+          Copy its link
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Live run log: one collapsible row per step. Collapsed rows show status,
  * id and timing; expanding one shows its explorer links and details. Failed
  * steps start expanded so an error is never hidden behind a click.
  */
-export function RunPanel({ steps, run, hasPool, signedBy }: Props) {
+export function RunPanel({ steps, run, estimate, signedBy, payer }: Props) {
   const records = run.phase === "idle" ? {} : run.records;
   // Explicit user choices per step; unset rows follow the default (open only when failed).
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -46,12 +137,7 @@ export function RunPanel({ steps, run, hasPool, signedBy }: Props) {
           <strong>{steps.length}</strong> step{steps.length === 1 ? "" : "s"} will run in order on{" "}
           <strong>testnet</strong>, signed by {signedBy}.
         </p>
-        {hasPool && (
-          <div className="alert alert-info alert-soft py-2 text-xs">
-            Seeding a SaucerSwap pool costs about 33 ℏ on testnet (SaucerSwap&apos;s fee plus creating the pool&apos;s
-            LP token), on top of the HBAR you deposit. A full launch is 60–80 ℏ.
-          </div>
-        )}
+        {estimate && <CostSummary estimate={estimate} steps={steps} payer={payer} />}
         <p className="opacity-70">Press Run to watch each block light up as its transaction reaches consensus.</p>
       </div>
     );
@@ -72,6 +158,9 @@ export function RunPanel({ steps, run, hasPool, signedBy }: Props) {
             ? "Launch complete. Every step is on-chain; expand a step for its HashScan links."
             : `Stopped at ${run.result.error?.stepId}. Earlier steps are on-chain; later ones were skipped.`}
         </div>
+      )}
+      {run.phase === "done" && launchLogTopic(run.records) && (
+        <LaunchPageCard topicId={launchLogTopic(run.records) as string} />
       )}
       <div className="flex items-center justify-end gap-1">
         <button className="btn btn-ghost btn-xs" onClick={() => setAll(true)}>

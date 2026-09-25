@@ -84,7 +84,7 @@ for _ in $(seq 1 90); do
   curl -s -o /dev/null "http://localhost:$PORT/" && break
   sleep 1
 done
-for path in / /launch /debug /blockexplorer /api/launchblocks/steps /api/launchblocks/gallery /api/launchblocks/operator; do
+for path in / /launch /launches /debug /blockexplorer /api/launchblocks/steps /api/launchblocks/gallery /api/launchblocks/operator; do
   code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$PORT$path")
   [ "$code" = 200 ] && pass "GET $path" || fail "GET $path -> $code"
 done

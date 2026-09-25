@@ -1,4 +1,4 @@
-import type { FlowInput, HarnessRecipe, StepCatalogEntry } from "@sh/launchblocks/editor";
+import type { FeeEstimate, FlowInput, HarnessRecipe, StepCatalogEntry } from "@sh/launchblocks/editor";
 
 /** Client for the LaunchBlocks API routes. Types mirror what the server returns. */
 
@@ -92,7 +92,7 @@ export async function fetchOperator(): Promise<{ accountId: string | null; netwo
 export async function validateFlow(
   flow: FlowInput,
   signal?: AbortSignal,
-): Promise<{ ok: boolean; issues: FlowIssue[] }> {
+): Promise<{ ok: boolean; issues: FlowIssue[]; estimate?: FeeEstimate }> {
   const response = await fetch(`${BASE}/flows/validate`, {
     method: "POST",
     headers: { "content-type": "application/json" },

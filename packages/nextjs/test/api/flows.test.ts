@@ -46,8 +46,12 @@ describe("POST /api/launchblocks/flows/validate", () => {
   const validate = async (body: unknown) =>
     json(await (await import("~~/app/api/launchblocks/flows/validate/route")).POST(post("/validate", body)));
 
-  it("passes a gallery flow", async () => {
-    expect(await validate(galleryInput())).toEqual({ status: 200, body: { ok: true, issues: [] } });
+  it("passes a gallery flow and says what one run costs", async () => {
+    const { status, body } = await validate(galleryInput());
+    expect({ status, ok: body.ok, issues: body.issues }).toEqual({ status: 200, ok: true, issues: [] });
+    // Token with custom fees 26, topic 0.4, two messages 0.2, mint 0.1.
+    expect(body.estimate).toMatchObject({ perRunHbar: 26.7, unknownAmounts: [] });
+    expect(body.estimate.lines).toHaveLength(5);
   });
 
   it("answers 200 with every issue, for the editor to show inline", async () => {

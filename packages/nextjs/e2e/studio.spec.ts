@@ -92,6 +92,42 @@ test("exports the launch as flow JSON and as a launch.ts that calls the core", a
   await expect(page.getByRole("button", { name: "Download launch.ts" })).toBeEnabled();
 });
 
+test("says what a run costs before anything is sent", async ({ page }) => {
+  await page.goto("/launch?example=hts-launch-basic");
+  await expectValid(page, 5);
+  // Token with custom fees 26, topic 0.4, two messages 0.2, mint 0.1.
+  const cost = page.getByText("Costs about 26.7 ℏ, paid by the default account");
+  await expect(cost).toBeVisible();
+  await cost.click();
+  await expect(page.getByRole("cell", { name: /createToken/ })).toBeVisible();
+});
+
+test("shares a launch as a link that opens the same blocks for someone else", async ({ page, context, browser }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("/launch?example=hts-launch-scheduled-unlocks");
+  await expectValid(page, 6);
+  await page.getByRole("button", { name: "Share", exact: true }).click();
+  const link = await page.evaluate(() => navigator.clipboard.readText());
+  expect(link).toMatch(/\/launch#flow=[A-Za-z0-9_-]+$/);
+
+  // A visitor with nothing saved opens it.
+  const visitor = await (await browser.newContext()).newPage();
+  await visitor.goto(link);
+  await expectValid(visitor, 6);
+  await expect(visitor).toHaveURL(/\/launch$/);
+  await expect(visitor.locator(".blocklyBlockCanvas").getByText("unlockMonth2", { exact: true })).toBeVisible();
+  await visitor.context().close();
+});
+
+test("finds a launch page by its log's topic id, and answers 404 when there is none", async ({ page }) => {
+  await page.goto("/launches");
+  await expect(page.getByRole("heading", { name: "Launches", exact: true })).toBeVisible();
+  const response = await page.goto("/launches?topic=not-a-topic");
+  expect(response?.status()).toBe(404);
+  await expect(page).toHaveURL(/\/launches\/not-a-topic$/);
+  await expect(page.getByRole("heading", { name: "No launch log with that id" })).toBeVisible();
+});
+
 test("explains why a run cannot start on a server without an operator", async ({ page, request }) => {
   // The guard that keeps this test from spending HBAR.
   expect(await (await request.get("/api/launchblocks/operator")).json()).toMatchObject({ accountId: null });

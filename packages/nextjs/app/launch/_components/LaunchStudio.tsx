@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import type { FlowIssue, GalleryEntry, StepRecord } from "../_lib/api";
 import { fetchCatalog, fetchGallery, fetchOperator, runFlowStream, toApiError, validateFlow } from "../_lib/api";
 import type { StepStatus, WorkspaceState } from "../_lib/blocks";
+import { clearSharedFlowFromUrl, shareLinkFor, sharedFlowInUrl } from "../_lib/share";
 import { useHederaWallet } from "../_lib/wallet";
 import { runFlowWithWallet } from "../_lib/walletRun";
 import type { LoadRequest } from "./BlockEditor";
@@ -16,10 +17,10 @@ import type { SignerMode } from "./SignerPicker";
 import { SignerPicker, walletApprovals } from "./SignerPicker";
 import type { PanelMode, RunSummary } from "./StudioPanel";
 import { StudioPanel } from "./StudioPanel";
-import type { Catalog, EditorDocument, FlowInput, StepCatalogEntry } from "@sh/launchblocks/editor";
+import type { Catalog, EditorDocument, FeeEstimate, FlowInput, StepCatalogEntry } from "@sh/launchblocks/editor";
 import { editorToFlow, flowIdFromName, flowToEditor, indexCatalog, outputsOf } from "@sh/launchblocks/editor";
 import { useTheme } from "next-themes";
-import { EyeIcon } from "@heroicons/react/24/outline";
+import { EyeIcon, LinkIcon } from "@heroicons/react/24/outline";
 import { notification } from "~~/utils/scaffold-hbar";
 
 const BlockEditor = dynamic(() => import("./BlockEditor"), {
@@ -43,7 +44,6 @@ const TOKEN_KEY = "launchblocks.runToken";
 const PANEL_KEY = "launchblocks.panel";
 const SIGNER_KEY = "launchblocks.signer";
 const HERO_FLOW = "hts-launch-saucerswap";
-const POOL_STEP = "saucerswap.createPool";
 
 type Tab = "run" | "problems" | "outputs";
 
@@ -94,6 +94,7 @@ export function LaunchStudio() {
   // (and its export) stays "hts-launch-saucerswap" rather than a slug of its name.
   const [loaded, setLoaded] = useState<{ id: string; name: string } | null>(null);
   const [issues, setIssues] = useState<FlowIssue[]>([]);
+  const [estimate, setEstimate] = useState<FeeEstimate | null>(null);
   const [validating, setValidating] = useState(false);
   const [run, setRun] = useState<RunState>({ phase: "idle" });
   const [tab, setTab] = useState<Tab>("run");
@@ -137,8 +138,8 @@ export function LaunchStudio() {
     [setLoad],
   );
 
-  // Catalog and gallery, then: an example requested with ?example=<id>, else
-  // the saved flow, else the hero example.
+  // Catalog and gallery, then: a shared link's flow (#flow=…), else an example
+  // requested with ?example=<id>, else the saved flow, else the hero example.
   useEffect(() => {
     // In development React runs this effect twice; only the second load may
     // open a flow, or it would replace the ?example= the first one consumed.
@@ -158,17 +159,32 @@ export function LaunchStudio() {
           saved = undefined;
         }
 
-        // Read the query directly rather than through useSearchParams, which
-        // would force a Suspense boundary around the whole studio.
-        const requested = new URLSearchParams(window.location.search).get("example");
-        const example = requested ? flows.find(entry => entry.id === requested) : undefined;
-        if (requested) window.history.replaceState(null, "", window.location.pathname);
-
         // The saved flow is the user's own work unless it is exactly an example as
         // the studio would save it (same normalisation, same id).
         const canonical = (flow: FlowInput) => JSON.stringify(editorToFlow(flowToEditor(flow, cat).document, cat));
         const savedJson = saved ? JSON.stringify(saved) : "";
         const savedIsOwnWork = !!saved?.steps?.length && !flows.some(entry => canonical(entry.flow) === savedJson);
+
+        let shared: FlowInput | null = null;
+        try {
+          shared = sharedFlowInUrl();
+        } catch (error) {
+          notification.error(toApiError(error).message);
+          clearSharedFlowFromUrl();
+        }
+        if (shared) {
+          clearSharedFlowFromUrl();
+          if (!savedIsOwnWork || window.confirm("Open the shared launch? It replaces your current launch.")) {
+            openFlow(shared, cat);
+            return;
+          }
+        }
+
+        // Read the query directly rather than through useSearchParams, which
+        // would force a Suspense boundary around the whole studio.
+        const requested = new URLSearchParams(window.location.search).get("example");
+        const example = requested ? flows.find(entry => entry.id === requested) : undefined;
+        if (requested) window.history.replaceState(null, "", window.location.pathname);
         if (
           example &&
           (!savedIsOwnWork || window.confirm(`Open the example "${example.title}"? It replaces your current launch.`))
@@ -186,6 +202,36 @@ export function LaunchStudio() {
       cancelled = true;
     };
   }, [openFlow]);
+
+  // Another shared link pasted into this tab changes only the fragment, which reloads nothing.
+  useEffect(() => {
+    if (!catalog) return;
+    const onHashChange = () => {
+      let shared: FlowInput | null;
+      try {
+        shared = sharedFlowInUrl();
+      } catch (error) {
+        notification.error(toApiError(error).message);
+        return;
+      }
+      if (!shared) return;
+      clearSharedFlowFromUrl();
+      if (window.confirm("Open the shared launch? It replaces your current launch.")) openFlow(shared, catalog);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [catalog, openFlow]);
+
+  const copyShareLink = async () => {
+    if (!flow) return;
+    const link = shareLinkFor(flow);
+    try {
+      await navigator.clipboard.writeText(link);
+      notification.success("Link copied. It opens this launch, as blocks, in the studio.");
+    } catch {
+      window.prompt("Copy this link to share the launch:", link);
+    }
+  };
 
   useEffect(() => {
     setPanelMode(parsePanelMode(readStorage(PANEL_KEY, () => window.localStorage)));
@@ -221,6 +267,7 @@ export function LaunchStudio() {
     if (!flow) return;
     if (!flow.steps.length) {
       setIssues([]);
+      setEstimate(null);
       return;
     }
     const controller = new AbortController();
@@ -231,6 +278,7 @@ export function LaunchStudio() {
         result => {
           if (controller.signal.aborted) return;
           setIssues(result.issues);
+          setEstimate(result.estimate ?? null);
           setValidating(false);
         },
         () => !controller.signal.aborted && setValidating(false),
@@ -432,6 +480,15 @@ export function LaunchStudio() {
             Show panel
           </button>
         )}
+        <button
+          className="btn btn-ghost btn-sm"
+          disabled={!flow?.steps.length}
+          onClick={() => void copyShareLink()}
+          title="Copy a link that opens this launch in the studio"
+        >
+          <LinkIcon className="h-4 w-4" />
+          Share
+        </button>
         <button className="btn btn-sm" disabled={!flow?.steps.length} onClick={() => setExportOpen(true)}>
           Export
         </button>
@@ -487,7 +544,8 @@ export function LaunchStudio() {
                 key={runKey}
                 steps={steps}
                 run={run}
-                hasPool={workspace.steps.some(step => step.type === POOL_STEP)}
+                estimate={issues.length ? null : estimate}
+                payer={signerMode === "wallet" ? "your wallet" : "the default account"}
                 signedBy={
                   signerMode === "wallet"
                     ? wallet.state.status === "connected"
