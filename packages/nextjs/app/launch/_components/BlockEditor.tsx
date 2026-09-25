@@ -20,6 +20,23 @@ import * as En from "blockly/msg/en";
 
 export type LoadRequest = { document: EditorDocument; nonce: number };
 
+const START_SCALE = 0.85;
+/** Below this the field text gets hard to read, so a long launch opens at its top instead of whole. */
+const MIN_FIT_SCALE = 0.6;
+const MARGIN = { x: 48, y: 24 };
+
+/** Zoom so the whole launch shows if it can at a readable size, then scroll to its header. */
+function showLaunch(ws: Blockly.WorkspaceSvg, root: Blockly.BlockSvg) {
+  const view = ws.getMetricsManager().getViewMetrics();
+  const box = root.getBoundingRectangle();
+  const fit = Math.min(
+    (view.width - 2 * MARGIN.x) / (box.right - box.left),
+    (view.height - 2 * MARGIN.y) / (box.bottom - box.top),
+  );
+  ws.setScale(Math.min(START_SCALE, Math.max(MIN_FIT_SCALE, fit)));
+  ws.scroll(-box.left * ws.scale + MARGIN.x, -box.top * ws.scale + MARGIN.y);
+}
+
 type Props = {
   catalog: Catalog;
   load: LoadRequest | null;
@@ -58,7 +75,7 @@ export default function BlockEditor({ catalog, load, onChange, onLoadProblems, s
         controls: true,
         wheel: false,
         pinch: true,
-        startScale: 0.85,
+        startScale: START_SCALE,
         maxScale: 2,
         minScale: 0.3,
         scaleSpeed: 1.15,
@@ -106,12 +123,8 @@ export default function BlockEditor({ catalog, load, onChange, onLoadProblems, s
     if (!ws || !load) return;
     const skipped = writeDocument(ws, catalog, load.document);
     if (skipped.length) onLoadProblems?.(skipped);
-    // Open on the Launch block's header rather than the middle of a tall flow.
     const root = flowBlock(ws) as Blockly.BlockSvg | null;
-    if (root) {
-      const box = root.getBoundingRectangle();
-      ws.scroll(-box.left * ws.scale + 48, -box.top * ws.scale + 24);
-    }
+    if (root) showLaunch(ws, root);
     onChangeRef.current(readDocument(ws, catalog));
     // Only a new load request (nonce) should rebuild the workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -108,7 +108,7 @@ export function StudioPanel({ mode, onModeChange, tab, onTabChange, problemCount
   return (
     <aside className="flex w-full flex-col border-t border-base-300 bg-base-100 lg:min-h-0 lg:w-[380px] lg:border-l lg:border-t-0">
       <div className="flex items-center px-2 pt-1">
-        <div role="tablist" aria-label="Studio panel" className="tabs tabs-bordered">
+        <div role="tablist" aria-label="Studio panel" className="tabs tabs-border">
           {TABS.map(({ id, label }) => (
             <button
               key={id}

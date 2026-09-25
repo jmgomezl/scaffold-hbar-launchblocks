@@ -47,7 +47,7 @@ export function RunPanel({ steps, run, hasPool, signedBy }: Props) {
           <strong>testnet</strong>, signed by {signedBy}.
         </p>
         {hasPool && (
-          <div className="alert alert-info py-2 text-xs">
+          <div className="alert alert-info alert-soft py-2 text-xs">
             Seeding a SaucerSwap pool costs about 33 ℏ on testnet (SaucerSwap&apos;s fee plus creating the pool&apos;s
             LP token), on top of the HBAR you deposit. A full launch is 60–80 ℏ.
           </div>

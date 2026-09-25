@@ -51,8 +51,10 @@ export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: b
   const json = JSON.stringify(flow, null, 2);
 
   useEffect(() => {
-    if (open) dialog.current?.showModal();
-    else dialog.current?.close();
+    if (!open) return void dialog.current?.close();
+    dialog.current?.showModal();
+    // showModal focuses the first tab and draws its focus ring; start on the panel instead.
+    dialog.current?.querySelector<HTMLElement>(".modal-box")?.focus();
   }, [open]);
 
   useEffect(() => {
@@ -100,9 +102,9 @@ export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: b
 
   return (
     <dialog ref={dialog} className="modal" onClose={onClose}>
-      <div className="modal-box max-w-4xl">
+      <div className="modal-box max-w-4xl outline-none" tabIndex={-1}>
         <h3 className="text-lg font-bold">Export {flow.name}</h3>
-        <div role="tablist" aria-label="Export format" className="tabs tabs-bordered my-3">
+        <div role="tablist" aria-label="Export format" className="tabs tabs-border my-3">
           {EXPORT_TABS.map(({ id, label }) => (
             <button
               key={id}

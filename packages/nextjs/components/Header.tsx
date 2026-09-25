@@ -67,6 +67,9 @@ export const HeaderMenuLinks = () => {
  */
 export const Header = () => {
   const burgerMenuRef = useRef<HTMLDetailsElement>(null);
+  // Launches sign with the operator or a Hedera wallet picked in the studio; Scaffold's EVM wallet
+  // is for Debug Contracts and the block explorer, and would only compete with that choice there.
+  const inStudio = usePathname() === "/launch";
   useOutsideClick(burgerMenuRef, () => {
     burgerMenuRef?.current?.removeAttribute("open");
   });
@@ -105,9 +108,7 @@ export const Header = () => {
           <HeaderMenuLinks />
         </ul>
       </div>
-      <div className="navbar-end grow mr-4">
-        <RainbowKitCustomConnectButton />
-      </div>
+      <div className="navbar-end grow mr-4">{inStudio ? null : <RainbowKitCustomConnectButton />}</div>
     </div>
   );
 };
