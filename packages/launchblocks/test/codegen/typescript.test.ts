@@ -85,6 +85,35 @@ describe("generateLaunchScript() naming and comments", () => {
     expect(source).toContain("function required<T>(");
   });
 
+  it("writes an output into a string as the runner does, and closes the client even when a step fails", () => {
+    const source = generateLaunchScript(
+      {
+        schemaVersion: 1,
+        id: "text",
+        name: "Text",
+        network: "testnet",
+        steps: [
+          { id: "createToken", type: "hts.createToken", params: { name: "Demo", symbol: "DMO" } },
+          { id: "log", type: "hcs.createTopic", params: {} },
+          {
+            id: "note",
+            type: "hcs.submitMessage",
+            params: {
+              topicId: "{{steps.log.topicId}}",
+              message: "max={{steps.createToken.maxSupplyUnits}} token={{steps.createToken.tokenId}}",
+            },
+          },
+        ],
+      },
+      registry,
+    );
+    // null becomes "" as in the runner, not "null"; a plain string needs no helper.
+    expect(source).toContain("`max=${asText(createToken.maxSupplyUnits)} token=${createToken.tokenId}`");
+    expect(source).toContain("function asText(value: unknown): string {");
+    expect(source).toMatch(/ {2}try \{\n[\s\S]*\n {2}\} finally \{\n {4}client\.close\(\);\n {2}\}/);
+    expect(source).not.toContain("operatorKey");
+  });
+
   it("keeps labels, names and descriptions inside their comments", () => {
     const source = generateLaunchScript(
       {

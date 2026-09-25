@@ -12,7 +12,8 @@ import type { HederaContext } from "../hedera/context";
 import { readLaunch } from "../launches/read";
 import { stepCatalog } from "../registry/catalog";
 import type { StepRegistry } from "../registry/registry";
-import { runFlow } from "../runner/runner";
+import type { FieldSpec } from "../registry/types";
+import { preflightFlow, runFlow } from "../runner/runner";
 import { createDefaultRegistry } from "../steps";
 import { LAUNCHBLOCKS_VERSION } from "../version";
 
@@ -40,15 +41,52 @@ export type LaunchBlocksMcpOptions = {
 
 const INSTRUCTIONS = `LaunchBlocks composes Hedera token launches from steps (HTS, HCS, HSS, SaucerSwap, Pyth, contracts).
 A flow is JSON: { "schemaVersion": 1, "id": "kebab-id", "name": "…", "network": "testnet", "steps": [{ "id": "camelCaseId", "type": "hts.createToken", "params": { … } }] }.
-A param can use an earlier step's output with "{{steps.<stepId>.<outputKey>}}".
+A param can use an earlier step's output with "{{steps.<stepId>.<outputKey>}}". Nested params are objects:
+write "keys": { "admin": false }, never "keys.admin"; validate_flow reports any key a step does not take.
 Work like this: list_steps (and get_step for a type's exact params), or start from get_example; then validate_flow until ok,
 which also estimates the HBAR it costs; then share_link to open it in the studio, generate_script for launch.ts, or run_flow
 (a dry run by default; pass dryRun: false only when the user asked to spend testnet HBAR). read_launch shows a finished
 launch from its HCS log.`;
 
 const FLOW = z
-  .record(z.string(), z.unknown())
-  .describe("A flow document: { schemaVersion: 1, id, name, network, steps: [{ id, type, params }] }.");
+  .union([z.record(z.string(), z.unknown()), z.string()])
+  .describe(
+    "A flow document: { schemaVersion: 1, id, name, network, steps: [{ id, type, params }] }, as an object or as JSON text.",
+  );
+
+/** Agents often send the flow as JSON text; take it either way. */
+function flowFrom(value: Record<string, unknown> | string): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch (cause) {
+    throw new LaunchBlocksError("FLOW_JSON_INVALID", "The flow is text that does not parse as JSON", {
+      cause,
+      hint: "Send the flow as a JSON object, or as valid JSON text.",
+    });
+  }
+}
+
+type ParamSummary = { key: string; kind: string; label: string; fields?: ParamSummary[] };
+
+/** A step's editor fields as the JSON they stand for: the field `keys.admin` is `admin` inside `keys`. */
+function paramsOf(fields: readonly FieldSpec[]): ParamSummary[] {
+  const params: ParamSummary[] = [];
+  for (const field of fields) {
+    const [head = field.key, ...rest] = field.key.split(".");
+    if (!rest.length) {
+      params.push({ key: field.key, kind: field.kind, label: field.label });
+      continue;
+    }
+    let group = params.find(param => param.key === head && param.fields);
+    if (!group) {
+      group = { key: head, kind: "object", label: head, fields: [] };
+      params.push(group);
+    }
+    group.fields?.push({ key: rest.join("."), kind: field.kind, label: field.label });
+  }
+  return params;
+}
 
 type ToolResult = { content: { type: "text"; text: string }[]; isError?: boolean };
 
@@ -84,8 +122,8 @@ export function createLaunchBlocksMcpServer(options: LaunchBlocksMcpOptions): Mc
   const log = options.log ?? (() => undefined);
   const server = new McpServer({ name: "launchblocks", version: LAUNCHBLOCKS_VERSION }, { instructions: INSTRUCTIONS });
 
-  const check = (flow: unknown) => {
-    const result = registry.checkFlow(flow);
+  const check = (value: Record<string, unknown> | string) => {
+    const result = registry.checkFlow(flowFrom(value));
     return result.flow
       ? { ok: true as const, flow: result.flow, issues: [], estimate: estimateFlowFees(result.flow) }
       : { ok: false as const, flow: null, issues: result.issues };
@@ -96,7 +134,7 @@ export function createLaunchBlocksMcpServer(options: LaunchBlocksMcpOptions): Mc
     {
       title: "List step types",
       description:
-        "Every step type a flow can use: what it does, its params (key and kind) and the outputs later steps can reference.",
+        "Every step type a flow can use: what it does, its params (key and kind; an object param lists its own fields) and the outputs later steps can reference.",
       annotations: { readOnlyHint: true },
     },
     () =>
@@ -106,7 +144,7 @@ export function createLaunchBlocksMcpServer(options: LaunchBlocksMcpOptions): Mc
           label: entry.ui.label,
           summary: entry.docs.summary,
           services: entry.docs.hederaServices,
-          params: entry.ui.fields.map(field => ({ key: field.key, kind: field.kind, label: field.label })),
+          params: paramsOf(entry.ui.fields),
           outputs: entry.ui.outputs.map(output => output.key),
         })),
       ),
@@ -116,7 +154,8 @@ export function createLaunchBlocksMcpServer(options: LaunchBlocksMcpOptions): Mc
     "get_step",
     {
       title: "Describe a step type",
-      description: "One step type in full: the JSON Schema of its params, an example of its outputs, and its docs.",
+      description:
+        'One step type in full: the JSON Schema of its params, an example of its outputs, and its docs. Any string param may instead be a reference, "{{steps.<stepId>.<outputKey>}}", to an earlier step\'s output, whatever pattern the schema shows.',
       inputSchema: { type: z.string().describe('A step type, e.g. "saucerswap.createPool".') },
       annotations: { readOnlyHint: true },
     },
@@ -193,7 +232,9 @@ export function createLaunchBlocksMcpServer(options: LaunchBlocksMcpOptions): Mc
     },
     ({ flow }) =>
       answer(() =>
-        generateLaunchScript(flow, registry, { headerLines: ["Generated through the LaunchBlocks MCP server."] }),
+        generateLaunchScript(flowFrom(flow), registry, {
+          headerLines: ["Generated through the LaunchBlocks MCP server."],
+        }),
       ),
   );
 
@@ -231,13 +272,19 @@ export function createLaunchBlocksMcpServer(options: LaunchBlocksMcpOptions): Mc
         const result = check(flow);
         if (!result.ok) throw new FlowValidationError(result.issues);
         const plan = result.flow.steps.map(step => ({ id: step.id, type: step.type }));
+        const mainnetBlocked = result.flow.network === "mainnet" && !options.allowMainnet;
         if (dryRun) {
+          // The checks a real run makes before its first step, such as a contract that is not compiled.
+          await preflightFlow(result.flow, registry, {
+            network: result.flow.network,
+            artifacts: name => loadHardhatArtifact(name),
+          });
           return {
             dryRun: true,
             network: result.flow.network,
             estimate: result.estimate,
             steps: plan,
-            canRun: !!options.operator,
+            canRun: !!options.operator && !mainnetBlocked,
           };
         }
         if (!options.operator) {
@@ -245,7 +292,7 @@ export function createLaunchBlocksMcpServer(options: LaunchBlocksMcpOptions): Mc
             hint: "Set HEDERA_OPERATOR_ID and HEDERA_OPERATOR_KEY in packages/nextjs/.env and restart the MCP server.",
           });
         }
-        if (result.flow.network === "mainnet" && !options.allowMainnet) {
+        if (mainnetBlocked) {
           throw new LaunchBlocksError("MAINNET_DISABLED", "Mainnet runs are disabled", {
             hint: "Set LAUNCHBLOCKS_ALLOW_MAINNET=true for the MCP server to allow them.",
           });

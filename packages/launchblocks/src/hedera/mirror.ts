@@ -150,9 +150,10 @@ export async function fetchSchedule(
   };
 }
 
-/** A mirror node timestamp (`seconds.nanoseconds`) as an ISO date. */
+/** A mirror node timestamp (`seconds.nanoseconds`) as an ISO date, to the millisecond. */
 export function mirrorTimestampToIso(timestamp: string): string {
-  return new Date(Number(timestamp.split(".")[0]) * 1000).toISOString();
+  const [seconds = "0", nanos = ""] = timestamp.split(".");
+  return new Date(Number(seconds) * 1000 + Number(nanos.padEnd(9, "0").slice(0, 3))).toISOString();
 }
 
 /** A URL's host, for messages: a private mirror's URL can carry an API key in its path or query. */
@@ -176,6 +177,11 @@ async function mirrorFetch(url: string, signal?: AbortSignal): Promise<unknown> 
     });
   }
   if (response.status === 404) return null;
+  if (response.status === 400) {
+    throw new LaunchBlocksError("MIRROR_BAD_REQUEST", `Mirror node ${hostOf(url)} refused the request as invalid`, {
+      hint: "An id may be out of range.",
+    });
+  }
   if (!response.ok) {
     throw new LaunchBlocksError("MIRROR_ERROR", `Mirror node ${hostOf(url)} answered ${response.status}`);
   }

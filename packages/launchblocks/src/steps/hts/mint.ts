@@ -2,7 +2,14 @@ import { z } from "zod";
 
 import { mintFungibleToken } from "../../hedera/ops/tokens";
 import { defineStep } from "../../registry/define-step";
-import { CATEGORY_COLOUR, PositiveAmountSchema, TokenIdSchema, callOperation } from "../shared";
+import {
+  CATEGORY_COLOUR,
+  PositiveAmountSchema,
+  TokenIdSchema,
+  callOperation,
+  tokenAmountIssues,
+  tokenMadeInFlow,
+} from "../shared";
 
 export const htsMint = defineStep({
   type: "hts.mint",
@@ -42,6 +49,19 @@ export const htsMint = defineStep({
   docs: {
     summary: "Mint additional supply into the treasury (requires the supply key).",
     hederaServices: ["HTS"],
+  },
+  checkWiring: (params, earlier) => {
+    const token = tokenMadeInFlow(params.tokenId, earlier);
+    const noSupplyKey =
+      token && !token.supplyKey
+        ? [
+            {
+              path: "tokenId",
+              message: `${token.stepId} creates its token without a supply key, so nothing can mint it`,
+            },
+          ]
+        : [];
+    return [...noSupplyKey, ...tokenAmountIssues(params, [{ path: "amount", value: params.amount }], earlier)];
   },
   execute: (input, ctx) => mintFungibleToken(ctx.hedera, input),
   codegen: ctx => callOperation(ctx, "mintFungibleToken", ["tokenId", "amount"]),

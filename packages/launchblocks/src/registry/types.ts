@@ -82,6 +82,9 @@ export type RunContext = {
   artifacts?: ArtifactLoader;
 };
 
+/** What `preflight` gets: enough to check what a step needs, and no way to send anything. */
+export type PreflightContext = Pick<RunContext, "network" | "artifacts">;
+
 /** What a step's `codegen` receives: symbolic access to its params. */
 export type CodegenContext = {
   stepId: string;
@@ -90,9 +93,11 @@ export type CodegenContext = {
   /**
    * TypeScript expression for a param. Literals become JSON literals;
    * references become `<stepId>.<key>`; interpolated strings become
-   * template literals.
+   * template literals. With `data: true` the param is free-form data (a
+   * message body): a null output nested inside it stays null, as the runner
+   * logs it, instead of stopping the script.
    */
-  expr(key: string): string;
+  expr(key: string, options?: { data?: boolean }): string;
   /** Register a named import for the generated file (deduplicated). */
   addImport(specifier: string, ...names: string[]): void;
 };
@@ -124,11 +129,26 @@ export type StepDefinition<In, Out extends Record<string, unknown>> = {
   /**
    * Optional check, run for every step before the flow's first step, of what
    * this step will need later: a failure refuses the run before anything is
-   * spent. `params` are as written, references unresolved.
+   * spent. `params` are as written, references unresolved. Dry runs call it
+   * too, without a Hedera client, so it gets only the network and artifacts.
    */
-  preflight?(params: Readonly<Record<string, unknown>>, ctx: RunContext): Promise<void>;
+  preflight?(params: Readonly<Record<string, unknown>>, ctx: PreflightContext): Promise<void>;
   codegen(ctx: CodegenContext): CodegenFragment;
+  /**
+   * Optional check against the earlier steps a param references, for what
+   * only shows once they have run: a mint more precise than the token the
+   * flow creates, or of a token created without a supply key.
+   */
+  checkWiring?(params: Readonly<Record<string, unknown>>, earlier: EarlierStepLookup): WiringIssue[];
 };
+
+/** The earlier step a value references as a whole (`{{steps.<id>.<key>}}`), as written in the flow. */
+export type EarlierStepLookup = (
+  value: unknown,
+) => { stepId: string; type: string; key: string; params: Readonly<Record<string, unknown>> } | undefined;
+
+/** `path` is relative to the step's params, e.g. `amount` or `recipients[0].amount`. */
+export type WiringIssue = { path: string; message: string };
 
 // Method signatures are bivariant, so a concrete definition is assignable here.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

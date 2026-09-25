@@ -5,7 +5,7 @@ import type { Flow, Network, StepEnvelope } from "../flow/schema";
 import type { HashscanEntity } from "../hedera/context";
 import { hashscanUrl } from "../hedera/context";
 import type { StepRegistry } from "../registry/registry";
-import type { AnyStepDefinition, FieldKind, RunContext } from "../registry/types";
+import type { AnyStepDefinition, FieldKind, PreflightContext, RunContext } from "../registry/types";
 
 export type StepStatus = "pending" | "running" | "succeeded" | "failed" | "skipped";
 
@@ -63,6 +63,15 @@ export type RunOptions = {
 };
 
 /**
+ * Check what a validated flow's steps will need (a compiled contract, …)
+ * without sending anything. `runFlow` does this before its first step; dry
+ * runs call it to catch the same problems.
+ */
+export async function preflightFlow(flow: Flow, registry: StepRegistry, ctx: PreflightContext): Promise<void> {
+  for (const step of flow.steps) await registry.get(step.type).preflight?.(step.params, ctx);
+}
+
+/**
  * Execute a flow step by step. Validation problems throw before anything
  * runs; execution problems are captured in the returned result so callers
  * always get the full step-by-step record.
@@ -72,8 +81,7 @@ export async function runFlow(document: unknown, options: RunOptions): Promise<R
   const emit = options.onEvent ?? (() => undefined);
   const flow = registry.validateFlow(document);
   assertNetworkMatches(flow, ctx);
-  // What later steps need (e.g. a compiled contract) is checked before the first one spends anything.
-  for (const step of flow.steps) await registry.get(step.type).preflight?.(step.params, ctx);
+  await preflightFlow(flow, registry, ctx);
 
   const startedAt = new Date().toISOString();
   const steps: StepRecord[] = flow.steps.map(step => pendingRecord(step));

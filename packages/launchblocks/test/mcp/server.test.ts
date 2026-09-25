@@ -65,6 +65,16 @@ describe("the LaunchBlocks MCP server", () => {
     expect(steps.data).toContainEqual(
       expect.objectContaining({ type: "saucerswap.createPool", services: ["HTS", "SmartContract", "MirrorNode"] }),
     );
+    // Nested params show as the objects they are, so an agent never writes "keys.admin".
+    const createToken = steps.data.find((entry: { type: string }) => entry.type === "hts.createToken");
+    expect(createToken.params).toContainEqual(
+      expect.objectContaining({
+        key: "keys",
+        kind: "object",
+        fields: expect.arrayContaining([expect.objectContaining({ key: "admin" })]),
+      }),
+    );
+    expect(JSON.stringify(steps.data)).not.toContain('"keys.admin"');
     const step = await call("get_step", { type: "hts.createToken" });
     expect(step.data.inputSchema).toMatchObject({ type: "object" });
     expect((await call("get_step", { type: "hts.nope" })).data).toMatchObject({ code: "STEP_UNKNOWN" });
@@ -86,6 +96,13 @@ describe("the LaunchBlocks MCP server", () => {
     expect(invalid.data.issues).toEqual([
       expect.objectContaining({ stepId: "createToken", path: expect.stringContaining("decimals") }),
     ]);
+
+    // A flow sent as JSON text works the same; text that is not JSON gets a code to act on.
+    expect((await call("validate_flow", { flow: JSON.stringify(basic()) })).data).toMatchObject({ ok: true });
+    expect(await call("validate_flow", { flow: "{ not json" })).toMatchObject({
+      isError: true,
+      data: { code: "FLOW_JSON_INVALID" },
+    });
   });
 
   it("exports launch.ts and a studio link that carries the flow", async () => {
@@ -104,6 +121,14 @@ describe("the LaunchBlocks MCP server", () => {
     const dry = await call("run_flow", { flow: basic() });
     expect(dry.data).toMatchObject({ dryRun: true, network: "testnet", canRun: false, steps: expect.any(Array) });
     expect(dry.data.steps).toHaveLength(5);
+    // A dry run makes the checks a real run makes first, such as a contract that was never compiled.
+    const missing = {
+      schemaVersion: 1,
+      id: "missing-contract",
+      name: "Missing contract",
+      steps: [{ id: "deploy", type: "contract.deploy", params: { contract: "NoSuchContract" } }],
+    };
+    expect((await call("run_flow", { flow: missing })).isError).toBe(true);
     expect(await call("run_flow", { flow: basic(), dryRun: false })).toMatchObject({
       isError: true,
       data: { code: "OPERATOR_MISSING" },
@@ -118,6 +143,10 @@ describe("the LaunchBlocks MCP server", () => {
       }),
     );
     const withOperator = await connect({ operator });
+    expect((await withOperator.call("run_flow", { flow: { ...basic(), network: "mainnet" } })).data).toMatchObject({
+      dryRun: true,
+      canRun: false,
+    });
     expect(
       await withOperator.call("run_flow", { flow: { ...basic(), network: "mainnet" }, dryRun: false }),
     ).toMatchObject({

@@ -168,8 +168,9 @@ describe("buildTokenAirdrop()", () => {
 
   it("rejects empty, oversized and zero-amount airdrops", () => {
     expect(() => buildTokenAirdrop(hedera, { tokenId: "0.0.9", recipients: [] }, 2)).toThrow(/at least one/);
-    const eleven = Array.from({ length: 11 }, (_, i) => ({ accountId: `0.0.${i + 1}`, amount: 1 }));
-    expect(() => buildTokenAirdrop(hedera, { tokenId: "0.0.9", recipients: eleven }, 2)).toThrow(/at most 10/);
+    // With the sender's debit, ten recipients would be eleven transfers.
+    const ten = Array.from({ length: 10 }, (_, i) => ({ accountId: `0.0.${i + 1}`, amount: 1 }));
+    expect(() => buildTokenAirdrop(hedera, { tokenId: "0.0.9", recipients: ten }, 2)).toThrow(/at most 9/);
     expect(() =>
       buildTokenAirdrop(hedera, { tokenId: "0.0.9", recipients: [{ accountId: "0.0.1", amount: 0 }] }, 2),
     ).toThrow(/positive/);

@@ -2,14 +2,20 @@ import { z } from "zod";
 
 import { createPoolWithHbar } from "../../saucerswap/pool";
 import { defineStep } from "../../registry/define-step";
-import { CATEGORY_COLOUR, PositiveAmountSchema, TokenIdSchema } from "../shared";
+import {
+  CATEGORY_COLOUR,
+  PositiveAmountSchema,
+  PositiveHbarAmountSchema,
+  TokenIdSchema,
+  tokenAmountIssues,
+} from "../shared";
 
 export const saucerswapCreatePool = defineStep({
   type: "saucerswap.createPool",
   input: z.object({
     tokenId: TokenIdSchema,
     tokenAmount: PositiveAmountSchema,
-    hbarAmount: PositiveAmountSchema,
+    hbarAmount: PositiveHbarAmountSchema,
     slippageBps: z.number().int().min(0).max(9999).default(100),
     deadlineSeconds: z.number().int().min(30).max(3600).default(120),
     feeBufferBps: z.number().int().min(0).max(10_000).default(200),
@@ -23,7 +29,7 @@ export const saucerswapCreatePool = defineStep({
     lpTokenId: z.string().nullable(),
     liquidity: z.string(),
     transactionId: z.string(),
-    createPairTransactionId: z.string(),
+    createPairTransactionId: z.string().nullable(),
     allowanceTransactionId: z.string(),
     tokenAmountUnits: z.string(),
     hbarAmountTinybar: z.string(),
@@ -50,7 +56,7 @@ export const saucerswapCreatePool = defineStep({
     creationFeeHbar: "25.95166934",
     creationFeePaidHbar: "26.47070273",
     openingPriceHbar: "0.0002",
-    poolUrl: "https://testnet.saucerswap.finance/liquidity/0.0.6512500",
+    poolUrl: "https://testnet.saucerswap.finance/pool/0.0.6512500",
   },
   ui: {
     label: "Seed SaucerSwap pool",
@@ -119,6 +125,8 @@ export const saucerswapCreatePool = defineStep({
     hederaServices: ["HTS", "SmartContract", "MirrorNode"],
     integrations: ["SaucerSwap"],
   },
+  checkWiring: (params, earlier) =>
+    tokenAmountIssues(params, [{ path: "tokenAmount", value: params.tokenAmount }], earlier),
   execute: (input, ctx) => createPoolWithHbar(ctx.hedera, input, ctx.signal),
   codegen: ctx => {
     ctx.addImport(ctx.coreModule, "createPoolWithHbar");

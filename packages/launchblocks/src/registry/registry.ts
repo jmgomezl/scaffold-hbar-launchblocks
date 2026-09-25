@@ -4,8 +4,9 @@ import type { FlowIssue } from "../errors";
 import { FlowValidationError, UnknownStepTypeError } from "../errors";
 import type { Flow } from "../flow/schema";
 import { FlowSchema } from "../flow/schema";
-import { findRefs, resolveRefs } from "../flow/refs";
-import type { AnyStepDefinition } from "./types";
+import { findRefs, parseRef, resolveRefs } from "../flow/refs";
+import type { AnyStepDefinition, EarlierStepLookup } from "./types";
+import { unknownKeys } from "./unknown-keys";
 
 export type StepRegistry = {
   register(definition: AnyStepDefinition): StepRegistry;
@@ -72,6 +73,10 @@ function checkSteps(flow: Flow, byType: ReadonlyMap<string, AnyStepDefinition>):
       return;
     }
 
+    for (const unknown of unknownKeys(definition.input, step.params)) {
+      issues.push({ path: `${base}.params.${unknown.path}`, stepId: step.id, message: unknown.message });
+    }
+
     let wiringOk = true;
     for (const target of findRefs(step.params)) {
       const targetOutputs = Object.hasOwn(exampleOutputs, target.stepId) ? exampleOutputs[target.stepId] : undefined;
@@ -101,6 +106,16 @@ function checkSteps(flow: Flow, byType: ReadonlyMap<string, AnyStepDefinition>):
       const parsed = definition.input.safeParse(substituted);
       if (!parsed.success) {
         issues.push(...zodIssues(parsed.error, `${base}.params`, step.id));
+      }
+      const earlier: EarlierStepLookup = value => {
+        const target = parseRef(value);
+        const found = target && flow.steps.slice(0, index).find(candidate => candidate.id === target.stepId);
+        return found && target
+          ? { stepId: found.id, type: found.type, key: target.key, params: found.params }
+          : undefined;
+      };
+      for (const issue of definition.checkWiring?.(step.params, earlier) ?? []) {
+        issues.push({ path: `${base}.params.${issue.path}`, stepId: step.id, message: issue.message });
       }
     }
 

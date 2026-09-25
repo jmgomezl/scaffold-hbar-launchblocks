@@ -4,7 +4,7 @@ import { CONTRACT_NAME_PATTERN } from "../../contracts/types";
 import { LaunchBlocksError } from "../../errors";
 import { DEFAULT_DEPLOY_GAS, deployContract } from "../../hedera/ops/contracts";
 import { defineStep } from "../../registry/define-step";
-import { AmountSchema, CATEGORY_COLOUR, MemoSchema } from "../shared";
+import { CATEGORY_COLOUR, HbarAmountSchema, MemoSchema } from "../shared";
 import { argFields, argsExpression, collectArgs, contractArgShape } from "./shared";
 
 const InputSchema = z
@@ -16,7 +16,7 @@ const InputSchema = z
     ...contractArgShape,
     autoAssociations: z.number().int().min(-1).max(5000).default(0),
     gas: z.number().int().min(100_000).max(15_000_000).default(DEFAULT_DEPLOY_GAS),
-    initialHbar: AmountSchema.optional(),
+    initialHbar: HbarAmountSchema.optional(),
     adminKey: z.boolean().default(false),
     memo: MemoSchema.optional(),
   })

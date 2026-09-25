@@ -1,16 +1,22 @@
 import { z } from "zod";
 
-import { submitTopicMessage } from "../../hedera/ops/topics";
+import { HCS_CHUNK_BYTES, messageBytes, submitTopicMessage } from "../../hedera/ops/topics";
 import { defineStep } from "../../registry/define-step";
 import { CATEGORY_COLOUR, TopicIdSchema, callOperation } from "../shared";
 
 export const hcsSubmitMessage = defineStep({
   type: "hcs.submitMessage",
-  input: z.object({
-    topicId: TopicIdSchema,
-    message: z.union([z.string().min(1), z.record(z.string(), z.unknown()), z.array(z.unknown())]),
-    maxChunks: z.number().int().min(1).max(20).default(10),
-  }),
+  input: z
+    .object({
+      topicId: TopicIdSchema,
+      message: z.union([z.string().min(1), z.record(z.string(), z.unknown()), z.array(z.unknown())]),
+      maxChunks: z.number().int().min(1).max(20).default(10),
+    })
+    // Checked with references filled in by example outputs, so a message near the limit may still differ at run time.
+    .refine(input => messageBytes(input.message) <= HCS_CHUNK_BYTES * input.maxChunks, {
+      path: ["message"],
+      message: `the message is longer than maxChunks × ${HCS_CHUNK_BYTES} bytes`,
+    }),
   output: z.object({
     topicId: z.string(),
     sequenceNumber: z.number().int(),
@@ -49,5 +55,5 @@ export const hcsSubmitMessage = defineStep({
     hederaServices: ["HCS"],
   },
   execute: (input, ctx) => submitTopicMessage(ctx.hedera, input),
-  codegen: ctx => callOperation(ctx, "submitTopicMessage", ["topicId", "message", "maxChunks"]),
+  codegen: ctx => callOperation(ctx, "submitTopicMessage", ["topicId", "message", "maxChunks"], ["message"]),
 });

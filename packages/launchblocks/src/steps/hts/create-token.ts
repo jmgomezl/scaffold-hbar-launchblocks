@@ -2,7 +2,17 @@ import { z } from "zod";
 
 import { createFungibleToken } from "../../hedera/ops/tokens";
 import { defineStep } from "../../registry/define-step";
-import { AccountIdSchema, AmountSchema, CATEGORY_COLOUR, MemoSchema, callOperation } from "../shared";
+import { LaunchBlocksError } from "../../errors";
+import { toUnits } from "../../hedera/amounts";
+import {
+  AccountIdSchema,
+  AmountSchema,
+  CATEGORY_COLOUR,
+  MemoSchema,
+  PositiveHbarAmountSchema,
+  callOperation,
+  hederaText,
+} from "../shared";
 
 const KeysSchema = z
   .object({
@@ -26,14 +36,15 @@ const FractionalFeeSchema = z.object({
 });
 
 const FixedHbarFeeSchema = z.object({
-  amountHbar: AmountSchema,
+  // Hedera refuses a zero fee (CUSTOM_FEE_MUST_BE_POSITIVE), after charging for the token.
+  amountHbar: PositiveHbarAmountSchema,
   collectorAccountId: AccountIdSchema.optional(),
 });
 
 const InputSchema = z
   .object({
-    name: z.string().trim().min(1).max(100),
-    symbol: z.string().trim().min(1).max(100),
+    name: hederaText(100, "a token name").pipe(z.string().trim().min(1)),
+    symbol: hederaText(100, "a token symbol").pipe(z.string().trim().min(1)),
     decimals: z.number().int().min(0).max(18).default(8),
     initialSupply: AmountSchema.default("1000000"),
     supplyType: z.enum(["infinite", "finite"]).default("infinite"),
@@ -46,6 +57,49 @@ const InputSchema = z
   .refine(input => input.supplyType === "infinite" || input.maxSupply !== undefined, {
     message: "maxSupply is required for a finite supply",
     path: ["maxSupply"],
+  })
+  // What Hedera would refuse only after the fee is paid: amounts it cannot hold, a max below the supply.
+  .superRefine((input, ctx) => {
+    // zod still runs this when a field failed; with bad decimals every amount check would repeat that one issue.
+    if (!Number.isInteger(input.decimals) || input.decimals < 0 || input.decimals > 18) return;
+    const units = (key: string, amount: string | number | undefined) => {
+      if (amount === undefined) return undefined;
+      try {
+        return toUnits(amount, input.decimals);
+      } catch (error) {
+        if (!(error instanceof LaunchBlocksError)) throw error;
+        ctx.addIssue({ code: "custom", path: key.split("."), message: error.message });
+        return undefined;
+      }
+    };
+    const initial = units("initialSupply", input.initialSupply);
+    const max = units("maxSupply", input.maxSupply);
+    if (input.supplyType === "finite" && max !== undefined) {
+      if (max === 0n)
+        ctx.addIssue({ code: "custom", path: ["maxSupply"], message: "a finite supply needs a maximum above zero" });
+      else if (initial !== undefined && max < initial) {
+        ctx.addIssue({ code: "custom", path: ["maxSupply"], message: "maxSupply is below the initial supply" });
+      }
+    }
+    const fee = input.fractionalFee;
+    if (fee) {
+      const min = units("fractionalFee.min", fee.min);
+      const most = units("fractionalFee.max", fee.max);
+      if (fee.numerator > fee.denominator) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["fractionalFee", "numerator"],
+          message: "a fee cannot be more than the whole transfer",
+        });
+      }
+      if (min !== undefined && most !== undefined && most > 0n && min > most) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["fractionalFee", "min"],
+          message: "the fee's minimum is above its maximum",
+        });
+      }
+    }
   });
 
 const OutputSchema = z.object({

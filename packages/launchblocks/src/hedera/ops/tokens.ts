@@ -308,6 +308,8 @@ export type AirdropResult = {
   pendingCount: number;
 };
 
+export const MAX_AIRDROP_RECIPIENTS = 9;
+
 export function buildTokenAirdrop(
   hedera: HederaContext,
   params: AirdropParams,
@@ -316,8 +318,12 @@ export function buildTokenAirdrop(
   if (params.recipients.length === 0) {
     throw new LaunchBlocksError("AIRDROP_EMPTY", "An airdrop needs at least one recipient");
   }
-  if (params.recipients.length > 10) {
-    throw new LaunchBlocksError("AIRDROP_TOO_MANY", "HTS airdrops take at most 10 transfers per transaction");
+  // A transaction lists at most 10 token account amounts, and the sender's debit is one of them.
+  if (params.recipients.length > MAX_AIRDROP_RECIPIENTS) {
+    throw new LaunchBlocksError(
+      "AIRDROP_TOO_MANY",
+      `An airdrop takes at most ${MAX_AIRDROP_RECIPIENTS} recipients: HTS allows 10 transfers per transaction, the sender's included`,
+    );
   }
   const tokenId = TokenId.fromString(params.tokenId);
   const tx = new TokenAirdropTransaction();

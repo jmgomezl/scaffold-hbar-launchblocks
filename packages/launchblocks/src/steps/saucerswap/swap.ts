@@ -2,13 +2,13 @@ import { z } from "zod";
 
 import { defineStep } from "../../registry/define-step";
 import { swapHbarForTokens } from "../../saucerswap/swap";
-import { CATEGORY_COLOUR, PositiveAmountSchema, TokenIdSchema } from "../shared";
+import { CATEGORY_COLOUR, PositiveHbarAmountSchema, TokenIdSchema } from "../shared";
 
 export const saucerswapSwap = defineStep({
   type: "saucerswap.swap",
   input: z.object({
     tokenId: TokenIdSchema,
-    hbarAmount: PositiveAmountSchema,
+    hbarAmount: PositiveHbarAmountSchema,
     slippageBps: z.number().int().min(0).max(9999).default(100),
     deadlineSeconds: z.number().int().min(30).max(3600).default(120),
     gasLimit: z.number().int().min(500_000).max(15_000_000).optional(),

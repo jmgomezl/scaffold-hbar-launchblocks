@@ -3,6 +3,8 @@
  *
  *   yarn core:run <flow.json | gallery-id> [--dry-run] [--codegen <out.ts>] [--env <path>] [--network <net>] [--wallet]
  *
+ * File paths are relative to the directory the command was typed in when the
+ * package manager says (npm), else to the project root.
  * Reads the operator from the environment (see packages/nextjs/.env.example);
  * without --env it loads packages/nextjs/.env, then ./.env. Every run writes
  * its RunResult to packages/launchblocks/runs/ so testnet activity is traceable.
@@ -27,54 +29,78 @@ import type { RunContext } from "../src/registry/types";
 import type { RunEvent, RunResult } from "../src/runner/runner";
 import { runFlow } from "../src/runner/runner";
 import { createDefaultRegistry } from "../src/steps";
-import { findCallerFile } from "./paths";
+import { estimateFlowFees } from "../src/harness/recipe";
+import { preflightFlow } from "../src/runner/runner";
+import { PROJECT_ROOT, callerPath, findCallerFile } from "./paths";
 
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
 const RUNS_DIR = path.join(PACKAGE_ROOT, "runs");
 
-type Args = { source: string; dryRun: boolean; wallet: boolean; codegen?: string; env?: string; network?: string };
+type Args = {
+  source: string;
+  dryRun: boolean;
+  wallet: boolean;
+  help: boolean;
+  codegen?: string;
+  env?: string;
+  network?: string;
+};
+
+const USAGE = [
+  "Usage: run-flow <flow.json | gallery-id> [options]",
+  "",
+  "  --dry-run          validate, check what the steps need and estimate the cost; send nothing",
+  "  --codegen <out.ts> also write the flow as a launch.ts script",
+  "  --env <path>       read the operator from this env file (default: packages/nextjs/.env)",
+  "  --network <net>    testnet, mainnet or localnet, instead of HEDERA_NETWORK",
+  "  --wallet           sign through the SDK's local Wallet, the code path a browser wallet takes",
+  "  -h, --help         show this",
+].join("\n");
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { source: "", dryRun: false, wallet: false };
+  const args: Args = { source: "", dryRun: false, wallet: false, help: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i] as string;
     const next = (): string => {
       const value = argv[i + 1];
-      if (value === undefined) throw new Error(`${arg} needs a value`);
+      // `--codegen --dry-run` must not write a file named "--dry-run".
+      if (value === undefined || value.startsWith("-")) throw new Error(`${arg} needs a value`);
       i += 1;
       return value;
     };
     // Yarn passes a `--` on to the script where npm drops it; skipping it lets one command work with both.
     if (arg === "--") continue;
+    else if (arg === "-h" || arg === "--help") args.help = true;
     else if (arg === "--dry-run") args.dryRun = true;
     else if (arg === "--wallet") args.wallet = true;
     else if (arg === "--codegen") args.codegen = next();
     else if (arg === "--env") args.env = next();
     else if (arg === "--network") args.network = next();
-    else if (arg.startsWith("--")) throw new Error(`Unknown option ${arg}`);
+    else if (arg.startsWith("-")) throw new Error(`Unknown option ${arg}\n\n${USAGE}`);
     else if (!args.source) args.source = arg;
     else throw new Error(`Unexpected argument ${arg}`);
   }
-  if (!args.source) {
-    throw new Error(
-      `Usage: run-flow <flow.json | gallery-id> [--dry-run] [--codegen out.ts] [--env path] [--network net] [--wallet]\n` +
-        `Gallery: ${GALLERY.map(entry => entry.id).join(", ")}`,
-    );
-  }
+  if (!args.source && !args.help) throw new Error(`${USAGE}\n\n${galleryLine()}`);
   return args;
 }
+
+const galleryLine = () => `Gallery: ${GALLERY.map(entry => entry.id).join(", ")}`;
 
 function loadFlowDocument(source: string): unknown {
   const entry = galleryFlow(source);
   if (entry) return entry.flow;
   const { found, tried } = findCallerFile(source);
   if (!found) throw new Error(`No gallery flow or file named "${source}" (looked at ${tried.join(" and ")})`);
-  return JSON.parse(readFileSync(found, "utf8"));
+  try {
+    return JSON.parse(readFileSync(found, "utf8"));
+  } catch (error) {
+    throw new Error(`${found} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 function loadEnvironment(explicit: string | undefined): void {
   const candidates = explicit
-    ? [path.resolve(explicit)]
+    ? findCallerFile(explicit).tried
     : [path.join(PACKAGE_ROOT, "..", "nextjs", ".env"), path.resolve(".env")];
   for (const candidate of candidates) {
     if (existsSync(candidate)) {
@@ -114,6 +140,8 @@ async function asWallet(operator: HederaContext): Promise<HederaContext> {
   return walletHederaContext({ signer, network: operator.network, mirrorBaseUrl: operator.mirrorBaseUrl });
 }
 
+const round = (hbar: number) => Math.round(hbar * 100) / 100;
+
 function saveRun(result: RunResult): string {
   mkdirSync(RUNS_DIR, { recursive: true });
   const stamp = result.startedAt.replace(/[:.]/g, "-");
@@ -124,6 +152,10 @@ function saveRun(result: RunResult): string {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  if (args.help) {
+    console.log(`${USAGE}\n\n${galleryLine()}`);
+    return;
+  }
   const registry = createDefaultRegistry();
   const document = loadFlowDocument(args.source);
   const flow = registry.validateFlow(document);
@@ -131,13 +163,24 @@ async function main(): Promise<void> {
 
   if (args.codegen) {
     const script = generateLaunchScript(document, registry, { headerLines: [`Source: ${args.source}`] });
-    writeFileSync(path.resolve(args.codegen), script);
-    console.log(`codegen: wrote ${args.codegen}`);
+    const out = callerPath(args.codegen);
+    writeFileSync(out, script);
+    console.log(`codegen: wrote ${path.relative(PROJECT_ROOT, out) || out}`);
   }
 
   if (args.dryRun) {
-    flow.steps.forEach((step, index) => console.log(`  ${index + 1}. ${step.id} (${step.type})`));
-    console.log("\nDry run: flow is valid; nothing was submitted.");
+    // What a run checks before its first step, such as a contract that was never compiled.
+    await preflightFlow(flow, registry, { network: flow.network, artifacts: name => loadHardhatArtifact(name) });
+    const estimate = estimateFlowFees(flow);
+    const cost = new Map(estimate.lines.map(line => [line.stepId, line.feeHbar + line.spentHbar]));
+    flow.steps.forEach((step, index) =>
+      console.log(`  ${index + 1}. ${step.id} (${step.type})  ~${round(cost.get(step.id) ?? 0)} ℏ`),
+    );
+    const unknown = estimate.unknownAmounts.length
+      ? `, plus the HBAR that ${estimate.unknownAmounts.join(", ")} take from earlier steps`
+      : "";
+    console.log(`\nCosts about ${estimate.perRunHbar} ℏ on ${flow.network}${unknown}.`);
+    console.log("Dry run: flow is valid; nothing was submitted.");
     return;
   }
 

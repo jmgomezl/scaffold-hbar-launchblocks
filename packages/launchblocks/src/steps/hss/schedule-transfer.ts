@@ -2,7 +2,14 @@ import { z } from "zod";
 
 import { scheduleTokenTransfer } from "../../hedera/ops/schedules";
 import { defineStep } from "../../registry/define-step";
-import { AccountIdSchema, CATEGORY_COLOUR, PositiveAmountSchema, TokenIdSchema, callOperation } from "../shared";
+import {
+  AccountIdSchema,
+  CATEGORY_COLOUR,
+  PositiveAmountSchema,
+  TokenIdSchema,
+  callOperation,
+  tokenAmountIssues,
+} from "../shared";
 import {
   SCHEDULE_DETAILS,
   scheduleFields,
@@ -50,6 +57,7 @@ export const hssScheduleTransfer = defineStep({
     details: `${SCHEDULE_DETAILS}\n\nThe recipient must be associated with the token, or have a free association slot, when it runs.`,
     hederaServices: ["HSS", "HTS"],
   },
+  checkWiring: (params, earlier) => tokenAmountIssues(params, [{ path: "amount", value: params.amount }], earlier),
   execute: (input, ctx) => scheduleTokenTransfer(ctx.hedera, input),
   codegen: ctx =>
     callOperation(ctx, "scheduleTokenTransfer", ["tokenId", "to", "amount", "delaySeconds", "memo", "adminKey"]),

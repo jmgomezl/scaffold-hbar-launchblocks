@@ -65,7 +65,7 @@ describe("readLaunch()", () => {
     expect(launch).toMatchObject({
       topicId: "0.0.500",
       memo: "LBL launch log",
-      createdAt: "2026-09-21T14:13:19.000Z",
+      createdAt: "2026-09-21T14:13:19.100Z",
       token: { tokenId: "0.0.501", symbol: "LBL", totalSupply: "1000000", treasuryAccountId: "0.0.1001" },
       pool: {
         pairId: "0.0.502",
@@ -113,7 +113,7 @@ describe("readLaunch()", () => {
       {
         scheduleId: "0.0.602",
         label: "month1",
-        executedAt: "2026-10-22T05:02:15.000Z",
+        executedAt: "2026-10-22T05:02:15.500Z",
         executesAt: "2026-10-23T05:02:15.046Z",
         deleted: false,
       },
@@ -175,5 +175,10 @@ describe("readLaunch()", () => {
     await expect(readLaunch(hedera, "../0.0.1")).rejects.toMatchObject({ code: "ENTITY_ID_INVALID" });
     expect(fetch).not.toHaveBeenCalled();
     await expect(readLaunch(hedera, "0.0.9")).rejects.toMatchObject({ code: "LAUNCH_NOT_FOUND" });
+  });
+
+  it("calls an id the mirror node finds out of range invalid, not a mirror failure", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 400 }));
+    await expect(readLaunch(hedera, "0.0.999999999999")).rejects.toMatchObject({ code: "ENTITY_ID_INVALID" });
   });
 });

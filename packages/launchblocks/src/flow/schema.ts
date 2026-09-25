@@ -33,7 +33,7 @@ export const StepTypeSchema = z
   .string()
   .regex(STEP_TYPE_PATTERN, "step type must look like namespace.action (e.g. hts.createToken)");
 
-export const StepEnvelopeSchema = z.object({
+export const StepEnvelopeSchema = z.strictObject({
   id: StepIdSchema,
   type: StepTypeSchema,
   /** Free-text label shown in the editor and run log. */
@@ -59,7 +59,7 @@ function nestsDeeperThan(value: unknown, limit: number): boolean {
 }
 
 export const FlowSchema = z
-  .object({
+  .strictObject({
     schemaVersion: z.literal(1),
     id: z.string().min(1).max(64).regex(FLOW_ID_PATTERN, "flow id must be kebab-case (e.g. hts-launch)"),
     name: z.string().min(1).max(120),

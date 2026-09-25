@@ -50,12 +50,48 @@ function typeErrors(scripts: Record<string, string>): string[] {
     });
 }
 
+/** Params written only in part, as an agent or a person typing JSON writes them: the schema's defaults fill the rest. */
+const PARTIAL_PARAMS = {
+  schemaVersion: 1,
+  id: "partial-params",
+  name: "Partial params",
+  network: "testnet",
+  steps: [
+    {
+      id: "createToken",
+      type: "hts.createToken",
+      params: { name: "A", symbol: "A", keys: { freeze: true }, fractionalFee: { numerator: 1, denominator: 100 } },
+    },
+    { id: "log", type: "hcs.createTopic", params: {} },
+    {
+      id: "note",
+      type: "hcs.submitMessage",
+      params: {
+        topicId: "{{steps.log.topicId}}",
+        message: { event: "token.launched", max: "{{steps.createToken.maxSupplyUnits}}" },
+      },
+    },
+  ],
+};
+
 describe("generated launch scripts", () => {
-  it("type-check for every gallery flow", () => {
-    const registry = createDefaultRegistry();
+  const registry = createDefaultRegistry();
+
+  it("type-check for every gallery flow, and for params written only in part", () => {
     const scripts = Object.fromEntries(
       GALLERY.map(entry => [`__generated__/${entry.id}.ts`, generateLaunchScript(entry.flow, registry)]),
     );
+    scripts["__generated__/partial-params.ts"] = generateLaunchScript(PARTIAL_PARAMS, registry);
     expect(typeErrors(scripts)).toEqual([]);
   }, 120_000);
+
+  it("keep the defaults the runner applies under a nested param the flow sets in part", () => {
+    const script = generateLaunchScript(PARTIAL_PARAMS, registry);
+    expect(script).toContain(
+      "keys: { admin: true, supply: true, freeze: true, wipe: false, pause: false, kyc: false, feeSchedule: false }",
+    );
+    expect(script).toContain('fractionalFee: { numerator: 1, denominator: 100, assessment: "inclusive" }');
+    // Inside a message, a null output is logged as null, as the runner does, rather than stopping the script.
+    expect(script).toContain('message: { event: "token.launched", max: createToken.maxSupplyUnits }');
+  });
 });

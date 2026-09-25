@@ -17,7 +17,9 @@ import { translateHederaError } from "../hedera/errors";
 import type { ExchangeRate } from "../hedera/mirror";
 import {
   TINYBAR_PER_HBAR,
+  fetchAccount,
   fetchExchangeRates,
+  fetchTokenBalances,
   readContract,
   resolveContractId,
   resolveEvmAddress,
@@ -188,7 +190,8 @@ export type CreatePoolResult = {
   liquidity: string;
   /** The deposit (addLiquidityETH). */
   transactionId: string;
-  createPairTransactionId: string;
+  /** Null when an earlier attempt had created the pair and left it empty, so this run only deposited. */
+  createPairTransactionId: string | null;
   allowanceTransactionId: string;
   /** Deposited exactly as requested, in smallest units. */
   tokenAmountUnits: string;
@@ -210,11 +213,15 @@ export async function createPoolWithHbar(
 ): Promise<CreatePoolResult> {
   const deployment = saucerswapFor(hedera.network);
   const existing = await findPool(hedera, params.tokenId, signal);
-  if (existing) {
+  // A pair an earlier attempt created, whose deposit then failed, is empty: this run deposits into it.
+  const emptyPair = existing?.contractId
+    ? await isEmptyPair(hedera, existing.contractId, params.tokenId, signal)
+    : false;
+  if (existing && !emptyPair) {
     throw new LaunchBlocksError(
       "POOL_EXISTS",
       `A SaucerSwap pool for ${params.tokenId} and WHBAR already exists (${existing.contractId ?? existing.evmAddress})`,
-      { hint: "Add to the existing pool instead of creating one." },
+      { hint: "This step opens new pools only: add liquidity to that one on SaucerSwap." },
     );
   }
 
@@ -227,37 +234,41 @@ export async function createPoolWithHbar(
 
   const quote = await quotePoolCreation(hedera, signal);
   const feePaid = withBuffer(quote.creationFeeTinybar, params.feeBufferBps ?? DEFAULT_FEE_BUFFER_BPS);
+  // The pair fee is paid before the deposit, so a deposit the account cannot cover must stop here.
+  await assertCanDeposit(hedera, params.tokenId, tokenUnits, hbarTinybar + (emptyPair ? 0n : feePaid), signal);
   const tokenEvm = entityIdToEvmAddress(params.tokenId);
   // Alias-created accounts must be addressed by their EVM alias, not long-zero.
   const recipient = await resolveEvmAddress(hedera, hedera.operatorId.toString(), signal);
 
   // 1. Create the pair, paying the fee. Nothing is deposited yet.
-  let createPairTransactionId: string;
-  try {
-    const createPair = new ContractExecuteTransaction()
-      .setContractId(ContractId.fromString(deployment.v1Factory))
-      .setGas(params.createPairGasLimit ?? CREATE_PAIR_GAS)
-      .setPayableAmount(Hbar.fromTinybars(toLong(feePaid)))
-      .setFunction(
-        "createPair",
-        new ContractFunctionParameters().addAddress(tokenEvm).addAddress(entityIdToEvmAddress(deployment.whbarToken)),
-      );
-    ({ transactionId: createPairTransactionId } = await send(
-      hedera,
-      createPair,
-      `Creating the SaucerSwap pair for ${params.tokenId}`,
-    ));
-  } catch (error) {
-    const translated =
-      error instanceof LaunchBlocksError
-        ? error
-        : translateHederaError(error, `Creating the SaucerSwap pair for ${params.tokenId}`);
-    throw new LaunchBlocksError(translated.code, translated.message, {
-      cause: error,
-      hint:
-        translated.hint ??
-        "If the exchange rate moved since the quote, the fee was short: retry, or raise feeBufferBps. Nothing was deposited.",
-    });
+  let createPairTransactionId: string | null = null;
+  if (!emptyPair) {
+    try {
+      const createPair = new ContractExecuteTransaction()
+        .setContractId(ContractId.fromString(deployment.v1Factory))
+        .setGas(params.createPairGasLimit ?? CREATE_PAIR_GAS)
+        .setPayableAmount(Hbar.fromTinybars(toLong(feePaid)))
+        .setFunction(
+          "createPair",
+          new ContractFunctionParameters().addAddress(tokenEvm).addAddress(entityIdToEvmAddress(deployment.whbarToken)),
+        );
+      ({ transactionId: createPairTransactionId } = await send(
+        hedera,
+        createPair,
+        `Creating the SaucerSwap pair for ${params.tokenId}`,
+      ));
+    } catch (error) {
+      const translated =
+        error instanceof LaunchBlocksError
+          ? error
+          : translateHederaError(error, `Creating the SaucerSwap pair for ${params.tokenId}`);
+      throw new LaunchBlocksError(translated.code, translated.message, {
+        cause: error,
+        hint:
+          translated.hint ??
+          "If the exchange rate moved since the quote, the fee was short: retry, or raise feeBufferBps. Nothing was deposited.",
+      });
+    }
   }
 
   // 2. Let the router pull exactly the tokens it is about to deposit.
@@ -310,11 +321,57 @@ export async function createPoolWithHbar(
       creationFeePaidHbar: fromUnits(feePaid, 8),
       gasUsed: outcome.gasUsed,
       openingPriceHbar: openingPrice(amountHbar, amountToken, decimals),
-      poolUrl: pairId ? `${deployment.appBaseUrl}/liquidity/${pairId}` : deployment.appBaseUrl,
+      poolUrl: pairId ? `${deployment.appBaseUrl}/pool/${pairId}` : deployment.appBaseUrl,
     };
   } catch (error) {
     if (error instanceof LaunchBlocksError) throw error;
     throw translateHederaError(error, `Depositing into the new SaucerSwap pool for ${params.tokenId}`);
+  }
+}
+
+/** Whether a pair holds neither the token nor WHBAR: created, but never funded. */
+async function isEmptyPair(
+  hedera: HederaContext,
+  pairId: string,
+  tokenId: string,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  const balances = await fetchTokenBalances(hedera, pairId, signal);
+  const whbar = saucerswapFor(hedera.network).whbarToken;
+  return (balances.get(tokenId) ?? 0n) === 0n && (balances.get(whbar) ?? 0n) === 0n;
+}
+
+/**
+ * Refuse a deposit the account cannot cover, before the pair fee is paid.
+ * The mirror node trails consensus by a few seconds: a token it does not list
+ * yet (created moments ago) is not held against the run.
+ */
+async function assertCanDeposit(
+  hedera: HederaContext,
+  tokenId: string,
+  tokenUnits: bigint,
+  hbarTinybar: bigint,
+  signal?: AbortSignal,
+): Promise<void> {
+  const accountId = hedera.operatorId.toString();
+  const [tokens, account] = await Promise.all([
+    fetchTokenBalances(hedera, accountId, signal),
+    fetchAccount(hedera, accountId, signal),
+  ]);
+  const held = tokens.get(tokenId);
+  if (held !== undefined && held < tokenUnits) {
+    throw new LaunchBlocksError(
+      "POOL_TOKENS_SHORT",
+      `${accountId} holds ${held} units of ${tokenId}, and the pool needs ${tokenUnits}`,
+      { hint: "Lower tokenAmount, or mint more first. Nothing was sent." },
+    );
+  }
+  if (account && account.balanceTinybar < hbarTinybar) {
+    throw new LaunchBlocksError(
+      "POOL_HBAR_SHORT",
+      `${accountId} has ${fromUnits(account.balanceTinybar, 8)} ℏ, and the pool needs ${fromUnits(hbarTinybar, 8)} ℏ plus gas`,
+      { hint: "Top up the account from the faucet, or lower hbarAmount. Nothing was sent." },
+    );
   }
 }
 

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { DEFAULT_CALL_GAS, callContract, parseFunctionSignature } from "../../hedera/ops/contracts";
 import { defineStep } from "../../registry/define-step";
-import { AmountSchema, CATEGORY_COLOUR, ENTITY_ID_PATTERN } from "../shared";
+import { CATEGORY_COLOUR, ENTITY_ID_PATTERN, HbarAmountSchema } from "../shared";
 import { argFields, argsExpression, collectArgs, contractArgShape } from "./shared";
 
 const InputSchema = z
@@ -10,7 +10,7 @@ const InputSchema = z
     contractId: z.string().trim().regex(ENTITY_ID_PATTERN, "expected a contract id like 0.0.12345"),
     function: z.string().trim().min(1, "enter a function signature"),
     ...contractArgShape,
-    payableHbar: AmountSchema.optional(),
+    payableHbar: HbarAmountSchema.optional(),
     gas: z.number().int().min(25_000).max(15_000_000).default(DEFAULT_CALL_GAS),
   })
   .superRefine((input, ctx) => {

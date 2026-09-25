@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { airdropFungibleToken } from "../../hedera/ops/tokens";
+import { MAX_AIRDROP_RECIPIENTS, airdropFungibleToken } from "../../hedera/ops/tokens";
 import { defineStep } from "../../registry/define-step";
 import {
   AccountIdSchema,
@@ -9,6 +9,7 @@ import {
   PositiveAmountSchema,
   TokenIdSchema,
   callOperation,
+  tokenAmountIssues,
 } from "../shared";
 
 export const htsAirdrop = defineStep({
@@ -18,7 +19,10 @@ export const htsAirdrop = defineStep({
     recipients: z
       .array(z.object({ accountId: AccountIdSchema, amount: PositiveAmountSchema }))
       .min(1, "add at least one recipient")
-      .max(10, "at most 10 recipients per airdrop"),
+      .max(
+        MAX_AIRDROP_RECIPIENTS,
+        `at most ${MAX_AIRDROP_RECIPIENTS} recipients per airdrop (10 transfers, the sender's included)`,
+      ),
     memo: MemoSchema.optional(),
   }),
   output: z.object({
@@ -57,6 +61,15 @@ export const htsAirdrop = defineStep({
       "Recipients with a free auto-association slot receive the tokens immediately; the rest get a pending airdrop they claim from their wallet.",
     hederaServices: ["HTS"],
   },
+  checkWiring: (params, earlier) =>
+    tokenAmountIssues(
+      params,
+      (Array.isArray(params.recipients) ? params.recipients : []).map((recipient: unknown, index) => ({
+        path: `recipients[${index}].amount`,
+        value: (recipient as { amount?: unknown } | null)?.amount,
+      })),
+      earlier,
+    ),
   execute: (input, ctx) => airdropFungibleToken(ctx.hedera, input),
   codegen: ctx => callOperation(ctx, "airdropFungibleToken", ["tokenId", "recipients", "memo"]),
 });

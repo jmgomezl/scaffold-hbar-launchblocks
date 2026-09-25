@@ -15,12 +15,16 @@ export type CodegenOptions = {
 const DEFAULT_CORE_MODULE = "@sh/launchblocks";
 
 /** Names the generated script defines itself, which a step's variable must not shadow. */
-const SCRIPT_NAMES = ["step", "required", "main", "ctx", "client", "operatorId", "operatorKey", "console", "process"];
+const SCRIPT_NAMES = ["step", "required", "asText", "main", "ctx", "client", "operatorId", "console", "process"];
 
 /** How a reference renders: the variable holding each step's outputs, and which outputs may be null. */
 export type RefRendering = {
   variable?: (stepId: string) => string;
   nullable?: (stepId: string, key: string) => boolean;
+  /** Outputs that `String()` does not write as the runner does (null, arrays, objects): interpolated through `asText`. */
+  structured?: (stepId: string, key: string) => boolean;
+  /** Free-form data: nested null outputs pass through (see `CodegenContext.expr`). */
+  data?: boolean;
 };
 
 /**
@@ -38,10 +42,17 @@ export function generateLaunchScript(document: unknown, registry: StepRegistry, 
 
   // Outputs whose schema admits null: a whole reference to one is checked at run time.
   const nullable = new Set<string>();
+  // Outputs a template literal would write differently from the runner: null, arrays and objects.
+  const structured = new Set<string>();
   for (const step of flow.steps) {
-    const output = registry.get(step.type).output as unknown as { shape?: Record<string, ZodType> };
+    const definition = registry.get(step.type);
+    const output = definition.output as unknown as { shape?: Record<string, ZodType> };
     for (const [key, schema] of Object.entries(output.shape ?? {})) {
+      const example: unknown = (definition.outputExample as Record<string, unknown>)[key];
       if (schema.safeParse(null).success) nullable.add(`${step.id}.${key}`);
+      if (schema.safeParse(null).success || (typeof example === "object" && example !== null)) {
+        structured.add(`${step.id}.${key}`);
+      }
     }
   }
 
@@ -57,7 +68,7 @@ export function generateLaunchScript(document: unknown, registry: StepRegistry, 
       const ctx: CodegenContext = {
         stepId: step.id,
         coreModule,
-        expr: key => renderExpr(params[key], rendering),
+        expr: (key, options) => renderExpr(params[key], { ...rendering, data: options?.data === true }),
         addImport: (specifier, ...names) => imports.add(specifier, ...names),
       };
       const fragment = definition.codegen(ctx);
@@ -85,6 +96,7 @@ export function generateLaunchScript(document: unknown, registry: StepRegistry, 
   const { imports, sections } = render({
     variable: id => variables.get(id) ?? id,
     nullable: (id, key) => nullable.has(`${id}.${key}`),
+    structured: (id, key) => structured.has(`${id}.${key}`),
   });
   const body = sections.join("\n\n");
 
@@ -98,16 +110,20 @@ export function generateLaunchScript(document: unknown, registry: StepRegistry, 
     "",
     STEP_HELPER,
     ...(body.includes("required(") ? ["", REQUIRED_HELPER] : []),
+    ...(body.includes("asText(") ? ["", AS_TEXT_HELPER] : []),
     "",
     `async function main(): Promise<void> {`,
     `  const ctx = hederaContextFromEnv(process.env, { network: ${JSON.stringify(flow.network)} });`,
-    `  const { client, operatorId, operatorKey } = ctx;`,
+    `  const { client, operatorId } = ctx;`,
     `  console.log(\`Running flow ${flow.id} on ${flow.network} as \${operatorId.toString()}\`);`,
+    // A failed step must still close the client, or its open channels keep the process alive.
+    `  try {`,
+    indent(body, 2),
     "",
-    body,
-    "",
-    `  console.log("Flow complete", { ${summary} });`,
-    `  client.close();`,
+    `    console.log("Flow complete", { ${summary} });`,
+    `  } finally {`,
+    `    client.close();`,
+    `  }`,
     `}`,
     "",
     `main().catch(error => {`,
@@ -121,15 +137,37 @@ export function generateLaunchScript(document: unknown, registry: StepRegistry, 
 /**
  * Apply the input schema's defaults without losing references: parse a copy
  * where references are replaced by example outputs, then let the original
- * (reference-bearing) values win for every key the author wrote.
+ * (reference-bearing) values win for every value the author wrote, at any
+ * depth, so `keys: { freeze: true }` keeps the admin and supply defaults.
  */
 function paramsWithDefaults(
   params: Record<string, unknown>,
   input: ZodType,
   exampleOutputs: Record<string, Record<string, unknown>>,
 ): Record<string, unknown> {
-  const parsed = input.parse(resolveRefs(params, exampleOutputs));
-  return isPlainObject(parsed) ? { ...parsed, ...params } : params;
+  const merged = withDefaults(input.parse(resolveRefs(params, exampleOutputs)), params);
+  return isPlainObject(merged) ? merged : params;
+}
+
+function withDefaults(parsed: unknown, written: unknown): unknown {
+  if (isPlainObject(parsed) && isPlainObject(written)) {
+    const keys = new Set([...Object.keys(parsed), ...Object.keys(written)]);
+    // fromEntries, not assignment: a "__proto__" key stays an ordinary key.
+    return Object.fromEntries(
+      [...keys].map(key => [
+        key,
+        !Object.hasOwn(written, key)
+          ? parsed[key]
+          : Object.hasOwn(parsed, key)
+            ? withDefaults(parsed[key], written[key])
+            : written[key],
+      ]),
+    );
+  }
+  if (Array.isArray(parsed) && Array.isArray(written) && parsed.length === written.length) {
+    return written.map((item: unknown, index) => withDefaults(parsed[index], item));
+  }
+  return written;
 }
 
 /** Text for a line comment: a line break in a label must not end the comment. */
@@ -165,6 +203,12 @@ async function step<T>(id: string, run: () => Promise<T>): Promise<T> {
   }
 }`;
 
+const AS_TEXT_HELPER = `/** An output inside a string, written as the runner writes it: nothing for null, JSON for arrays and objects. */
+function asText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  return typeof value === "object" ? JSON.stringify(value) : String(value);
+}`;
+
 const REQUIRED_HELPER = `/** An output the flow needs but the step did not produce, e.g. a pool the mirror node never showed. */
 function required<T>(value: T | null | undefined, name: string): T {
   if (value === null || value === undefined) throw new Error(\`\${name} is missing\`);
@@ -198,12 +242,16 @@ class ImportCollector {
  * arrays/objects are rendered recursively so nested references survive.
  */
 export function renderExpr(value: unknown, rendering: RefRendering = {}): string {
+  return renderValue(value, rendering, false);
+}
+
+function renderValue(value: unknown, rendering: RefRendering, nested: boolean): string {
   if (value === undefined) return "undefined";
   if (typeof value === "string") {
     const whole = parseRef(value);
     if (whole) {
       const access = `${rendering.variable?.(whole.stepId) ?? whole.stepId}.${whole.key}`;
-      return rendering.nullable?.(whole.stepId, whole.key)
+      return rendering.nullable?.(whole.stepId, whole.key) && !(rendering.data && nested)
         ? `required(${access}, ${JSON.stringify(`${whole.stepId}.${whole.key}`)})`
         : access;
     }
@@ -211,10 +259,12 @@ export function renderExpr(value: unknown, rendering: RefRendering = {}): string
     return renderTemplateLiteral(value, rendering);
   }
   if (Array.isArray(value)) {
-    return `[${value.map(item => renderExpr(item, rendering)).join(", ")}]`;
+    return `[${value.map(item => renderValue(item, rendering, true)).join(", ")}]`;
   }
   if (isPlainObject(value)) {
-    const entries = Object.entries(value).map(([key, item]) => `${renderKey(key)}: ${renderExpr(item, rendering)}`);
+    const entries = Object.entries(value).map(
+      ([key, item]) => `${renderKey(key)}: ${renderValue(item, rendering, true)}`,
+    );
     return entries.length ? `{ ${entries.join(", ")} }` : "{}";
   }
   return JSON.stringify(value);
@@ -226,7 +276,9 @@ function renderTemplateLiteral(value: string, rendering: RefRendering): string {
   let last = 0;
   for (const match of value.matchAll(pattern)) {
     out += escapeTemplateText(value.slice(last, match.index));
-    out += `\${${rendering.variable?.(match[1] as string) ?? match[1]}.${match[2]}}`;
+    const [stepId, key] = [match[1] as string, match[2] as string];
+    const access = `${rendering.variable?.(stepId) ?? stepId}.${key}`;
+    out += `\${${rendering.structured?.(stepId, key) ? `asText(${access})` : access}}`;
     last = match.index + match[0].length;
   }
   out += escapeTemplateText(value.slice(last));

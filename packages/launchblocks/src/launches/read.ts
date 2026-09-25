@@ -118,7 +118,15 @@ export async function readLaunch(
   const [topic, messages] = await Promise.all([
     fetchTopic(hedera, topicId, signal),
     fetchTopicMessages(hedera, topicId, MAX_ENTRIES, signal),
-  ]);
+  ]).catch((error: unknown) => {
+    // The mirror node refuses ids whose numbers are out of range: to a reader, that is just not a topic id.
+    if (error instanceof LaunchBlocksError && error.code === "MIRROR_BAD_REQUEST") {
+      throw new LaunchBlocksError("ENTITY_ID_INVALID", `"${topicId}" is not a topic id`, {
+        hint: "A launch log is an HCS topic id such as 0.0.10716076.",
+      });
+    }
+    throw error;
+  });
   if (!topic) {
     throw new LaunchBlocksError("LAUNCH_NOT_FOUND", `There is no topic ${topicId} on ${hedera.network}`, {
       hint: "Check the id, and that it is a launch log on this network.",

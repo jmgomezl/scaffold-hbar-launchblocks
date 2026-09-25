@@ -9,6 +9,7 @@ import {
   PositiveAmountSchema,
   TokenIdSchema,
   callOperation,
+  tokenAmountIssues,
 } from "../shared";
 
 export const htsTransfer = defineStep({
@@ -53,6 +54,7 @@ export const htsTransfer = defineStep({
       "Fails with TOKEN_NOT_ASSOCIATED_TO_ACCOUNT if the recipient has not associated; use hts.airdrop for cold recipients.",
     hederaServices: ["HTS"],
   },
+  checkWiring: (params, earlier) => tokenAmountIssues(params, [{ path: "amount", value: params.amount }], earlier),
   execute: (input, ctx) => transferFungibleToken(ctx.hedera, input),
   codegen: ctx => callOperation(ctx, "transferFungibleToken", ["tokenId", "to", "amount", "memo"]),
 });

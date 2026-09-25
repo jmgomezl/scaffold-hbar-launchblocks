@@ -102,8 +102,8 @@ export function estimateFlowFees(flow: Flow): FeeEstimate {
       feeHbar += CUSTOM_FEE_SURCHARGE_HBAR;
     }
     let spentHbar = 0;
-    // What the step hands over: a pool deposit or swap (hbarAmount), or a contract's initial balance.
-    const amount = step.params.hbarAmount ?? step.params.initialHbar;
+    // What the step hands over: a pool deposit or swap (hbarAmount), a contract's initial balance, or HBAR sent with a call.
+    const amount = step.params.hbarAmount ?? step.params.initialHbar ?? step.params.payableHbar;
     if (amount !== undefined) {
       const value = Number(amount);
       if (Number.isFinite(value) && value >= 0) spentHbar = value;

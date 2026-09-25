@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { FlowValidationError, UnknownStepTypeError } from "../../src/errors";
 import { ref } from "../../src/flow/refs";
 import { createRegistry } from "../../src/registry/registry";
+import { createDefaultRegistry } from "../../src/steps";
 import { FAKE_STEPS, makeToken, useToken } from "../helpers/fake-steps";
 
 const registry = createRegistry(FAKE_STEPS);
@@ -147,5 +148,41 @@ describe("validateFlow()", () => {
       expect((error as FlowValidationError).issues).toHaveLength(1);
       expect((error as FlowValidationError).code).toBe("FLOW_INVALID");
     }
+  });
+});
+
+describe("checkFlow() and params nobody asked for", () => {
+  const defaults = createDefaultRegistry();
+  const token = (params: Record<string, unknown>) => ({
+    schemaVersion: 1,
+    id: "t",
+    name: "T",
+    steps: [{ id: "createToken", type: "hts.createToken", params: { name: "A", symbol: "A", ...params } }],
+  });
+  const messages = (document: unknown) =>
+    defaults.checkFlow(document).issues.map(issue => `${issue.path}: ${issue.message}`);
+
+  it("reports a dotted key instead of dropping it, and says how to nest it", () => {
+    expect(messages(token({ "keys.admin": false }))).toEqual([
+      'steps[0].params.keys.admin: unknown param "keys.admin": nested params are objects, so write "keys": { "admin": … }',
+    ]);
+  });
+
+  it("suggests the key a typo meant, at any depth", () => {
+    expect(messages(token({ nmae: "B" }))).toEqual([
+      'steps[0].params.nmae: unknown param "nmae"; did you mean "name"?',
+    ]);
+    expect(messages(token({ keys: { amdin: false } }))).toEqual([
+      'steps[0].params.keys.amdin: unknown param "amdin"; did you mean "admin"?',
+    ]);
+  });
+
+  it("reports unknown keys on the flow and on a step too", () => {
+    const document = { ...token({}), stpes: [] };
+    document.steps = [{ ...document.steps[0]!, lable: "x" } as never];
+    expect(messages(document)).toEqual([
+      expect.stringContaining('Unrecognized key: "lable"'),
+      expect.stringContaining('Unrecognized key: "stpes"'),
+    ]);
   });
 });
