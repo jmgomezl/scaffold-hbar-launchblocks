@@ -8,6 +8,7 @@ export const metadata = getMetadata({
   title: "Launches",
   description:
     "Any LaunchBlocks launch, rebuilt from its HCS log: token, market, locked liquidity and schedules as they are now.",
+  path: "/launches",
 });
 
 /** Real launches on testnet, one per kind of gallery flow. */

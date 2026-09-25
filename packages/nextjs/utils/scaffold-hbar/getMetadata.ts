@@ -17,10 +17,13 @@ export const getMetadata = ({
   title,
   description,
   imageRelativePath = THUMBNAIL.path,
+  path,
 }: {
   title: string;
   description: string;
   imageRelativePath?: string;
+  /** The page's own path, e.g. "/launches": its canonical URL and og:url. */
+  path?: string;
 }): Metadata => {
   const imageUrl = `${baseUrl}${imageRelativePath}`;
   // Sizes let Facebook and LinkedIn show the image on a link's first share.
@@ -36,12 +39,14 @@ export const getMetadata = ({
       template: titleTemplate,
     },
     description: description,
+    ...(path ? { alternates: { canonical: path } } : {}),
     openGraph: {
       title: {
         default: title,
         template: titleTemplate,
       },
       description: description,
+      ...(path ? { url: path } : {}),
       siteName: "LaunchBlocks",
       type: "website",
       images: [image],

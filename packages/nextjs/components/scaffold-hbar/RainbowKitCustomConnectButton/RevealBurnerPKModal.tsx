@@ -32,7 +32,14 @@ export const RevealBurnerPKModal = () => {
 
   return (
     <div>
-      <input type="checkbox" id="reveal-burner-pk-modal" className="modal-toggle" ref={modalCheckboxRef} />
+      <input
+        type="checkbox"
+        id="reveal-burner-pk-modal"
+        className="modal-toggle"
+        ref={modalCheckboxRef}
+        tabIndex={-1}
+        aria-hidden="true"
+      />
       <label htmlFor="reveal-burner-pk-modal" className="modal cursor-pointer">
         <label className="modal-box relative bg-base-100 border border-base-300 rounded-2xl shadow-xl p-6 max-w-md">
           <input className="h-0 w-0 absolute top-0 left-0" />

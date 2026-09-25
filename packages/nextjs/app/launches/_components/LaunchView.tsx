@@ -5,9 +5,11 @@ import {
   formatAmount,
   formatDate,
   linkFor,
+  loggedAmount,
   loggedDate,
   priceChange,
   relativeTime,
+  saucerswapPoolUrl,
 } from "../_lib/format";
 import type { LaunchLogEntry, LaunchRecord, Network } from "@sh/launchblocks";
 import { hashscanUrl } from "@sh/launchblocks";
@@ -30,10 +32,12 @@ function External({
   );
 }
 
+const MAX_SHOWN = 400;
+
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-2xl border border-base-300 bg-base-100 p-5">
-      <p className="mb-2 text-xs font-medium uppercase tracking-widest text-base-content/60">{title}</p>
+      <p className="mb-2 text-xs font-medium uppercase tracking-widest text-base-content/70">{title}</p>
       {children}
     </div>
   );
@@ -49,11 +53,22 @@ function Value({ network, name, value }: { network: Network; name: string; value
   if (date) {
     return (
       <span title={text}>
-        {date} <span className="font-mono text-xs text-base-content/50">{text}</span>
+        {date} <span className="font-mono text-xs text-base-content/70">{text}</span>
       </span>
     );
   }
+  const amount = loggedAmount(value);
+  if (amount) return <span className="font-mono">{amount}</span>;
   const href = typeof value === "string" ? linkFor(network, name, value) : null;
+  // The whole message is under "The message as recorded"; a field shows its first 400 characters.
+  if (!href && text.length > MAX_SHOWN) {
+    return (
+      <span className="break-all font-mono">
+        {text.slice(0, MAX_SHOWN)}…{" "}
+        <span className="text-base-content/70">({text.length - MAX_SHOWN} more characters)</span>
+      </span>
+    );
+  }
   return href ? (
     <External href={href} className="link link-primary break-all font-mono">
       {text}
@@ -69,7 +84,7 @@ function Fields({ network, data }: { network: Network; data: Record<string, unkn
     <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-[minmax(0,11rem)_1fr]">
       {entries.map(([key, value]) => (
         <div key={key} className="contents">
-          <dt className="mt-1 text-xs text-base-content/60 sm:mt-0 sm:text-sm">{fieldLabel(key)}</dt>
+          <dt className="mt-1 text-xs text-base-content/70 sm:mt-0 sm:text-sm">{fieldLabel(key)}</dt>
           <dd className="min-w-0">
             <Value network={network} name={key} value={value} />
           </dd>
@@ -88,7 +103,7 @@ function Entry({ network, entry }: { network: Network; entry: LaunchLogEntry }) 
       {!entry.fromLauncher && (
         <span className="badge badge-warning badge-soft badge-sm mb-1">Posted by another account</span>
       )}
-      <p className="text-xs text-base-content/60">
+      <p className="text-xs text-base-content/70">
         #{entry.sequence} · {formatDate(entry.consensusAt)}
         {entry.payerAccountId && (
           <>
@@ -112,7 +127,7 @@ function Entry({ network, entry }: { network: Network; entry: LaunchLogEntry }) 
         <p className="whitespace-pre-wrap break-words text-sm">{entry.text}</p>
       )}
       <details className="mt-2 text-xs">
-        <summary className="cursor-pointer text-base-content/60">The message as recorded</summary>
+        <summary className="cursor-pointer text-base-content/70">The message as recorded</summary>
         <pre className="mt-1 max-h-60 overflow-auto rounded-lg bg-base-200 p-2">{entry.text}</pre>
       </details>
     </li>
@@ -122,18 +137,26 @@ function Entry({ network, entry }: { network: Network; entry: LaunchLogEntry }) 
 export function LaunchView({ launch }: { launch: LaunchRecord }) {
   const { network, token, pool, lock, schedules, entries } = launch;
   const market = entries.find(entry => entry.data?.event === "market.opened")?.data;
-  const poolUrl = typeof market?.poolUrl === "string" && market.poolUrl.startsWith("https://") ? market.poolUrl : null;
-  const change = pool ? priceChange(pool.openingPriceHbar, pool.priceHbar) : null;
+  const poolUrl = saucerswapPoolUrl(market?.poolUrl);
+  // From the reserves themselves: the shown price is cut to 8 decimals, which can move the change by 0.01 point.
+  const change = pool
+    ? priceChange(pool.openingPriceHbar, String(Number(pool.hbarReserve) / Number(pool.tokenReserve)))
+    : null;
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-8 px-5 py-10">
       <section className="rounded-2xl bg-base-100 p-6 shadow-lg md:p-8">
-        <p className="text-xs font-medium uppercase tracking-widest text-base-content/60">
+        <p className="text-xs font-medium uppercase tracking-widest text-base-content/70">
           Launch log · Hedera {network}
         </p>
         <h1 className="mt-1 text-3xl font-bold">
           {token ? token.name : launch.memo || `Topic ${launch.topicId}`}
-          {token && <span className="ml-3 text-xl font-medium text-base-content/50">{token.symbol}</span>}
+          {token && (
+            <>
+              {" "}
+              <span className="ml-2 text-xl font-medium text-base-content/70">{token.symbol}</span>
+            </>
+          )}
         </h1>
         <p className="mt-3 max-w-3xl text-base-content/70">
           Rebuilt from HCS topic{" "}
@@ -159,7 +182,7 @@ export function LaunchView({ launch }: { launch: LaunchRecord }) {
               <p className="text-2xl font-bold">
                 {formatAmount(token.totalSupply)} <span className="text-base font-medium">{token.symbol}</span>
               </p>
-              <p className="text-sm text-base-content/60">in circulation, {token.decimals} decimals</p>
+              <p className="text-sm text-base-content/70">total supply, {token.decimals} decimals</p>
               <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
                 <External href={hashscanUrl(network, "token", token.tokenId)}>Token {token.tokenId}</External>
                 {token.treasuryAccountId && (
@@ -176,13 +199,17 @@ export function LaunchView({ launch }: { launch: LaunchRecord }) {
                 {pool.priceHbar} ℏ{" "}
                 {change && (
                   <span
-                    className={`badge align-middle ${change.startsWith("-") ? "badge-error" : "badge-success"} badge-soft`}
+                    className={`badge align-middle border-0 ${
+                      change.startsWith("-")
+                        ? "bg-error/15 text-red-700 dark:text-error"
+                        : "bg-success/15 text-emerald-700 dark:text-success"
+                    }`}
                   >
                     {change} since opening
                   </span>
                 )}
               </p>
-              <p className="text-sm text-base-content/60">
+              <p className="text-sm text-base-content/70">
                 per {token.symbol} now; the pool holds {formatAmount(pool.tokenReserve)} {token.symbol} and{" "}
                 {formatAmount(pool.hbarReserve)} ℏ
                 {pool.openingPriceHbar ? `. It opened at ${pool.openingPriceHbar} ℏ.` : "."}
@@ -198,7 +225,7 @@ export function LaunchView({ launch }: { launch: LaunchRecord }) {
               <p className="text-2xl font-bold">
                 {lock.released ? "Released" : `${formatAmount(lock.lockedLp)} LP locked`}
               </p>
-              <p className="text-sm text-base-content/60">
+              <p className="text-sm text-base-content/70">
                 {lock.releaseAt
                   ? `${lock.released ? "Release time was" : "Nobody can withdraw it until"} ${formatDate(lock.releaseAt)} (${relativeTime(lock.releaseAt)}).`
                   : "The log does not say when it unlocks."}
@@ -216,18 +243,29 @@ export function LaunchView({ launch }: { launch: LaunchRecord }) {
                   <li key={schedule.scheduleId}>
                     <div className="flex flex-wrap items-center gap-2">
                       <span
-                        className={`badge badge-sm ${schedule.executedAt ? "badge-success" : schedule.deleted ? "badge-ghost" : "badge-info"} badge-soft`}
+                        className={`badge badge-sm border-0 ${
+                          schedule.executedAt
+                            ? "bg-success/15 text-emerald-700 dark:text-success"
+                            : schedule.deleted
+                              ? "badge-ghost"
+                              : "bg-info/15 text-blue-700 dark:text-info"
+                        }`}
                       >
                         {schedule.executedAt ? "executed" : schedule.deleted ? "deleted" : "scheduled"}
                       </span>
                       <span className="font-medium">{fieldLabel(schedule.label)}</span>
+                      {schedule.amount && token && (
+                        <span className="text-base-content/70">
+                          {formatAmount(schedule.amount)} {token.symbol}
+                        </span>
+                      )}
                       <span className="ml-auto">
                         <External href={hashscanUrl(network, "schedule", schedule.scheduleId)}>
                           {schedule.scheduleId}
                         </External>
                       </span>
                     </div>
-                    <p className="mt-0.5 text-base-content/60">
+                    <p className="mt-0.5 text-base-content/70">
                       {schedule.executedAt
                         ? `Ran ${formatDate(schedule.executedAt)}`
                         : schedule.executesAt
@@ -237,7 +275,7 @@ export function LaunchView({ launch }: { launch: LaunchRecord }) {
                   </li>
                 ))}
               </ul>
-              <p className="mt-2 text-xs text-base-content/60">
+              <p className="mt-2 text-xs text-base-content/70">
                 The network runs each one at its time by itself, with nobody online.
               </p>
             </Card>

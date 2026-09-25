@@ -24,6 +24,9 @@ export function fieldLabel(key: string): string {
     .replace(/\blp\b/g, "LP")
     .replace(/\bhbar\b/g, "HBAR")
     .replace(/\busd\b/g, "USD")
+    .replace(/\bdex\b/g, "DEX")
+    .replace(/\burl\b/g, "URL")
+    .replace(/\bhcs\b/g, "HCS")
     .replace(/\btx\b/g, "transaction")
     .trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
@@ -34,7 +37,15 @@ const ENTITY_ID = /^\d+\.\d+\.\d+$/;
 
 /** Where a logged value leads: HashScan for ids (the key says which kind), the URL itself for https links. */
 export function linkFor(network: Network, key: string, value: string): string | null {
-  if (/^https:\/\/[^\s]+$/.test(value)) return value;
+  if (/^https:\/\/[^\s]+$/.test(value)) {
+    // "https://hashscan.io@elsewhere.example" reads as HashScan but opens elsewhere: such links stay text.
+    try {
+      const url = new URL(value);
+      return url.username || url.password ? null : value;
+    } catch {
+      return null;
+    }
+  }
   if (TRANSACTION_ID.test(value)) return hashscanUrl(network, "transaction", value);
   if (!ENTITY_ID.test(value)) return null;
   const name = key.toLowerCase();
@@ -96,4 +107,26 @@ export function formatAmount(value: string): string {
   const [whole = "0", fraction] = value.split(".");
   const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return fraction ? `${grouped}.${fraction}` : grouped;
+}
+
+/** A logged whole number (a supply, a count of units), grouped for reading: "70,710,677,118". */
+export function loggedAmount(value: unknown): string | null {
+  const text = typeof value === "number" && Number.isSafeInteger(value) ? String(value) : value;
+  return typeof text === "string" && /^\d{5,}$/.test(text) ? formatAmount(text) : null;
+}
+
+/**
+ * The SaucerSwap link a launch logged, if it is one. Earlier launches logged
+ * `/liquidity/<id>`, which SaucerSwap now redirects to `/pool/<id>`.
+ */
+export function saucerswapPoolUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || !/(^|\.)saucerswap\.finance$/.test(url.hostname)) return null;
+    url.pathname = url.pathname.replace(/^\/liquidity\//, "/pool/");
+    return url.toString();
+  } catch {
+    return null;
+  }
 }

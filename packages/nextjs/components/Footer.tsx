@@ -18,7 +18,9 @@ export const Footer = () => {
   const inStudio = usePathname() === "/launch";
 
   return (
-    <div className="min-h-0 py-5 px-1 mb-11 lg:mb-0">
+    // Room at the bottom for the fixed bar (two rows on a phone), so it never covers the links. The studio
+    // sizes itself to the viewport around the bar, and on a phone the bar sits in its flow instead.
+    <footer className={`min-h-0 py-5 px-1 ${inStudio ? "" : "mb-24 md:mb-14"}`}>
       <div>
         <div
           className={`fixed flex justify-between items-center w-full z-10 p-4 bottom-0 left-0 pointer-events-none ${inStudio ? "max-lg:static" : ""}`}
@@ -37,45 +39,49 @@ export const Footer = () => {
           <SwitchTheme className="pointer-events-auto" />
         </div>
       </div>
-      <div className="w-full">
-        <ul className="menu menu-horizontal w-full">
-          <div className="flex flex-wrap justify-center items-center gap-3 text-sm w-full text-base-content/60">
+      <nav aria-label="Links" className="w-full">
+        <div className="flex flex-wrap justify-center items-center gap-x-3 gap-y-1 text-sm w-full text-base-content/70">
+          <a
+            href="https://github.com/jmgomezl/scaffold-hbar-launchblocks"
+            target="_blank"
+            rel="noreferrer"
+            className="link hover:text-primary"
+          >
+            LaunchBlocks on GitHub
+          </a>
+          <span aria-hidden="true" className="opacity-30 max-sm:hidden">
+            |
+          </span>
+          <span>
+            Built on{" "}
             <a
-              href="https://github.com/jmgomezl/scaffold-hbar-launchblocks"
+              href="https://hedera.com/"
               target="_blank"
               rel="noreferrer"
-              className="link hover:text-primary"
+              className="font-semibold link hover:text-primary"
             >
-              LaunchBlocks on GitHub
+              Hedera
             </a>
-            <span className="opacity-30">|</span>
-            <span>
-              Built on{" "}
-              <a
-                href="https://hedera.com/"
-                target="_blank"
-                rel="noreferrer"
-                className="font-semibold link hover:text-primary"
-              >
-                Hedera
-              </a>
-            </span>
-            <span className="opacity-30">|</span>
-            <a
-              href="https://github.com/hedera-dev/scaffold-hbar"
-              target="_blank"
-              rel="noreferrer"
-              className="link hover:text-primary"
-            >
-              Scaffold-HBAR
-            </a>
-            <span className="opacity-30">|</span>
-            <a href="https://docs.hedera.com/" target="_blank" rel="noreferrer" className="link hover:text-primary">
-              Docs
-            </a>
-          </div>
-        </ul>
-      </div>
-    </div>
+          </span>
+          <span aria-hidden="true" className="opacity-30 max-sm:hidden">
+            |
+          </span>
+          <a
+            href="https://github.com/hedera-dev/scaffold-hbar"
+            target="_blank"
+            rel="noreferrer"
+            className="link hover:text-primary"
+          >
+            Scaffold-HBAR
+          </a>
+          <span aria-hidden="true" className="opacity-30 max-sm:hidden">
+            |
+          </span>
+          <a href="https://docs.hedera.com/" target="_blank" rel="noreferrer" className="link hover:text-primary">
+            Docs
+          </a>
+        </div>
+      </nav>
+    </footer>
   );
 };

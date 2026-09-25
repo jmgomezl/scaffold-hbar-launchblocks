@@ -115,6 +115,7 @@ describe("readLaunch()", () => {
         label: "month1",
         executedAt: "2026-10-22T05:02:15.500Z",
         executesAt: "2026-10-23T05:02:15.046Z",
+        amount: "250000",
         deleted: false,
       },
       {
@@ -122,6 +123,7 @@ describe("readLaunch()", () => {
         label: "month2",
         executedAt: null,
         executesAt: "2026-11-22T05:02:16.945Z",
+        amount: "250000",
         deleted: false,
       },
     ]);

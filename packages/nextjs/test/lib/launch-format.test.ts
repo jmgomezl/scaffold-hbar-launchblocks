@@ -4,9 +4,11 @@ import {
   fieldLabel,
   formatAmount,
   linkFor,
+  loggedAmount,
   loggedDate,
   priceChange,
   relativeTime,
+  saucerswapPoolUrl,
 } from "~~/app/launches/_lib/format";
 
 describe("launch page formatting", () => {
@@ -17,6 +19,8 @@ describe("launch page formatting", () => {
     expect(fieldLabel("lpTokenId")).toBe("LP token id");
     expect(fieldLabel("firstTradeTx")).toBe("First trade transaction");
     expect(fieldLabel("month1")).toBe("Month 1");
+    expect(fieldLabel("poolUrl")).toBe("Pool URL");
+    expect(fieldLabel("dex")).toBe("DEX");
   });
 
   it("links ids to HashScan by what the key says they are, and only https URLs as they are", () => {
@@ -59,5 +63,21 @@ describe("launch page formatting", () => {
     const now = Date.parse("2026-09-25T00:00:00Z");
     expect(relativeTime("2026-10-23T00:00:00Z", now)).toBe("in 28 days");
     expect(relativeTime("2026-09-24T21:00:00Z", now)).toBe("3 hours ago");
+  });
+
+  it("links only what it names honestly, and fixes SaucerSwap's old pool path", () => {
+    expect(linkFor("testnet", "poolUrl", "https://hashscan.io@elsewhere.example/x")).toBeNull();
+    expect(saucerswapPoolUrl("https://testnet.saucerswap.finance/liquidity/0.0.5")).toBe(
+      "https://testnet.saucerswap.finance/pool/0.0.5",
+    );
+    expect(saucerswapPoolUrl("https://saucerswap.finance.evil.example/pool/0.0.5")).toBeNull();
+    expect(saucerswapPoolUrl("javascript:alert(1)")).toBeNull();
+  });
+
+  it("groups logged whole numbers, and leaves ids and short numbers alone", () => {
+    expect(loggedAmount("70710677118")).toBe("70,710,677,118");
+    expect(loggedAmount(1000000)).toBe("1,000,000");
+    expect(loggedAmount("0.0.10674240")).toBeNull();
+    expect(loggedAmount("250")).toBeNull();
   });
 });

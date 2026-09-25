@@ -140,15 +140,24 @@
   opacity: 80%;
 }
 
-.hedera-gradient {
-  background: linear-gradient(135deg, #8259ef 0%, #0031ff 100%);
+/* In the components layer, so utilities such as dark:bg-none can override them. */
+@layer components {
+  .hedera-gradient {
+    background: linear-gradient(135deg, #8259ef 0%, #0031ff 100%);
+  }
+
+  .hedera-gradient-text {
+    background: linear-gradient(135deg, #8259ef 0%, #0031ff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
 }
 
-.hedera-gradient-text {
-  background: linear-gradient(135deg, #8259ef 0%, #0031ff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+/* The brand violet reads at 3.7:1 as text on the dark base colours; text and links take a lighter violet (6.9:1). */
+[data-theme="dark"] .link-primary,
+[data-theme="dark"] .text-primary {
+  color: #a58bff;
 }
 
 /*

@@ -18,9 +18,17 @@ const ScaffoldHbarApp = ({ children }: { children: React.ReactNode }) => {
   return (
     <>
       <div className="flex flex-col min-h-screen">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-base-100 focus:px-4 focus:py-2 focus:shadow-lg"
+        >
+          Skip to content
+        </a>
         <Header />
         <LocalChainErrorBanner />
-        <main className="relative flex flex-col flex-1">{children}</main>
+        <main id="main" className="relative flex flex-col flex-1">
+          {children}
+        </main>
         <Footer />
       </div>
       <Toaster />

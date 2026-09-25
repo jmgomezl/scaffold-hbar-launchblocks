@@ -5,11 +5,13 @@ import { getMetadata } from "~~/utils/scaffold-hbar/getMetadata";
 export const metadata = getMetadata({
   title: "Debug Contracts",
   description: "Debug your deployed 🏗 Scaffold-HBAR contracts in an easy way",
+  path: "/debug",
 });
 
 const Debug: NextPage = () => {
   return (
-    <>
+    // Scaffold's hidden unit tooltips are wider than a phone; clipping them stops the page scrolling sideways.
+    <div className="overflow-x-clip">
       <DebugContracts />
       <div className="text-center mt-8 bg-secondary p-10">
         <h1 className="text-4xl my-0">Debug Contracts</h1>
@@ -21,7 +23,7 @@ const Debug: NextPage = () => {
           </code>{" "}
         </p>
       </div>
-    </>
+    </div>
   );
 };
 

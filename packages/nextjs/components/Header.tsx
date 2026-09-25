@@ -60,9 +60,10 @@ export const HeaderMenuLinks = () => {
             <Link
               href={href}
               passHref
+              aria-current={isActive ? "page" : undefined}
               className={`${
                 isActive ? "bg-primary/10 text-primary font-semibold" : "hover:bg-primary/5"
-              } py-1.5 px-3 text-sm rounded-full gap-2 grid grid-flow-col transition-colors`}
+              } py-1.5 px-3 text-sm rounded-full gap-2 grid grid-flow-col transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary`}
             >
               {icon}
               <span>{label}</span>
@@ -88,10 +89,17 @@ export const Header = () => {
   });
 
   return (
-    <div className="sticky lg:static top-0 navbar bg-base-100 min-h-0 shrink-0 justify-between z-20 shadow-sm border-b border-base-300 px-0 sm:px-2">
-      <div className="navbar-start w-auto lg:w-1/2">
-        <details className="dropdown" ref={burgerMenuRef}>
-          <summary className="ml-1 btn btn-ghost lg:hidden hover:bg-transparent">
+    <header className="sticky lg:static top-0 navbar bg-base-100 min-h-0 shrink-0 justify-between z-20 shadow-sm border-b border-base-300 px-0 sm:px-2">
+      <div className="navbar-start w-auto xl:w-1/2">
+        <details
+          className="dropdown"
+          ref={burgerMenuRef}
+          onKeyDown={event => {
+            if (event.key === "Escape") burgerMenuRef.current?.removeAttribute("open");
+          }}
+        >
+          {/* The full menu needs about 1,120px beside the wallet button; below that, it folds in here. */}
+          <summary aria-label="Menu" className="ml-1 btn btn-ghost xl:hidden hover:bg-transparent">
             <Bars3Icon className="h-1/2" />
           </summary>
           <ul
@@ -112,16 +120,18 @@ export const Header = () => {
           <LaunchBlocksMark className="w-9 h-9" />
           <div className="hidden sm:flex flex-col">
             <span className="font-bold leading-tight text-base">LaunchBlocks</span>
-            <span className="text-[10px] tracking-wider uppercase text-base-content/50 font-medium">
+            <span className="text-[10px] tracking-wider uppercase text-base-content/70 font-medium">
               on Scaffold-HBAR
             </span>
           </div>
         </Link>
-        <ul className="hidden lg:flex lg:flex-nowrap menu menu-horizontal px-1 gap-2">
-          <HeaderMenuLinks />
-        </ul>
+        <nav aria-label="Main" className="hidden xl:block">
+          <ul className="flex flex-nowrap menu menu-horizontal px-1 gap-2">
+            <HeaderMenuLinks />
+          </ul>
+        </nav>
       </div>
       <div className="navbar-end grow mr-4">{inStudio ? null : <RainbowKitCustomConnectButton />}</div>
-    </div>
+    </header>
   );
 };

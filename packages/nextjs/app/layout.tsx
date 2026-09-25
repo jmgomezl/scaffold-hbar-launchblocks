@@ -10,6 +10,7 @@ export const metadata = getMetadata({
   title: "LaunchBlocks",
   description:
     "A visual token launchpad for Hedera. Snap together an HTS token, an HCS launch log, a SaucerSwap pool, locked liquidity and scheduled unlocks, then run it on testnet or export it as code.",
+  path: "/",
 });
 
 const ScaffoldHbarApp = ({ children }: { children: React.ReactNode }) => {

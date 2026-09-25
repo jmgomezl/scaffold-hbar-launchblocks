@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { FindLaunch } from "../_components/FindLaunch";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Launch not found" };
 
 export default function LaunchNotFound() {
   return (

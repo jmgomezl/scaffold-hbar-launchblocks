@@ -78,6 +78,8 @@ export type LaunchSchedule = {
   executedAt: string | null;
   /** ISO time the network runs it, when the log or the schedule says. */
   executesAt: string | null;
+  /** Whole tokens it moves or mints, when the log says. */
+  amount: string | null;
   deleted: boolean;
 };
 
@@ -242,7 +244,7 @@ async function readLock(
 ): Promise<LaunchLock | null> {
   const contractId = stringField(event, "lock");
   const lpTokenId = stringField(event, "lpTokenId");
-  if (!contractId || !lpTokenId || !ENTITY_ID.test(contractId)) return null;
+  if (!contractId || !lpTokenId || !ENTITY_ID.test(contractId) || !ENTITY_ID.test(lpTokenId)) return null;
   const held = (await fetchTokenBalances(hedera, contractId, signal)).get(lpTokenId) ?? 0n;
   return {
     contractId,
@@ -268,20 +270,29 @@ async function readSchedules(
   events: Record<string, unknown>[],
   signal?: AbortSignal,
 ): Promise<LaunchSchedule[]> {
-  const found: { scheduleId: string; label: string; at: string | null }[] = [];
+  const found: { scheduleId: string; label: string; at: string | null; amount: string | null }[] = [];
   const visit = (value: unknown, label: string) => {
     if (!value || typeof value !== "object" || found.length >= MAX_SCHEDULES) return;
     const record = value as Record<string, unknown>;
     const scheduleId = stringField(record, "schedule") ?? stringField(record, "scheduleId");
     if (scheduleId && ENTITY_ID.test(scheduleId) && !found.some(entry => entry.scheduleId === scheduleId)) {
-      found.push({ scheduleId, label, at: stringField(record, "at") ?? stringField(record, "executesAt") });
+      const amount = record.amount;
+      found.push({
+        scheduleId,
+        label,
+        at: stringField(record, "at") ?? stringField(record, "executesAt"),
+        amount:
+          typeof amount === "number" || (typeof amount === "string" && /^\d+(\.\d+)?$/.test(amount))
+            ? String(amount)
+            : null,
+      });
     }
     for (const [key, child] of Object.entries(record)) visit(child, key);
   };
   for (const event of events) visit(event, String(event.event ?? "schedule"));
 
   return Promise.all(
-    found.map(async ({ scheduleId, label, at }) => {
+    found.map(async ({ scheduleId, label, at, amount }) => {
       const schedule = await fetchSchedule(hedera, scheduleId, signal);
       const expiration = schedule?.expirationTime ? mirrorTimestampToIso(schedule.expirationTime) : null;
       return {
@@ -289,6 +300,7 @@ async function readSchedules(
         label,
         executedAt: schedule?.executedTimestamp ? mirrorTimestampToIso(schedule.executedTimestamp) : null,
         executesAt: at ?? expiration,
+        amount,
         deleted: schedule?.deleted ?? false,
       };
     }),
