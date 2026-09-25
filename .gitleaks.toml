@@ -1,0 +1,9 @@
+# Secret scanning for CI (the "No committed secrets" job): gitleaks' default rules,
+# minus the Yarn release and plugins committed under .yarn/, which are minified
+# bundles whose identifiers look random to the entropy rules.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Vendored Yarn bundles"
+paths = ['''^\.yarn/(releases|plugins)/''']

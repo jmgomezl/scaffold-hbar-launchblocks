@@ -39,12 +39,12 @@ jobs:
 
     steps:
       - name: Checkout the check script
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           sparse-checkout: .github/scripts
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
 
@@ -68,7 +68,7 @@ jobs:
 
       - name: Upload the logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: scaffold-logs-${{ matrix.package-manager }}
           path: ${{ runner.temp }}/logs
