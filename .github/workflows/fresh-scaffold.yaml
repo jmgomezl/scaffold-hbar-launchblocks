@@ -1,0 +1,74 @@
+name: Fresh scaffold
+
+# Template maintenance: create a project from this template with the latest
+# Scaffold-HBAR CLI, as the bounty gate does, once with each package manager,
+# and check the result item by item (.github/scripts/check-scaffold.sh). The
+# daily run catches a new CLI release. It calls the CLI through npx, which
+# runs the same package as the gate's command, in a form the CLI leaves
+# alone when it rewrites a project's commands for npm.
+#
+# It only runs in the template's own repository: in a project scaffolded from
+# the template it does nothing, and you can delete it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fresh-scaffold-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scaffold:
+    if: github.repository == 'jmgomezl/scaffold-hbar-launchblocks'
+    name: Scaffold with ${{ matrix.package-manager }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        package-manager: [yarn, npm]
+
+    steps:
+      - name: Checkout the check script
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Git identity for the scaffold's first commit
+        run: |
+          git config --global user.name "Fresh scaffold check"
+          git config --global user.email "fresh-scaffold@users.noreply.github.com"
+
+      - name: Scaffold from the template
+        env:
+          # A pull request scaffolds its own branch; every other run scaffolds main, as the gate does.
+          TEMPLATE: ${{ github.repository }}${{ github.event_name == 'pull_request' && format('#{0}', github.head_ref) || '' }}
+          PACKAGE_MANAGER: ${{ matrix.package-manager }}
+        working-directory: ${{ runner.temp }}
+        run: npx --yes create-scaffold-hbar@latest app --template "$TEMPLATE" --package-manager "$PACKAGE_MANAGER" --yes --skip-hedera-skills --ci
+
+      - name: Check the project
+        env:
+          LOG_DIR: ${{ runner.temp }}/logs
+        run: .github/scripts/check-scaffold.sh "${{ runner.temp }}/app" "${{ matrix.package-manager }}"
+
+      - name: Upload the logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scaffold-logs-${{ matrix.package-manager }}
+          path: ${{ runner.temp }}/logs

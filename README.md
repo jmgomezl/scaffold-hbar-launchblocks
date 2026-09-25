@@ -6,6 +6,7 @@
 
 [![Live demo](https://img.shields.io/badge/live%20demo-launchblocks.aivylabs.xyz-4f46e5)](https://launchblocks.aivylabs.xyz)
 [![CI](https://github.com/jmgomezl/scaffold-hbar-launchblocks/actions/workflows/ci.yaml/badge.svg)](https://github.com/jmgomezl/scaffold-hbar-launchblocks/actions/workflows/ci.yaml)
+[![Fresh scaffold](https://github.com/jmgomezl/scaffold-hbar-launchblocks/actions/workflows/fresh-scaffold.yaml/badge.svg)](https://github.com/jmgomezl/scaffold-hbar-launchblocks/actions/workflows/fresh-scaffold.yaml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Node ≥ 20.18.3](https://img.shields.io/badge/node-%E2%89%A5%2020.18.3-339933)
 ![Hedera testnet](https://img.shields.io/badge/Hedera-testnet-8259EF)
@@ -352,6 +353,7 @@ With npm, put `--` before flags meant for the script, or they never reach it: `n
 
 An exported `launch.ts` calls this package's operations, so it runs inside the repo: save it in `packages/launchblocks/` and run `npx tsx --env-file=../nextjs/.env launch.ts`.
 
+**Checks on every push.** CI lints (a warning fails it), type-checks, runs the tests with coverage, checks the step table above, compiles the contracts and tests them on a Hedera fork, builds the app, and scans the whole git history for committed secrets with gitleaks. **Fresh scaffold** then creates a project from the published template with the latest Scaffold-HBAR CLI, once for each package manager (npm, then Yarn), and checks it item by item as the bounty gate does: files, install, lint, types, tests, a dry run of every gallery flow, the build, and the served app's routes. Its script runs locally too: `.github/scripts/check-scaffold.sh <project> <yarn|npm>`.
 
 ## Adding a step type
 
@@ -451,6 +453,7 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 - `PYTH_API_KEY` stays on the server too, and travels only to Hermes over HTTPS. Wallet runs get price updates through the app's route, which serves only the feeds the steps use and reuses an answer for a few seconds.
 - The operator is the treasury and holds every key it enables, so a flow never needs a second signer. The flip side: anyone who can reach an unguarded run endpoint can spend its HBAR. Use the run guards.
 - A wallet run never touches the operator key, and the page never sees the wallet's private key: the wallet signs each transaction after the visitor approves it. The studio offers wallet runs on testnet only.
+- CI scans every commit for secrets with gitleaks. Keys belong in the git-ignored `packages/nextjs/.env` only.
 - The code is experimental and unaudited. It is built for testnet.
 
 ## Credits
