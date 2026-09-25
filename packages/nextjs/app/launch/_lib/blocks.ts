@@ -124,7 +124,16 @@ export class OptionalTextField extends Blockly.FieldTextInput {
   }
 }
 
-const idValidator = (value: string) => (isValidStepId(value) ? value : null);
+/** A step id must be well formed and not used by another step block; Blockly keeps the old id otherwise. */
+function idValidator(this: Blockly.FieldTextInput, value: string): string | null {
+  if (!isValidStepId(value)) return null;
+  const block = this.getSourceBlock();
+  if (!block || block.isInFlyout || !block.workspace) return value;
+  const taken = stepBlocks(block.workspace).some(
+    other => other.id !== block.id && !other.isInFlyout && String(other.getFieldValue(ID_FIELD)) === value,
+  );
+  return taken ? null : value;
+}
 const numberValidator = (value: string) =>
   value === "" || /^-?\d*\.?\d*$/.test(value) || parseRef(value) ? value : null;
 
@@ -482,19 +491,48 @@ export function writeDocument(workspace: Blockly.WorkspaceSvg, catalog: Catalog,
 /**
  * Keep step ids unique (new blocks and pastes get the next free id) and
  * carry a rename through to every output reporter and text reference.
+ *
+ * What this does joins the event group that caused it, so one undo takes
+ * back a paste or a rename with everything it rewrote. When an undo or redo
+ * replays a rename, the reporters' references follow it again: their target
+ * is block state that undo does not restore by itself.
  */
 export function stepIdGuard(workspace: Blockly.WorkspaceSvg) {
+  const inGroupOf = (event: Blockly.Events.Abstract, work: () => void) => {
+    // An ungrouped event gets a group now, so the undo stack ties it to what follows.
+    const group = event.group || Blockly.utils.idGenerator.genUid();
+    event.group = group;
+    const replaying = !event.recordUndo;
+    Blockly.Events.setGroup(group);
+    if (replaying) Blockly.Events.setRecordUndo(false);
+    try {
+      work();
+    } finally {
+      if (replaying) Blockly.Events.setRecordUndo(true);
+      Blockly.Events.setGroup(false);
+    }
+  };
+
   return (event: Blockly.Events.Abstract) => {
     if (event.isUiEvent || workspace.isFlyout) return;
 
     if (event.type === Blockly.Events.BLOCK_CREATE) {
       const created = new Set((event as Blockly.Events.BlockCreate).ids ?? []);
       const blocks = stepBlocks(workspace);
-      for (const block of blocks.filter(candidate => created.has(candidate.id))) {
-        const id = String(block.getFieldValue(ID_FIELD));
-        const taken = blocks.filter(other => other.id !== block.id).map(other => String(other.getFieldValue(ID_FIELD)));
-        if (taken.includes(id)) block.setFieldValue(nextStepId(block.lbStepType ?? "step", taken), ID_FIELD);
-      }
+      const duplicates = blocks.filter(candidate => {
+        if (!created.has(candidate.id)) return false;
+        const id = String(candidate.getFieldValue(ID_FIELD));
+        return blocks.some(other => other.id !== candidate.id && String(other.getFieldValue(ID_FIELD)) === id);
+      });
+      if (!duplicates.length) return;
+      inGroupOf(event, () => {
+        for (const block of duplicates) {
+          const taken = stepBlocks(workspace)
+            .filter(other => other.id !== block.id)
+            .map(other => String(other.getFieldValue(ID_FIELD)));
+          block.setFieldValue(nextStepId(block.lbStepType ?? "step", taken), ID_FIELD);
+        }
+      });
       return;
     }
 
@@ -504,21 +542,26 @@ export function stepIdGuard(workspace: Blockly.WorkspaceSvg) {
       const oldId = String(change.oldValue);
       const newId = String(change.newValue);
       if (!oldId || oldId === newId) return;
-      for (const block of workspace.getAllBlocks(false)) {
-        if (block.type === REF_BLOCK) {
-          const state = (block as RefBlock).lbRef;
-          if (state?.stepId === oldId) applyRef(block, { ...state, stepId: newId });
-          continue;
-        }
-        for (const input of block.inputList) {
-          for (const field of input.fieldRow) {
-            if (!(field instanceof Blockly.FieldTextInput) || !field.name || field.name === ID_FIELD) continue;
-            const text = String(field.getValue() ?? "");
-            const renamed = renameReferencesInText(text, oldId, newId);
-            if (renamed !== text) field.setValue(renamed);
+      // A new block giving up an id another block holds (a paste, a second copy) renames nothing:
+      // the references still mean the block that keeps it.
+      if (stepBlocks(workspace).some(block => String(block.getFieldValue(ID_FIELD)) === oldId)) return;
+      inGroupOf(change, () => {
+        for (const block of workspace.getAllBlocks(false)) {
+          if (block.type === REF_BLOCK) {
+            const state = (block as RefBlock).lbRef;
+            if (state?.stepId === oldId) applyRef(block, { ...state, stepId: newId });
+            continue;
+          }
+          for (const input of block.inputList) {
+            for (const field of input.fieldRow) {
+              if (!(field instanceof Blockly.FieldTextInput) || !field.name || field.name === ID_FIELD) continue;
+              const text = String(field.getValue() ?? "");
+              const renamed = renameReferencesInText(text, oldId, newId);
+              if (renamed !== text) field.setValue(renamed);
+            }
           }
         }
-      }
+      });
     }
   };
 }
@@ -546,8 +589,11 @@ export function applyStatuses(workspace: Blockly.Workspace, statuses: Record<str
   }
 }
 
+/** A validation problem on a block: the param it is about, and the text to show. */
+export type BlockWarning = { field: string; text: string };
+
 /** Show validation problems on the blocks they belong to. */
-export function applyWarnings(workspace: Blockly.Workspace, warnings: ReadonlyMap<string, string[]>): void {
+export function applyWarnings(workspace: Blockly.Workspace, warnings: ReadonlyMap<string, BlockWarning[]>): void {
   const root = flowBlock(workspace);
   let block = root?.getInputTargetBlock(STEPS_INPUT) ?? null;
   const attached = new Set<string>();
@@ -564,9 +610,13 @@ export function applyWarnings(workspace: Blockly.Workspace, warnings: ReadonlyMa
         continue;
       }
       const messages = warnings.get(String(step.getFieldValue(ID_FIELD)));
-      step.setWarningText(messages?.length ? messages.join("\n") : null);
+      step.setWarningText(messages?.length ? messages.map(message => message.text).join("\n") : null);
       // A problem in a folded setting unfolds it, so the field is there to fix.
-      if (messages?.some(message => step.lbAdvancedKeys?.some(key => message.startsWith(`${key}:`)))) {
+      if (
+        messages?.some(message =>
+          step.lbAdvancedKeys?.some(key => message.field === key || message.field.startsWith(`${key}.`)),
+        )
+      ) {
         step.setFieldValue("TRUE", ADVANCED_FIELD);
       }
     }

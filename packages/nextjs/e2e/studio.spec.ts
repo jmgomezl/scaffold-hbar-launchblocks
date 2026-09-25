@@ -51,7 +51,64 @@ test("flags a problem as soon as a block's field is wrong, and blocks the run", 
   await expect(page.getByRole("button", { name: "Run on testnet" })).toBeDisabled();
   await badge.click();
   await expect(page.getByRole("tab", { name: /Problems/ })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByText(/createToken ·.*symbol/)).toBeVisible();
+  // Under the field's own label, in plain words.
+  await expect(page.getByText("createToken · Symbol: Required")).toBeVisible();
+});
+
+/** Edit a block's id field in place: the first editable field showing `from`. */
+async function renameStep(page: Page, from: string, to: string) {
+  await page
+    .locator(".blocklyEditableField", { hasText: new RegExp(`^${from}$`) })
+    .first()
+    .click();
+  const editor = page.locator(".blocklyHtmlInput");
+  await editor.fill(to);
+  await editor.press("Enter");
+}
+
+test("keeps the launch's references on the original block when a block is duplicated", async ({ page }) => {
+  await page.goto("/launch?example=hts-launch-basic");
+  await expectValid(page, 5);
+  // Duplicate "Mint tokens" (a paste takes the same path): the copy lands outside the Launch block.
+  await page.locator(".blocklyBlockCanvas .blocklyText", { hasText: "Mint tokens" }).first().click({ button: "right" });
+  await page.locator(".blocklyContextMenu").getByText("Duplicate", { exact: true }).click();
+
+  // The only problem is the loose copy; recordMint still reads the original mintReserve.
+  await expect(page.getByRole("button", { name: "1 problem" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run on testnet" })).toBeDisabled();
+  await page.getByRole("button", { name: "1 problem" }).click();
+  await expect(page.locator("aside li")).toHaveCount(1);
+  await expect(page.locator("aside li")).toContainText("is outside the Launch block");
+});
+
+test("refuses a step id another step already has", async ({ page }) => {
+  await page.goto("/launch?example=hts-launch-basic");
+  await expectValid(page, 5);
+  await renameStep(page, "createToken", "createLog");
+  // The field keeps its id, so nothing is rewired and the launch stays valid.
+  await expect(page.locator(".blocklyEditableField", { hasText: /^createToken$/ })).toHaveCount(1);
+  await expectValid(page, 5);
+});
+
+test("takes back a rename, and every reference it rewrote, with one undo", async ({ page }) => {
+  await page.goto("/launch?example=hts-launch-basic");
+  await expectValid(page, 5);
+  await renameStep(page, "createToken", "tokenA");
+  await expect(
+    page
+      .locator(".blocklyBlockCanvas")
+      // Blockly draws spaces as no-break spaces, which \s matches.
+      .getByText(/^tokenA\s▸/)
+      .first(),
+  ).toBeVisible();
+  await expectValid(page, 5);
+
+  await page.locator(".blocklyBlockCanvas .blocklyText", { hasText: "Mint tokens" }).first().click();
+  // Blockly takes Ctrl+Z and Cmd+Z; headless Chromium on macOS only delivers the Ctrl form.
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".blocklyBlockCanvas").getByText(/^tokenA/)).toHaveCount(0);
+  await expect(page.locator(".blocklyEditableField", { hasText: /^createToken$/ })).toHaveCount(1);
+  await expectValid(page, 5);
 });
 
 test("folds the settings most launches leave alone until asked", async ({ page }) => {

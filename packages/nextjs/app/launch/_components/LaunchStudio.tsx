@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { FlowIssue, GalleryEntry, StepRecord } from "../_lib/api";
 import { fetchCatalog, fetchGallery, fetchOperator, runFlowStream, toApiError, validateFlow } from "../_lib/api";
-import type { StepStatus, WorkspaceState } from "../_lib/blocks";
+import type { BlockWarning, StepStatus, WorkspaceState } from "../_lib/blocks";
 import { clearSharedFlowFromUrl, shareLinkFor, sharedFlowInUrl } from "../_lib/share";
 import { useHederaWallet } from "../_lib/wallet";
 import { runFlowWithWallet } from "../_lib/walletRun";
@@ -70,10 +70,39 @@ function writeStorage(key: string, value: string, storage: () => Storage): void 
   }
 }
 
-function issueText(issue: FlowIssue): string {
-  const field = issue.path.replace(/^steps\[\d+\]\.?(params\.)?/, "");
-  return field ? `${field}: ${issue.message}` : issue.message;
+/** The param a problem is about, relative to its step: `name`, `keys.admin`, `recipients[0].amount`. */
+function issueField(issue: FlowIssue): string {
+  return issue.path.replace(/^steps\[\d+\]\.?(params\.)?/, "");
 }
+
+/** The validator's wording, as a person filling in a block would put it. */
+function plainMessage(message: string): string {
+  if (/received undefined$/.test(message)) return "Required";
+  const expected = /^Invalid input: expected (\w+), received \w+$/.exec(message);
+  if (expected) return expected[1] === "int" ? "Must be a whole number" : `Must be a ${expected[1]}`;
+  return message === "Invalid input" ? "Not a valid value" : message;
+}
+
+/** A problem under the field's own label on the block, e.g. "Decimals: Must be a whole number". */
+function issueText(issue: FlowIssue, flow: FlowInput | null, catalog: Catalog | null): string {
+  const field = issueField(issue);
+  if (!field) return issue.message;
+  const type = flow?.steps.find(step => step.id === issue.stepId)?.type;
+  const label = (type && catalog?.get(type)?.ui.fields.find(spec => spec.key === field)?.label) || field;
+  return `${label}: ${plainMessage(issue.message)}`;
+}
+
+/** Whether `flow` is an example exactly as the studio would save it, rather than someone's own work. */
+function isUnchangedExample(flow: FlowInput, gallery: GalleryEntry[], cat: Catalog): boolean {
+  const canonical = (source: FlowInput) => JSON.stringify(editorToFlow(flowToEditor(source, cat).document, cat));
+  const json = JSON.stringify(flow);
+  return gallery.some(entry => canonical(entry.flow) === json);
+}
+
+const linkErrorText = (error: unknown) => {
+  const { message, hint } = toApiError(error);
+  return hint ? `${message}. ${hint}` : message;
+};
 
 /**
  * Launch Studio: the block editor plus everything around it — loading the
@@ -127,8 +156,20 @@ export function LaunchStudio() {
 
   const openFlow = useCallback(
     (source: FlowInput, cat: Catalog) => {
-      const { document: next, problems } = flowToEditor(source, cat);
-      problems.forEach(problem => notification.error(`${problem.stepId}: ${problem.message}`));
+      const { document: loaded } = flowToEditor(source, cat);
+      // A step type this app has no block for cannot be drawn, so it is left out, and saying so once is enough.
+      const unknown = loaded.steps.filter(step => !cat.get(step.type));
+      const next = unknown.length ? { ...loaded, steps: loaded.steps.filter(step => cat.get(step.type)) } : loaded;
+      if (unknown.length) {
+        notification.error(
+          `Left out ${unknown.map(step => `${step.id} (${step.type})`).join(", ")}: this app has no block for that step type.`,
+        );
+      }
+      if (source.network && source.network !== "testnet") {
+        notification.info(
+          `This launch was for ${source.network}. The studio runs on testnet, so it opens as a testnet launch.`,
+        );
+      }
       setDescription(next.description);
       setLoaded({ id: next.id, name: next.name });
       setRun({ phase: "idle" });
@@ -161,15 +202,13 @@ export function LaunchStudio() {
 
         // The saved flow is the user's own work unless it is exactly an example as
         // the studio would save it (same normalisation, same id).
-        const canonical = (flow: FlowInput) => JSON.stringify(editorToFlow(flowToEditor(flow, cat).document, cat));
-        const savedJson = saved ? JSON.stringify(saved) : "";
-        const savedIsOwnWork = !!saved?.steps?.length && !flows.some(entry => canonical(entry.flow) === savedJson);
+        const savedIsOwnWork = !!saved?.steps?.length && !isUnchangedExample(saved, flows, cat);
 
         let shared: FlowInput | null = null;
         try {
           shared = sharedFlowInUrl();
         } catch (error) {
-          notification.error(toApiError(error).message);
+          notification.error(linkErrorText(error));
           clearSharedFlowFromUrl();
         }
         if (shared) {
@@ -185,6 +224,8 @@ export function LaunchStudio() {
         const requested = new URLSearchParams(window.location.search).get("example");
         const example = requested ? flows.find(entry => entry.id === requested) : undefined;
         if (requested) window.history.replaceState(null, "", window.location.pathname);
+        if (requested && !example)
+          notification.error(`There is no example "${requested}". Opening your launch instead.`);
         if (
           example &&
           (!savedIsOwnWork || window.confirm(`Open the example "${example.title}"? It replaces your current launch.`))
@@ -211,7 +252,8 @@ export function LaunchStudio() {
       try {
         shared = sharedFlowInUrl();
       } catch (error) {
-        notification.error(toApiError(error).message);
+        notification.error(linkErrorText(error));
+        clearSharedFlowFromUrl();
         return;
       }
       if (!shared) return;
@@ -257,10 +299,10 @@ export function LaunchStudio() {
     if (panelMode !== "open") changePanelMode("open");
   };
 
-  // Remember the flow across reloads.
+  // Remember the flow across reloads, an empty one after New included.
   useEffect(() => {
-    if (flowJson && workspace.steps.length) writeStorage(STORAGE_KEY, flowJson, () => window.localStorage);
-  }, [flowJson, workspace.steps.length]);
+    if (flowJson && catalog) writeStorage(STORAGE_KEY, flowJson, () => window.localStorage);
+  }, [flowJson, catalog]);
 
   // Validate against the same registry the runner uses, shortly after edits settle.
   useEffect(() => {
@@ -268,6 +310,7 @@ export function LaunchStudio() {
     if (!flow.steps.length) {
       setIssues([]);
       setEstimate(null);
+      setValidating(false);
       return;
     }
     const controller = new AbortController();
@@ -293,13 +336,16 @@ export function LaunchStudio() {
   }, [flowJson]);
 
   const warnings = useMemo(() => {
-    const byStep = new Map<string, string[]>();
+    const byStep = new Map<string, BlockWarning[]>();
     for (const issue of issues) {
       if (!issue.stepId) continue;
-      byStep.set(issue.stepId, [...(byStep.get(issue.stepId) ?? []), issueText(issue)]);
+      const warning = { field: issueField(issue), text: issueText(issue, flow, catalog) };
+      byStep.set(issue.stepId, [...(byStep.get(issue.stepId) ?? []), warning]);
     }
     return byStep;
-  }, [issues]);
+    // issueText reads step types from the flow, which only matter when the issues change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [issues, catalog]);
 
   const statuses = useMemo(() => {
     const out: Record<string, StepStatus | undefined> = {};
@@ -337,7 +383,9 @@ export function LaunchStudio() {
   const running = run.phase === "running";
   const walletSigner = signerMode === "wallet" && wallet.state.status === "connected" ? wallet.signer() : null;
   const signerReady = signerMode === "operator" || !!walletSigner;
-  const canRun = !!flow && flow.steps.length > 0 && issues.length === 0 && !validating && !running && signerReady;
+  // A block outside the Launch block counts as a problem: it looks like part of the launch but would not run.
+  const problemCount = issues.length + workspace.detachedIds.length;
+  const canRun = !!flow && flow.steps.length > 0 && problemCount === 0 && !validating && !running && signerReady;
 
   const startRun = async (runToken?: string) => {
     if (!flow) return;
@@ -398,7 +446,11 @@ export function LaunchStudio() {
   };
 
   const confirmReplace = () =>
-    workspace.steps.length === 0 || window.confirm("Replace the current launch? Your changes will be lost.");
+    !flow ||
+    !catalog ||
+    workspace.steps.length === 0 ||
+    isUnchangedExample(flow, gallery, catalog) ||
+    window.confirm("Replace the current launch? Your changes will be lost.");
 
   if (loadError) {
     return (
@@ -463,9 +515,9 @@ export function LaunchStudio() {
         <div className="grow" />
         {validating ? (
           <span className="badge badge-ghost">checking…</span>
-        ) : issues.length ? (
+        ) : problemCount ? (
           <button className="badge badge-error cursor-pointer" onClick={() => showTab("problems")}>
-            {issues.length} problem{issues.length === 1 ? "" : "s"}
+            {problemCount} problem{problemCount === 1 ? "" : "s"}
           </button>
         ) : flow?.steps.length ? (
           <span className="badge badge-success">valid</span>
@@ -525,7 +577,7 @@ export function LaunchStudio() {
           onModeChange={changePanelMode}
           tab={tab}
           onTabChange={setTab}
-          problemCount={issues.length + workspace.detachedIds.length}
+          problemCount={problemCount}
           runSummary={runSummary}
         >
           {tab === "run" && (
@@ -545,6 +597,7 @@ export function LaunchStudio() {
                 steps={steps}
                 run={run}
                 estimate={issues.length ? null : estimate}
+                problems={problemCount}
                 payer={signerMode === "wallet" ? "your wallet" : "the default account"}
                 signedBy={
                   signerMode === "wallet"
@@ -569,7 +622,7 @@ export function LaunchStudio() {
                 {issues.map((issue, index) => (
                   <li key={`${issue.path}-${index}`} className="rounded-lg border border-error/40 p-2">
                     {issue.stepId && <span className="font-mono font-semibold">{issue.stepId} · </span>}
-                    {issueText(issue)}
+                    {issueText(issue, flow, catalog)}
                   </li>
                 ))}
               </ul>
@@ -580,7 +633,16 @@ export function LaunchStudio() {
         </StudioPanel>
       </div>
 
-      {flow && <ExportDialog flow={flow} open={exportOpen} onClose={() => setExportOpen(false)} />}
+      {flow && (
+        <ExportDialog
+          flow={flow}
+          problems={issues.map(
+            issue => `${issue.stepId ? `${issue.stepId} · ` : ""}${issueText(issue, flow, catalog)}`,
+          )}
+          open={exportOpen}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -30,6 +30,8 @@ type Props = {
   signedBy: string;
   /** Who pays, for the cost line: "the default account" or "your wallet". */
   payer: string;
+  /** Problems that keep the run from starting. */
+  problems: number;
 };
 
 const hbar = (value: number) => `${value.toLocaleString("en-US", { maximumFractionDigits: 2 })} ℏ`;
@@ -46,23 +48,24 @@ function CostSummary({ estimate, steps, payer }: { estimate: FeeEstimate; steps:
         </span>
       </summary>
       <div className="border-t border-base-300 px-3 py-2">
-        <table className="w-full">
+        {/* Fixed layout: the step column gives way (and truncates) so the numbers always fit the card. */}
+        <table className="w-full table-fixed">
           <thead className="opacity-60">
             <tr>
               <th className="text-left font-normal">Step</th>
-              <th className="text-right font-normal">Fee</th>
-              <th className="text-right font-normal">HBAR sent</th>
+              <th className="w-14 text-right font-normal">Fee</th>
+              <th className="w-[4.5rem] text-right font-normal">HBAR sent</th>
             </tr>
           </thead>
           <tbody>
             {estimate.lines.map(line => (
               <tr key={line.stepId}>
-                <td className="truncate pr-2">
+                <td className="truncate pr-2" title={`${line.stepId} ${labels.get(line.stepId) ?? ""}`.trim()}>
                   <span className="font-mono">{line.stepId}</span>{" "}
                   <span className="opacity-60">{labels.get(line.stepId)}</span>
                 </td>
-                <td className="text-right">{hbar(line.feeHbar)}</td>
-                <td className="text-right">{line.spentHbar ? hbar(line.spentHbar) : "—"}</td>
+                <td className="whitespace-nowrap text-right">{hbar(line.feeHbar)}</td>
+                <td className="whitespace-nowrap text-right">{line.spentHbar ? hbar(line.spentHbar) : "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -123,7 +126,7 @@ function LaunchPageCard({ topicId }: { topicId: string }) {
  * id and timing; expanding one shows its explorer links and details. Failed
  * steps start expanded so an error is never hidden behind a click.
  */
-export function RunPanel({ steps, run, estimate, signedBy, payer }: Props) {
+export function RunPanel({ steps, run, estimate, signedBy, payer, problems }: Props) {
   const records = run.phase === "idle" ? {} : run.records;
   // Explicit user choices per step; unset rows follow the default (open only when failed).
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -131,6 +134,13 @@ export function RunPanel({ steps, run, estimate, signedBy, payer }: Props) {
   const setAll = (open: boolean) => setExpanded(Object.fromEntries(steps.map(step => [step.id, open])));
 
   if (run.phase === "idle") {
+    if (!steps.length) {
+      return (
+        <p className="text-sm opacity-70">
+          Drag steps from the toolbox into the Launch block. Each one becomes a transaction, run in order.
+        </p>
+      );
+    }
     return (
       <div className="space-y-3 text-sm">
         <p>
@@ -138,7 +148,11 @@ export function RunPanel({ steps, run, estimate, signedBy, payer }: Props) {
           <strong>testnet</strong>, signed by {signedBy}.
         </p>
         {estimate && <CostSummary estimate={estimate} steps={steps} payer={payer} />}
-        <p className="opacity-70">Press Run to watch each block light up as its transaction reaches consensus.</p>
+        <p className="opacity-70">
+          {problems
+            ? `Fix the ${problems === 1 ? "problem" : `${problems} problems`} in the Problems tab, then press Run.`
+            : "Press Run to watch each block light up as its transaction reaches consensus."}
+        </p>
       </div>
     );
   }

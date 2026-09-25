@@ -25,7 +25,7 @@ export type WalletState =
   | { status: "ready"; extensions: WalletExtension[] }
   | { status: "connecting"; extensions: WalletExtension[] }
   | { status: "connected"; accountId: string; extensions: WalletExtension[] }
-  | { status: "error"; message: string; extensions: WalletExtension[] };
+  | { status: "error"; message: string; extensions: WalletExtension[]; cancelled?: boolean };
 
 let connectorPromise: Promise<DAppConnector> | null = null;
 
@@ -88,12 +88,14 @@ function onSessionChange(connector: DAppConnector, listener: () => void): () => 
   };
 }
 
-function messageOf(error: unknown): string {
-  if (isStalePage(error)) return "LaunchBlocks was updated while this page was open. Reload the page to connect.";
+/** What went wrong, and whether it was the visitor closing the prompt: that is a choice, not an error. */
+function failureOf(error: unknown): { message: string; cancelled?: boolean } {
+  if (isStalePage(error))
+    return { message: "LaunchBlocks was updated while this page was open. Reload the page to connect." };
   const text = error instanceof Error ? error.message : String(error);
   return /reject|closed|cancel/i.test(text)
-    ? "Connection cancelled. Try again, or run with the default account."
-    : text;
+    ? { message: "Connection cancelled. Try again, or run with the default account.", cancelled: true }
+    : { message: text };
 }
 
 /** The wallet connection, loaded when `enabled` first turns on. */
@@ -124,7 +126,7 @@ export function useHederaWallet(enabled: boolean) {
         timer = setTimeout(refresh, 800);
         unsubscribe = onSessionChange(loaded, refresh);
       },
-      error => !cancelled && setState({ status: "error", message: messageOf(error), extensions: [] }),
+      error => !cancelled && setState({ status: "error", ...failureOf(error), extensions: [] }),
     );
     return () => {
       cancelled = true;
@@ -144,7 +146,7 @@ export function useHederaWallet(enabled: boolean) {
         else await current.openModal(undefined, true);
         refresh();
       } catch (error) {
-        setState({ status: "error", message: messageOf(error), extensions });
+        setState({ status: "error", ...failureOf(error), extensions });
       }
     },
     [refresh],

@@ -43,13 +43,25 @@ function recipeZip(recipe: HarnessRecipe): Blob {
  * Export the flow as JSON (re-importable, runnable with core:run), as a
  * launch.ts script, or as a Hedera Harness recipe.
  */
-export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: boolean; onClose: () => void }) {
+export function ExportDialog({
+  flow,
+  problems,
+  open,
+  onClose,
+}: {
+  flow: FlowInput;
+  /** Validation problems, as the Problems tab words them: launch.ts and the recipe need a valid flow. */
+  problems: string[];
+  open: boolean;
+  onClose: () => void;
+}) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [tab, setTab] = useState<Tab>("json");
   const [script, setScript] = useState<{ source?: string; error?: ApiError }>({});
   const [recipe, setRecipe] = useState<{ value?: HarnessRecipe; error?: ApiError }>({});
   const [recipeFile, setRecipeFile] = useState(0);
   const json = JSON.stringify(flow, null, 2);
+  const blocked = problems.length > 0;
 
   useEffect(() => {
     if (!open) return void dialog.current?.close();
@@ -59,7 +71,7 @@ export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: b
   }, [open]);
 
   useEffect(() => {
-    if (!open || tab !== "script") return;
+    if (!open || tab !== "script" || blocked) return;
     let cancelled = false;
     setScript({});
     generateScript(flow).then(
@@ -69,10 +81,10 @@ export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: b
     return () => {
       cancelled = true;
     };
-  }, [open, tab, flow]);
+  }, [open, tab, flow, blocked]);
 
   useEffect(() => {
-    if (!open || tab !== "harness") return;
+    if (!open || tab !== "harness" || blocked) return;
     setRecipe({});
     let cancelled = false;
     setRecipeFile(0);
@@ -83,10 +95,11 @@ export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: b
     return () => {
       cancelled = true;
     };
-  }, [open, tab, flow]);
+  }, [open, tab, flow, blocked]);
 
   const shownRecipeFile = recipe.value?.files[recipeFile];
-  const text = tab === "json" ? json : tab === "script" ? (script.source ?? "") : (shownRecipeFile?.content ?? "");
+  const text =
+    tab === "json" ? json : blocked ? "" : tab === "script" ? (script.source ?? "") : (shownRecipeFile?.content ?? "");
   const error = tab === "script" ? script.error : tab === "harness" ? recipe.error : undefined;
   const language = tab === "json" ? "json" : tab === "script" ? "typescript" : languageOf(shownRecipeFile?.path ?? "");
   const downloadLabel =
@@ -124,7 +137,21 @@ export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: b
         {tab === "harness" && recipe.value && (
           <RecipeSummary recipe={recipe.value} selected={recipeFile} onSelect={setRecipeFile} />
         )}
-        {error ? (
+        {blocked && tab !== "json" ? (
+          <div role="alert" className="alert alert-warning alert-soft text-xs">
+            <div>
+              <p className="font-semibold">
+                Fix {problems.length === 1 ? "this problem" : `these ${problems.length} problems`} first: a script or
+                recipe needs a valid launch.
+              </p>
+              <ul className="mt-1 list-disc pl-4">
+                {problems.map((problem, index) => (
+                  <li key={index}>{problem}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ) : error ? (
           <div className="alert alert-error text-xs">
             <div>
               <p>{error.message}</p>

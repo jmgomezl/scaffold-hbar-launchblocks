@@ -120,7 +120,9 @@ export function SignerPicker({
           )}
           {(wallet.status === "ready" || wallet.status === "error") && (
             <>
-              {wallet.status === "error" && <p className="text-error">{wallet.message}</p>}
+              {wallet.status === "error" && (
+                <p className={wallet.cancelled ? "opacity-70" : "text-error"}>{wallet.message}</p>
+              )}
               <div className="flex flex-wrap gap-1.5">
                 {extensions.map(extension => (
                   <button

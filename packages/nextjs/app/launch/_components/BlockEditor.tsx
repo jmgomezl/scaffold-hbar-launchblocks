@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { StepStatus, WorkspaceState } from "../_lib/blocks";
+import type { BlockWarning, StepStatus, WorkspaceState } from "../_lib/blocks";
 import {
   applyStatuses,
   applyWarnings,
@@ -43,7 +43,7 @@ type Props = {
   onChange: (state: WorkspaceState) => void;
   onLoadProblems?: (skippedStepIds: string[]) => void;
   statuses: Record<string, StepStatus | undefined>;
-  warnings: ReadonlyMap<string, string[]>;
+  warnings: ReadonlyMap<string, BlockWarning[]>;
   dark: boolean;
 };
 
@@ -122,6 +122,8 @@ export default function BlockEditor({ catalog, load, onChange, onLoadProblems, s
     const ws = workspace.current;
     if (!ws || !load) return;
     const skipped = writeDocument(ws, catalog, load.document);
+    // The old undo history names blocks that no longer exist; undoing into it would throw.
+    ws.clearUndo();
     if (skipped.length) onLoadProblems?.(skipped);
     const root = flowBlock(ws) as Blockly.BlockSvg | null;
     if (root) showLaunch(ws, root);

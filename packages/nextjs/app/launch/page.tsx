@@ -6,8 +6,14 @@ export const metadata = getMetadata({
   title: "Launch Studio",
   description:
     "Compose a Hedera token launch from blocks (HTS, HCS, the Schedule Service, contracts and SaucerSwap) and run it on testnet, signed by the app's account or your own wallet.",
+  path: "/launch",
 });
 
-const LaunchPage: NextPage = () => <LaunchStudio />;
+const LaunchPage: NextPage = () => (
+  <>
+    <h1 className="sr-only">Launch Studio</h1>
+    <LaunchStudio />
+  </>
+);
 
 export default LaunchPage;
