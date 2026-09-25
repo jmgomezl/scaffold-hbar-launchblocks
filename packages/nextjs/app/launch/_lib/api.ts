@@ -39,11 +39,27 @@ export type RunEvent =
 const BASE = "/api/launchblocks";
 
 /**
+ * A lazily loaded part of the app (the core for wallet runs, the wallet
+ * connector) that a deploy replaced after this page loaded.
+ */
+export function isStalePage(error: unknown): boolean {
+  const { name, message } = (error ?? {}) as { name?: unknown; message?: unknown };
+  return name === "ChunkLoadError" || /Loading (CSS )?chunk \S+ failed/.test(String(message ?? ""));
+}
+
+/**
  * Anything thrown during a request or run as an ApiError: the server's errors
  * and the core's LaunchBlocksErrors keep their code and hint; anything else
  * (a dropped connection, say) keeps its message under `fallbackCode`.
  */
 export function toApiError(error: unknown, fallbackCode = "REQUEST_FAILED"): ApiError {
+  if (isStalePage(error)) {
+    return {
+      code: "APP_UPDATED",
+      message: "LaunchBlocks was updated while this page was open, so part of it could not load.",
+      hint: "Reload the page, then run again. Nothing was sent.",
+    };
+  }
   const candidate = (error ?? {}) as Partial<ApiError>;
   return {
     code: typeof candidate.code === "string" ? candidate.code : fallbackCode,

@@ -60,7 +60,7 @@ export function RunPanel({ steps, run, hasPool, signedBy }: Props) {
   return (
     <div className="space-y-3 text-sm">
       {run.phase === "error" && (
-        <div className="alert alert-error flex-col items-start gap-1 py-2 text-xs">
+        <div className="alert alert-error flex-col items-start gap-1 py-2 text-xs [overflow-wrap:anywhere]">
           <span className="font-semibold">{run.error.code}</span>
           <span>{run.error.message}</span>
           {run.error.hint && <span className="opacity-80">{run.error.hint}</span>}

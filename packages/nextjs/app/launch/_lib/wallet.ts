@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isStalePage } from "./api";
 import type { DAppConnector } from "@hashgraph/hedera-wallet-connect/dist/lib/dapp";
 import type { ExtensionData } from "@hashgraph/hedera-wallet-connect/dist/lib/shared";
 import type { Signer } from "@hiero-ledger/sdk";
@@ -88,6 +89,7 @@ function onSessionChange(connector: DAppConnector, listener: () => void): () => 
 }
 
 function messageOf(error: unknown): string {
+  if (isStalePage(error)) return "LaunchBlocks was updated while this page was open. Reload the page to connect.";
   const text = error instanceof Error ? error.message : String(error);
   return /reject|closed|cancel/i.test(text)
     ? "Connection cancelled. Try again, or run with the default account."
