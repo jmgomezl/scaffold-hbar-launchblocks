@@ -14,6 +14,7 @@ import { stepCatalog } from "../registry/catalog";
 import type { StepRegistry } from "../registry/registry";
 import { runFlow } from "../runner/runner";
 import { createDefaultRegistry } from "../steps";
+import { LAUNCHBLOCKS_VERSION } from "../version";
 
 /**
  * LaunchBlocks as an MCP server, so a coding agent (Claude Code, Cursor, …)
@@ -81,7 +82,7 @@ export function createLaunchBlocksMcpServer(options: LaunchBlocksMcpOptions): Mc
   const registry = options.registry ?? createDefaultRegistry();
   const catalog = stepCatalog(registry);
   const log = options.log ?? (() => undefined);
-  const server = new McpServer({ name: "launchblocks", version: "1.0.0" }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "launchblocks", version: LAUNCHBLOCKS_VERSION }, { instructions: INSTRUCTIONS });
 
   const check = (flow: unknown) => {
     const result = registry.checkFlow(flow);
