@@ -274,6 +274,10 @@ const Home: NextPage = () => {
               launch you build can become a recipe of its own: in the studio, choose Export, then Harness recipe.
             </p>
             <CopyCommand command="yarn harness:run" />
+            {/* A .tsx file keeps its text when the CLI scaffolds with npm, so this stays true in every copy. */}
+            <p className="mt-2 text-xs text-base-content/70">
+              The recipe runs with Yarn, the template&apos;s default package manager.
+            </p>
             <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
               <a
                 href={`${REPO}/tree/main/.harness`}

@@ -11,6 +11,7 @@ import {
   publicRunHbarEstimate,
   publicStepGuard,
 } from "@sh/launchblocks";
+import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import "server-only";
@@ -172,6 +173,13 @@ function crossSite(req: Request): boolean {
  *
  * The caller must call `release()` when the run ends.
  */
+/** Compare a presented token with the configured one in constant time, so response timing reveals nothing. */
+function sameSecret(presented: string | null, expected: string): boolean {
+  if (presented === null) return false;
+  const [a, b] = [Buffer.from(presented), Buffer.from(expected)];
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 /** A 403 for a run another site's page started, or null. Checked before anything else, the body included. */
 export function crossSiteRefusal(req: Request): NextResponse | null {
   return crossSite(req)
@@ -193,7 +201,7 @@ export function guardRun(req: Request, flow: Flow): RunGuard {
   }
 
   const requiredToken = process.env.LAUNCHBLOCKS_RUN_TOKEN;
-  if (requiredToken && req.headers.get(RUN_TOKEN_HEADER) !== requiredToken) {
+  if (requiredToken && !sameSecret(req.headers.get(RUN_TOKEN_HEADER), requiredToken)) {
     return {
       refused: jsonError(401, "RUN_TOKEN_REQUIRED", `Runs on this deployment need the ${RUN_TOKEN_HEADER} header`),
     };

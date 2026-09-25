@@ -26,6 +26,14 @@ const defOf = (schema: ZodType): Def => (schema as unknown as { _zod: { def: Def
 /** Wrappers that hold one inner schema: `.optional()`, `.default()`, `.prefault()`, and the like. */
 const WRAPPERS = new Set(["optional", "nullable", "default", "prefault", "nonoptional", "readonly", "catch"]);
 
+/** The keys an object schema takes at its top level, through wrappers and transforms. */
+export function paramKeys(schema: ZodType): string[] {
+  const def = defOf(schema);
+  if (WRAPPERS.has(def.type) && def.innerType) return paramKeys(def.innerType);
+  if (def.type === "pipe" && def.in) return paramKeys(def.in);
+  return def.type === "object" && def.shape ? Object.keys(def.shape) : [];
+}
+
 export function unknownKeys(schema: ZodType, value: unknown, path = ""): UnknownKey[] {
   const def = defOf(schema);
   if (WRAPPERS.has(def.type) && def.innerType) return unknownKeys(def.innerType, value, path);

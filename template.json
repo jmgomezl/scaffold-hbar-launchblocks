@@ -83,7 +83,7 @@
               "command": "{run:harness:run}"
             },
             {
-              "text": "See .harness/README.md: the harness forbids .env files in the workspace, so export the operator in your shell."
+              "text": "See .harness/README.md: the harness forbids .env files in the workspace, so export the operator in your shell. The recipe's commands are fixed to the template's default package manager, so it needs a project scaffolded with it."
             }
           ]
         }

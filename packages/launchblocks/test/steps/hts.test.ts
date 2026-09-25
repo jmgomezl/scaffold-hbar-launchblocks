@@ -70,6 +70,20 @@ describe("hts.createToken codegen", () => {
   });
 });
 
+describe("hts.mint codegen", () => {
+  it("calls the operation the runner uses, with the flow's params", () => {
+    const imports: string[] = [];
+    const { body } = htsMint.codegen({
+      stepId: "mintReserve",
+      coreModule: "core",
+      expr: key => renderExpr({ tokenId: "{{steps.createToken.tokenId}}", amount: "250000" }[key]),
+      addImport: (_specifier, ...names) => imports.push(...names),
+    });
+    expect(body).toBe('return await mintFungibleToken(ctx, { tokenId: createToken.tokenId, amount: "250000" });');
+    expect(imports).toEqual(["mintFungibleToken"]);
+  });
+});
+
 describe("hts.mint / hts.airdrop inputs", () => {
   it("rejects zero amounts", () => {
     expect(htsMint.input.safeParse({ tokenId: "0.0.1", amount: 0 }).success).toBe(false);
@@ -77,10 +91,11 @@ describe("hts.mint / hts.airdrop inputs", () => {
     expect(htsMint.input.safeParse({ tokenId: "0.0.1", amount: "0.5" }).success).toBe(true);
   });
 
-  it("bounds airdrop recipients to 1..10", () => {
+  it("bounds airdrop recipients to 1..9, since the sender's debit is the tenth transfer", () => {
     expect(htsAirdrop.input.safeParse({ tokenId: "0.0.1", recipients: [] }).success).toBe(false);
-    const eleven = Array.from({ length: 11 }, (_, i) => ({ accountId: `0.0.${i}`, amount: 1 }));
-    expect(htsAirdrop.input.safeParse({ tokenId: "0.0.1", recipients: eleven }).success).toBe(false);
+    const ten = Array.from({ length: 10 }, (_, i) => ({ accountId: `0.0.${i}`, amount: 1 }));
+    expect(htsAirdrop.input.safeParse({ tokenId: "0.0.1", recipients: ten }).success).toBe(false);
+    expect(htsAirdrop.input.safeParse({ tokenId: "0.0.1", recipients: ten.slice(1) }).success).toBe(true);
   });
 });
 

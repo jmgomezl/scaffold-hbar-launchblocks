@@ -23,7 +23,7 @@ npx create-scaffold-hbar@latest --template jmgomezl/scaffold-hbar-launchblocks
 
 *A real run of `hts-launch-locked-liquidity` on testnet, started from the Launch Studio: a token, its launch log, a SaucerSwap pool, a `TokenLock` contract holding the pool's LP tokens, and two reads of the lock, in 36 seconds. Shown at three times speed.*
 
-**Contents:** [What you get](#what-you-get) · [Quick start](#quick-start) · [See it in action](#see-it-in-action) · [Verified on testnet](#verified-on-testnet) · [Launch pages and share links](#launch-pages-and-share-links) · [AI agents (MCP)](#use-it-from-an-ai-agent-mcp) · [How it works](#how-it-works) · [Steps](#steps) · [SaucerSwap](#the-saucerswap-integration) · [Locking and unlocks](#locking-liquidity-and-scheduling-unlocks) · [Pyth](#pricing-a-launch-in-us-dollars-with-pyth) · [Adding a step](#adding-a-step-type) · [Hedera Harness](#extending-it-with-hedera-harness) · [Deploying](#deploying-the-studio) · [Troubleshooting](#troubleshooting)
+**Contents:** [What you get](#what-you-get) · [Quick start](#quick-start) · [See it in action](#see-it-in-action) · [Verified on testnet](#verified-on-testnet) · [Launch pages and share links](#launch-pages-and-share-links) · [AI agents (MCP)](#use-it-from-an-ai-agent-mcp) · [How it works](#how-it-works) · [Steps](#steps) · [SaucerSwap](#the-saucerswap-integration) · [Locking and unlocks](#locking-liquidity-and-scheduling-unlocks) · [Pyth](#pricing-a-launch-in-us-dollars-with-pyth) · [Adding a step](#adding-a-step-type) · [Hedera Harness](#extending-it-with-hedera-harness) · [Environment variables](#environment-variables) · [Scripts](#scripts) · [Deploying](#deploying-the-studio) · [Troubleshooting](#troubleshooting) · [Security notes](#security-notes)
 
 ## What you get
 
@@ -43,7 +43,7 @@ npx create-scaffold-hbar@latest --template jmgomezl/scaffold-hbar-launchblocks
 
 ## Quick start
 
-**You need:** Node.js ≥ 20.18.3, Git, and a Hedera testnet account with 60–80 ℏ for a full launch ([what it costs](#what-a-launch-costs)).
+**You need:** Node.js ≥ 20.18.3, Git, and a Hedera testnet account with 60–80 ℏ for a full launch ([what it costs](#what-a-launch-costs)). If you pick the template's default package manager, run `corepack enable` once first: the project pins its version in `package.json`. The CLI installs the dependencies; after a plain `git clone`, install them yourself.
 
 1. **Scaffold the project** (the CLI asks which package manager to use; both work) and go into it:
 
@@ -52,7 +52,7 @@ npx create-scaffold-hbar@latest --template jmgomezl/scaffold-hbar-launchblocks
    cd <your-project>
    ```
 
-2. **Fund an operator.** Create a testnet account at [portal.hedera.com](https://portal.hedera.com/) and top it up from the [faucet](https://portal.hedera.com/faucet).
+2. **Fund an operator.** Create an **ECDSA** testnet account at [portal.hedera.com](https://portal.hedera.com/) and top it up from the [faucet](https://portal.hedera.com/faucet). Copy its account id and its **DER-encoded** private key (it starts with `3030`): a DER key says which curve it is, so it needs no `HEDERA_OPERATOR_KEY_TYPE`. ED25519 works for the app too, but the Harness recipe needs ECDSA.
 
 3. **Configure it:**
 
@@ -60,7 +60,7 @@ npx create-scaffold-hbar@latest --template jmgomezl/scaffold-hbar-launchblocks
    cp packages/nextjs/.env.example packages/nextjs/.env
    ```
 
-   Set `HEDERA_OPERATOR_ID` and `HEDERA_OPERATOR_KEY`. If the key is raw hex rather than DER, also set `HEDERA_OPERATOR_KEY_TYPE` (`ecdsa` or `ed25519`).
+   Replace the placeholder `HEDERA_OPERATOR_ID=0.0.xxxxx` with your account id and set `HEDERA_OPERATOR_KEY`. If the key is raw hex rather than DER, also set `HEDERA_OPERATOR_KEY_TYPE` (`ecdsa` or `ed25519`). Every other variable is optional: see [Environment variables](#environment-variables).
 
 4. **Compile the contracts.** The **Deploy contract** block deploys contracts from `packages/hardhat`, and a run that needs one refuses to start until it is compiled:
 
@@ -75,7 +75,7 @@ npx create-scaffold-hbar@latest --template jmgomezl/scaffold-hbar-launchblocks
    yarn core:check hts-launch-saucerswap
    ```
 
-   `core:doctor` confirms the key parses and controls the account (it compares the public key with the one the mirror node reports), that the account exists on testnet, and that the balance is enough; it never prints the key. `core:check` validates a flow and lists its steps without sending anything.
+   `core:doctor` confirms the key parses and controls the account (it compares the public key with the one the mirror node reports), that the account exists on testnet, and which example launches its balance covers, by their estimated cost; it never prints the key. `core:check` validates a flow, runs the checks a run makes before its first step (such as a compiled contract), and lists its steps with what each costs, without sending anything.
 
 6. **Launch.** From the terminal:
 
@@ -196,6 +196,8 @@ Every gallery flow opens an HCS topic and writes a JSON event to it at each mile
 
 ![The launch page for the locked-liquidity example in dark mode: the header names the token LaunchBlocks Locked Demo and its HCS log 0.0.10676438; cards show 1,000,000 LBL in circulation, the SaucerSwap price of 0.0002 HBAR with 50,000 LBL and 10 HBAR in the pool, and 707.10677118 LP tokens locked until Oct 23, 2026 (in 28 days); below, the log's first entry, Token launched](docs/images/launch-page.png)
 
+A launch log gets a submit key by default, so only the account that ran the launch can write to it. On a topic without one, anyone can post, so the page builds its cards only from the messages paid for by the account that wrote the first one, and marks the others.
+
 `/launches` opens one by topic id and lists [real launches on testnet](https://launchblocks.aivylabs.xyz/launches). The reader is `readLaunch` in `packages/launchblocks/src/launches/`, so the same record is available from code and from the [MCP server](#use-it-from-an-ai-agent-mcp).
 
 **Share** in the studio's toolbar copies a link such as `https://…/launch#flow=rVXBbts4EP0V…`: the flow, compressed (the locked-liquidity example fits in 1,230 characters), in the URL's fragment. Browsers never send the fragment to a server, so a shared launch is stored nowhere but in the link, and whoever opens it gets the same blocks to edit, validate and run with their own account or wallet.
@@ -220,8 +222,11 @@ All live in `packages/nextjs/.env` and are read on the server only. None of them
 | `LAUNCHBLOCKS_PUBLIC_HBAR_PER_HOUR` | no | `400` | With the policy on: the most HBAR all visitors' runs may cost in an hour, counted at each run's worst case. |
 | `LAUNCHBLOCKS_PUBLIC_MAX_HBAR_PER_STEP` | no | `25` | With the policy on: the most HBAR one step may deposit or trade. |
 | `LAUNCHBLOCKS_STUDIO_URL` | no | `http://localhost:3000` | For the [MCP server](#use-it-from-an-ai-agent-mcp) only: where its share links and launch pages point. |
+| `LAUNCHBLOCKS_ARTIFACTS_DIR` | no | `packages/hardhat/artifacts/contracts` | Where **Deploy contract** finds compiled contracts, for a script run from outside the project. |
 
-The one public variable is Scaffold-HBAR's `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`, used by RainbowKit and by the studio's wallet option. It falls back to a shared development id; set your own from [WalletConnect Cloud](https://cloud.reown.com) before you deploy.
+The public variables are Scaffold-HBAR's: `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`, used by RainbowKit and by the studio's wallet option, and `NEXT_PUBLIC_HEDERA_TESTNET_RPC_URL` and `NEXT_PUBLIC_HEDERA_MAINNET_RPC_URL`, the JSON-RPC relays for EVM wallets and Debug Contracts. The WalletConnect id falls back to a shared development id; set your own from [WalletConnect Cloud](https://cloud.reown.com) before you deploy.
+
+`packages/hardhat/.env` is separate: it holds only the Hardhat deployer key (`yarn hardhat:account:generate`), and flows never read it.
 
 ## How it works
 
@@ -229,14 +234,16 @@ The one public variable is Scaffold-HBAR's `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_I
 flowchart TB
   Studio["Launch Studio (Blockly)"] <-->|editor model| Flow[("flow JSON")]
   CLI["core:run"] --> Runner
+  MCP["MCP server (coding agents)"] --> Runner
   Flow -->|"POST /api/launchblocks/flows/run"| Runner["runner"]
   Flow -.->|"in the page, with a connected wallet"| Runner
   Flow --> Codegen["codegen"] --> Script["launch.ts"]
   Runner --> Registry["step registry: schema, executor, codegen, docs"]
-  Registry --> Ops["Hedera operations: HTS, HCS, HSS, contracts, SaucerSwap"]
+  Registry --> Ops["Hedera operations: HTS, HCS, HSS, contracts, SaucerSwap, Pyth"]
   Hardhat["packages/hardhat: compiled contracts"] -->|ABI and bytecode| Ops
   Ops --> Hedera[("Hedera testnet")]
   Ops --> Mirror[("mirror node: quotes, aliases, rates, contract reads")]
+  Pages["launch pages: /launches/&lt;topic&gt;"] -->|"the HCS log, and state now"| Mirror
 ```
 
 A **flow** is an ordered list of steps. Each step has a `type`, a camelCase `id`, and `params`. A param can use an earlier step's output with `{{steps.<id>.<key>}}`: a param that is exactly one reference keeps the output's type, and a reference inside longer text is interpolated.
@@ -268,7 +275,7 @@ The terminal can exercise the same path: `yarn core:run -- <flow> --wallet` runs
 
 | Package | What it holds |
 | --- | --- |
-| `packages/launchblocks` | The core, with no framework: flow schema, step registry, runner, codegen, Hedera and SaucerSwap operations, the terminal scripts, and about 420 unit tests. It has two browser entries: `@sh/launchblocks/editor` for the block editor, which a test keeps free of zod and the Hedera SDK, and `@sh/launchblocks/browser` for wallet runs, which a test keeps free of Node built-ins. |
+| `packages/launchblocks` | The core, with no framework: flow schema, step registry, runner, codegen, Hedera and SaucerSwap operations, the terminal scripts, and about 480 unit tests. It has two browser entries: `@sh/launchblocks/editor` for the block editor, which a test keeps free of zod and the Hedera SDK, and `@sh/launchblocks/browser` for wallet runs, which a test keeps free of Node built-ins. |
 | `packages/nextjs` | The Launch Studio (`app/launch`), API routes (`app/api/launchblocks`), and the Scaffold-HBAR app shell. |
 | `packages/hardhat` | The starter's contracts, tests and deploy scripts. |
 
@@ -279,9 +286,9 @@ The terminal can exercise the same path: `yarn core:run -- <flow> --wallet` runs
 Generated from the step definitions with `yarn core:docs`; CI fails if this table falls out of date.
 
 <!-- launchblocks:steps:start -->
-| Step | What it does | Services | Inputs | Outputs other steps can use |
+| Step | What it does | Services | Params | Outputs other steps can use |
 | --- | --- | --- | --- | --- |
-| `hts.createToken` | Create a fungible HTS token with configurable keys, supply type and custom fees. | HTS | `name`, `symbol`, `decimals`, `initialSupply`, `supplyType`, `maxSupply`, `memo`, `keys.admin`, `keys.supply`, `keys.freeze`, `keys.wipe`, `keys.pause`, `keys.kyc`, `keys.feeSchedule`, `fractionalFee.numerator`, `fractionalFee.denominator`, `fractionalFee.assessment`, `fixedHbarFee.amountHbar` | `tokenId`, `treasuryAccountId`, `transactionId`, `symbol`, `decimals`, `initialSupply` |
+| `hts.createToken` | Create a fungible HTS token with configurable keys, supply type and custom fees. | HTS | `name`, `symbol`, `decimals`, `initialSupply`, `supplyType`, `maxSupply`, `memo`, `keys: { admin, supply, freeze, wipe, pause, kyc, feeSchedule }`, `fractionalFee: { numerator, denominator, assessment }`, `fixedHbarFee: { amountHbar }` | `tokenId`, `treasuryAccountId`, `transactionId`, `symbol`, `decimals`, `initialSupply` |
 | `hts.mint` | Mint additional supply into the treasury (requires the supply key). | HTS | `tokenId`, `amount` | `tokenId`, `transactionId`, `newTotalSupply` |
 | `hts.transfer` | Transfer tokens from the treasury to an associated account. | HTS | `tokenId`, `to`, `amount`, `memo` | `to`, `transactionId` |
 | `hts.airdrop` | Airdrop tokens to early supporters without requiring association (HIP-904). | HTS | `tokenId`, `recipients`, `memo` | `transactionId`, `recipientCount`, `pendingCount` |
@@ -291,9 +298,9 @@ Generated from the step definitions with `yarn core:docs`; CI fails if this tabl
 | `hss.scheduleTransfer` | Schedule a token transfer from the treasury that the network runs later by itself, for vesting. | HSS, HTS | `tokenId`, `to`, `amount`, `delaySeconds`, `memo`, `adminKey` | `scheduleId`, `executesAt`, `scheduledTransactionId` |
 | `hss.scheduleMint` | Schedule a mint into the treasury that the network runs later by itself, for a supply unlock. | HSS, HTS | `tokenId`, `amount`, `delaySeconds`, `memo`, `adminKey` | `scheduleId`, `executesAt`, `scheduledTransactionId` |
 | `pyth.priceInUsd` | Price a pool in US dollars: the HBAR to pair with a token deposit, from Pyth's HBAR/USD feed. | SmartContract, MirrorNode, Pyth | `tokenAmount`, `tokenPriceUsd`, `maxAgeSeconds`, `maxConfidenceBps` | `tokenAmount`, `hbarAmount`, `hbarUsd`, `pythContractId`, `updateTransactionId` |
-| `saucerswap.createPool` | Create the token's first SaucerSwap V1 liquidity pool against HBAR, making it tradeable. | HTS, SmartContract, MirrorNode, SaucerSwap | `tokenId`, `tokenAmount`, `hbarAmount`, `slippageBps`, `deadlineSeconds`, `gasLimit` | `pairId`, `lpTokenId`, `liquidity`, `createPairTransactionId`, `transactionId`, `openingPriceHbar`, `creationFeeHbar` |
+| `saucerswap.createPool` | Create the token's first SaucerSwap V1 liquidity pool against HBAR, making it tradeable. | HTS, SmartContract, MirrorNode, SaucerSwap | `tokenId`, `tokenAmount`, `hbarAmount`, `slippageBps`, `deadlineSeconds`, `gasLimit`; JSON only: `feeBufferBps`, `createPairGasLimit` | `pairId`, `lpTokenId`, `liquidity`, `createPairTransactionId`, `transactionId`, `openingPriceHbar`, `creationFeeHbar` |
 | `saucerswap.swap` | Buy the token with HBAR through its SaucerSwap V1 pool, proving the market is live. | HTS, SmartContract, MirrorNode, SaucerSwap | `tokenId`, `hbarAmount`, `slippageBps`, `deadlineSeconds`, `gasLimit` | `transactionId`, `tokensOut`, `effectivePriceHbar` |
-| `contract.deploy` | Deploy a Hardhat-compiled contract to Hedera, with constructor arguments and token slots. | SmartContract, MirrorNode | `contract`, `arg1`, `arg2`, `arg3`, `arg4`, `autoAssociations`, `gas`, `initialHbar`, `adminKey` | `contractId`, `accountId`, `transactionId` |
+| `contract.deploy` | Deploy a Hardhat-compiled contract to Hedera, with constructor arguments and token slots. | SmartContract, MirrorNode | `contract`, `arg1`, `arg2`, `arg3`, `arg4`, `autoAssociations`, `gas`, `initialHbar`, `adminKey`; JSON only: `memo` | `contractId`, `accountId`, `transactionId` |
 | `contract.call` | Call a contract function: views and pure functions for free through the mirror node, others as a transaction. | SmartContract, MirrorNode | `contractId`, `function`, `arg1`, `arg2`, `arg3`, `arg4`, `payableHbar`, `gas` | `result`, `transactionId` |
 <!-- launchblocks:steps:end -->
 
@@ -353,8 +360,8 @@ It refuses a price older than `maxAgeSeconds` (120 by default; 0 accepts any age
 | Command | What it does |
 | --- | --- |
 | `yarn core:doctor` | Check the operator (key, account, network, balance) without spending anything. |
-| `yarn core:check <flow.json \| gallery-id>` | Validate a flow and list its steps; nothing is sent. |
-| `yarn core:run <flow.json \| gallery-id>` | Run a flow. Add `--codegen out.ts` to write the script, `--wallet` to sign through a `Signer` as a browser wallet would. Each run's full result is saved under `packages/launchblocks/runs/`. |
+| `yarn core:check <flow.json \| gallery-id>` | Validate a flow, make the checks a run makes before its first step, and list its steps with their cost; nothing is sent. |
+| `yarn core:run <flow.json \| gallery-id>` | Run a flow. `--dry-run` is `core:check`; `--codegen out.ts` also writes the script; `--env <path>` and `--network <net>` pick the operator's env file and network; `--wallet` signs through a `Signer` as a browser wallet would; `--help` lists them. File paths are relative to where you typed the command (npm) or to the project root. Each run's full result is saved under `packages/launchblocks/runs/`. |
 | `yarn next:dev` | Start the app with the Launch Studio at `/launch`. |
 | `yarn core:test` · `yarn next:test` | Unit tests (vitest) for the core, and for the API routes: run guards, the public-demo policy, error statuses, streaming. No network. |
 | `yarn next:e2e` | Drive the Launch Studio in Chromium (Playwright) against the production build: every example loads valid, a bad field is flagged, export works, a run without an operator explains why. Run `yarn next:build` and, once, `yarn next:e2e:install` first. The test server gets no operator, so nothing is spent. |
@@ -364,13 +371,13 @@ It refuses a price older than `maxAgeSeconds` (120 by default; 0 accepts any age
 | `yarn harness:doctor` · `yarn harness:validate` · `yarn harness:run` | The [Hedera Harness recipe](#extending-it-with-hedera-harness). |
 | `yarn lint` · `yarn check-types` · `yarn test` | Everything, across packages. |
 
-Gallery flows live in `packages/launchblocks/flows/`: `hts-launch-saucerswap` (the full launch), `hts-launch-locked-liquidity` (the launch with its LP tokens locked in a `TokenLock` for 30 days; about 77 ℏ), `hts-launch-usd-price` (the pool opened at a dollar price from Pyth; about 60 ℏ), `hts-launch-scheduled-unlocks` (a reserve that unlocks in two scheduled tranches; about 14 ℏ) and `hts-launch-basic` (token with a 1% fee, HCS log and reserve mint; no pool, about 27 ℏ).
+Gallery flows live in `packages/launchblocks/flows/`: `hts-launch-saucerswap` (the full launch), `hts-launch-locked-liquidity` (the launch with its LP tokens locked in a `TokenLock` for 30 days; about 77 ℏ), `hts-launch-usd-price` (the pool opened at a dollar price from Pyth; about 62 ℏ), `hts-launch-scheduled-unlocks` (a reserve that unlocks in two scheduled tranches; about 14 ℏ) and `hts-launch-basic` (token with a 1% fee, HCS log and reserve mint; no pool, about 27 ℏ).
 
-With npm, put `--` before flags meant for the script, or they never reach it: `npm run core:run -- <flow> --codegen out.ts`. `core:run` and `core:check` ignore a `--` from Yarn, so that form works with both.
+With npm, put `--` before flags meant for the script, or they never reach it: `npm run core:run -- <flow> --codegen out.ts`. `core:run` and `core:check` skip a stray `--`, so that form works with either package manager.
 
 An exported `launch.ts` calls this package's operations, so it runs inside the repo: save it in `packages/launchblocks/` and run `npx tsx --env-file=../nextjs/.env launch.ts`.
 
-**Checks on every push.** CI lints (a warning fails it), type-checks, runs the core tests with coverage and the API tests, checks the step table above, compiles the contracts and tests them on a Hedera fork, builds the app and drives the studio in Chromium, and scans the whole git history for committed secrets with gitleaks. **Fresh scaffold** then creates a project from the published template with the latest Scaffold-HBAR CLI, once for each package manager (npm, then Yarn), and checks it item by item as the bounty gate does: files, install, lint, types, tests, a dry run of every gallery flow, the build, the served app's routes, and the studio in a browser. Its script runs locally too: `.github/scripts/check-scaffold.sh <project> <yarn|npm>`.
+**Checks on every push.** CI lints (a warning fails it), type-checks, runs the core tests with coverage and the API tests, checks the step table above, compiles the contracts and tests them on a Hedera fork, builds the app and drives the studio in Chromium, and scans the whole git history for committed secrets with gitleaks. **Fresh scaffold** then creates a project from the published template with the latest Scaffold-HBAR CLI, once with each package manager the template supports, and checks it item by item as the bounty gate does: files, install, lint, types, tests, a dry run of every gallery flow, the build, the served app's routes, and the studio in a browser. Its script runs locally too: `.github/scripts/check-scaffold.sh <project> <package-manager>`.
 
 ## Adding a step type
 
@@ -389,13 +396,13 @@ Each step is one file under `packages/launchblocks/src/steps/<namespace>/`. The 
 
 The validators were checked in both directions. On the template as shipped they fail with 15 findings, all about the missing step. On a correct implementation they pass with none.
 
-**A full run passed.** `yarn harness:run` on a fresh clone had Claude Code build the step from `prd.md` in about five minutes, touching nothing under `packages/nextjs`. The harness then graded every tier: tests, lint, types and the build; the booted app; all five acceptance assertions in the running studio; and, on testnet, its own funded account created token [`0.0.10700526`](https://hashscan.io/testnet/token/0.0.10700526) and burned 100,000 of its 1,000,000 tokens. The agent's work is published unchanged on the [`harness/run-launchblocks-hts-burn-06e832`](https://github.com/jmgomezl/scaffold-hbar-launchblocks/tree/harness/run-launchblocks-hts-burn-06e832) branch ([its diff](https://github.com/jmgomezl/scaffold-hbar-launchblocks/commit/2dd34dd08f44f34e990230ac1153b5403d31a624)). Details, and how to run it, are in [.harness/README.md](.harness/README.md).
+**A full run passed.** A full recipe run on a fresh clone had Claude Code build the step from `prd.md` in about five minutes, touching nothing under `packages/nextjs`. The harness then graded every tier: tests, lint, types and the build; the booted app; all five acceptance assertions in the running studio; and, on testnet, its own funded account created token [`0.0.10700526`](https://hashscan.io/testnet/token/0.0.10700526) and burned 100,000 of its 1,000,000 tokens. The agent's work is published unchanged on the [`harness/run-launchblocks-hts-burn-06e832`](https://github.com/jmgomezl/scaffold-hbar-launchblocks/tree/harness/run-launchblocks-hts-burn-06e832) branch ([its diff](https://github.com/jmgomezl/scaffold-hbar-launchblocks/commit/2dd34dd08f44f34e990230ac1153b5403d31a624)). Details, and how to run it, are in [.harness/README.md](.harness/README.md).
 
 ![The Launch Studio during the harness's Tier 3 check: the Tokens · HTS toolbox is open, and below Create HTS token and Mint tokens is the agent-built Burn tokens block, with Token and Amount inputs](docs/images/harness-burn-block.png)
 
 *The **Burn tokens** block the agent added, in the studio's toolbox, as the harness's validator saw it. No frontend code changed: the studio found the step in the registry.*
 
-Before a run: the harness refuses env files in the workspace, so move `packages/nextjs/.env` aside and export `HEDERA_OPERATOR_ID` and an ECDSA `HEDERA_OPERATOR_KEY` in your shell instead; install Playwright's browser with `npx playwright install chromium`; and use Yarn, which the recipe assumes. `harness:doctor` checks all of it.
+Before a run: the harness refuses env files in the workspace, so move `packages/nextjs/.env` aside and export `HEDERA_OPERATOR_ID` and an ECDSA `HEDERA_OPERATOR_KEY` in your shell instead; and install Playwright's browser with `npx playwright install chromium`. The recipe's commands are fixed to the template's default package manager (see [.harness/README.md](.harness/README.md)), so it does not run in a project scaffolded with npm. `harness:doctor` checks all of it.
 
 ```bash
 yarn harness:doctor     # prerequisites and the recipe
@@ -453,12 +460,13 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 
 - Leave `LAUNCHBLOCKS_ALLOW_MAINNET` unset, and consider `LAUNCHBLOCKS_RUN_TOKEN`: every run spends the operator's HBAR.
 - Without a run token, set `LAUNCHBLOCKS_PUBLIC_DEMO=true`. Anyone can otherwise write a flow that sends the operator's HBAR away: a **Call contract** with HBAR attached to their own contract, or a pool or trade of a token they hold. The policy (`src/runner/public-policy.ts`) lets every gallery launch run, and refuses the rest before or during the run:
-  - value only goes to tokens and contracts the same run creates, and no contract call or deployment carries HBAR;
+  - value, tokens and messages only go to tokens, topics, accounts and contracts the same run creates; no contract call or deployment carries HBAR, and gas limits stay at their defaults;
   - at most `LAUNCHBLOCKS_PUBLIC_MAX_HBAR_PER_STEP` per deposit or trade, and 25 steps per flow;
   - one run at a time per visitor, and at most `LAUNCHBLOCKS_PUBLIC_HBAR_PER_HOUR` across all visitors, counted at each run's worst case.
+- A run posted from another site's page is refused (`CROSS_SITE_REFUSED`), and the run API takes only JSON bodies up to 256 KB, so no page can start runs from its visitors' browsers.
 - `LAUNCHBLOCKS_RUNS_PER_HOUR` (default 20) then limits each visitor: it counts runs per visitor, per server instance, and IPv6 visitors by their /64. It identifies visitors by `X-Real-IP`, which the proxy must set (`proxy_set_header X-Real-IP $remote_addr;` in nginx), rather than by the first `X-Forwarded-For` entry, which visitors can forge.
 - Behind nginx, keep response buffering off for `/api/launchblocks/flows/run`. The route already sends `X-Accel-Buffering: no` so run events stream.
-- A full launch takes about a minute; the route stops a run after 180 s.
+- A full launch takes about a minute; the route stops a run after 180 s, and asks serverless hosts for the same (`maxDuration`).
 - Wallet runs happen in the visitor's browser and spend their HBAR, so the run token and rate limit do not apply to them. Set your own `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`.
 
 ## Troubleshooting
@@ -466,6 +474,11 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 | Symptom | Cause and fix |
 | --- | --- |
 | `OPERATOR_MISSING` | `HEDERA_OPERATOR_ID` or `HEDERA_OPERATOR_KEY` is empty. Run `yarn core:doctor`. |
+| `OPERATOR_ID_INVALID`, `OPERATOR_KEY_INVALID` or `KEY_TYPE_INVALID` | The id is not `0.0.<number>`, the key does not parse, or `HEDERA_OPERATOR_KEY_TYPE` is not `ecdsa` or `ed25519`. Copy the DER key from the Portal, or set the type for a raw hex key. |
+| `NETWORK_MISMATCH` | The flow's `network` differs from `HEDERA_NETWORK`. Change one of them. |
+| `MAINNET_DISABLED` | Mainnet runs are off unless `LAUNCHBLOCKS_ALLOW_MAINNET=true`. |
+| `RUN_TOKEN_REQUIRED` or `RATE_LIMITED` | The deployment sets `LAUNCHBLOCKS_RUN_TOKEN` (the studio asks for it), or this visitor used up `LAUNCHBLOCKS_RUNS_PER_HOUR`. |
+| `CROSS_SITE_REFUSED` | The run was posted from another site's page. Start it from the studio on the same site. |
 | `INVALID_SIGNATURE`, or doctor says the key does not control the account | Wrong key for the account, or a raw hex key read as the wrong curve. Set `HEDERA_OPERATOR_KEY_TYPE`. |
 | `INSUFFICIENT_PAYER_BALANCE` | Top up at the [faucet](https://portal.hedera.com/faucet). A full launch needs 60–80 ℏ. |
 | `PUBLIC_RUN_REFUSED` | The deployment runs the public-run policy and the flow sends value to something it did not create, attaches HBAR to a contract, or moves too much HBAR at once. Wire the target from an earlier step, or run on your own deployment or with your own wallet. |
@@ -477,7 +490,8 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 | `Safe token transfer failed!` from a SaucerSwap contract | Almost always a long-zero recipient for an alias account (see [the integration](#the-saucerswap-integration)). Check the transaction's child records for the real status. |
 | `Safe multiple associations failed!` | Out of gas inside the pool contracts. Raise the step's gas limit. |
 | `Could not quote HBAR → …` straight after creating a pool | The mirror node has not caught up yet. The swap step retries; if you call the operations directly, wait a few seconds. |
-| `POOL_EXISTS` | That token already has a SaucerSwap pool against HBAR. Trade against it with `saucerswap.swap`. |
+| `POOL_EXISTS` | That token already has a funded SaucerSwap pool against HBAR. Trade against it with `saucerswap.swap`. (An empty pair left by a failed attempt is reused, not refused.) |
+| `POOL_TOKENS_SHORT` or `POOL_HBAR_SHORT` | The account cannot cover the deposit, or the deposit plus SaucerSwap's pair fee. Checked before the fee is paid, so nothing was sent. |
 | npm install fails with `ERESOLVE` | Make sure the root `.npmrc` (`legacy-peer-deps=true`) came with the scaffold; with npm, only the root file counts in a workspace project. |
 | `WALLET_REJECTED` | The transaction was declined in the wallet. Run again and approve each request, or switch **Sign with** back to the default account. |
 | `WALLET_KEY_UNSUPPORTED` | The connected account has a key list or threshold key. Connect an account with a single ED25519 or ECDSA key. |
@@ -493,6 +507,7 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 - The operator is the treasury and holds every key it enables, so a flow never needs a second signer. The flip side: anyone who can reach an unguarded run endpoint can spend its HBAR. Use the run guards.
 - A wallet run never touches the operator key, and the page never sees the wallet's private key: the wallet signs each transaction after the visitor approves it. The studio offers wallet runs on testnet only.
 - CI scans every commit for secrets with gitleaks. Keys belong in the git-ignored `packages/nextjs/.env` only.
+- Every response forbids framing (`frame-ancestors 'none'`, `X-Frame-Options: DENY`) and MIME sniffing, and error messages name a mirror node or Pyth provider by host only, so a key in a private provider's URL never reaches a page.
 - The code is experimental and unaudited. It is built for testnet.
 
 ## Credits

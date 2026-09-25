@@ -181,7 +181,8 @@ function header(flow: Flow, extra: readonly string[]): string {
     ...(flow.description ? ["", ...flow.description.split(/\r?\n|\u2028|\u2029/)] : []),
     "",
     "Regenerate from the flow JSON instead of editing by hand.",
-    `Requires HEDERA_OPERATOR_ID and HEDERA_OPERATOR_KEY for ${flow.network}.`,
+    `Requires HEDERA_OPERATOR_ID and HEDERA_OPERATOR_KEY for ${flow.network}, and HEDERA_OPERATOR_KEY_TYPE for a raw hex key.`,
+    "Run it from packages/launchblocks: npx tsx --env-file=../nextjs/.env launch.ts",
     ...(extra.length ? ["", ...extra] : []),
   ];
   // "*/" inside the text would close the comment early.

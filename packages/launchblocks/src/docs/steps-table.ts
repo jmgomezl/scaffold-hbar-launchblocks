@@ -1,5 +1,6 @@
 import type { StepRegistry } from "../registry/registry";
-import type { AnyStepDefinition, FieldSpec } from "../registry/types";
+import type { AnyStepDefinition } from "../registry/types";
+import { paramKeys } from "../registry/unknown-keys";
 
 /**
  * Markdown reference for every registered step, generated from the step
@@ -15,8 +16,24 @@ function escapeCell(text: string): string {
   return text.replace(/\|/g, "\\|").replace(/\n+/g, " ");
 }
 
-function inputList(fields: readonly FieldSpec[]): string {
-  return fields.map(field => `\`${field.key}\``).join(", ");
+/**
+ * A step's params as the JSON writes them: nested ones inside their object
+ * (`keys: { admin, supply }`), then those only JSON sets, not the editor.
+ */
+function paramList(definition: AnyStepDefinition): string {
+  const groups = new Map<string, string[]>();
+  for (const field of definition.ui.fields) {
+    const [head = field.key, ...rest] = field.key.split(".");
+    groups.set(head, [...(groups.get(head) ?? []), ...(rest.length ? [rest.join(".")] : [])]);
+  }
+  const shown = [...groups].map(([key, nested]) =>
+    nested.length ? `\`${key}: { ${nested.join(", ")} }\`` : `\`${key}\``,
+  );
+  const jsonOnly = paramKeys(definition.input).filter(key => !groups.has(key));
+  return [
+    shown.join(", "),
+    ...(jsonOnly.length ? [`JSON only: ${jsonOnly.map(key => `\`${key}\``).join(", ")}`] : []),
+  ].join("; ");
 }
 
 function outputList(definition: AnyStepDefinition): string {
@@ -26,10 +43,10 @@ function outputList(definition: AnyStepDefinition): string {
 export function renderStepsTable(registry: StepRegistry): string {
   const rows = registry.list().map(step => {
     const services = [...step.docs.hederaServices, ...(step.docs.integrations ?? [])].join(", ");
-    return `| \`${step.type}\` | ${escapeCell(step.docs.summary)} | ${services} | ${inputList(step.ui.fields)} | ${outputList(step)} |`;
+    return `| \`${step.type}\` | ${escapeCell(step.docs.summary)} | ${services} | ${paramList(step)} | ${outputList(step)} |`;
   });
   return [
-    "| Step | What it does | Services | Inputs | Outputs other steps can use |",
+    "| Step | What it does | Services | Params | Outputs other steps can use |",
     "| --- | --- | --- | --- | --- |",
     ...rows,
   ].join("\n");

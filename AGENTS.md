@@ -28,7 +28,7 @@ Package-prefixed scripts for package-specific work. Keep only truly cross-worksp
 # Local chain + deploy + frontend (separate terminals)
 yarn hardhat:chain    # Hedera-forked Hardhat node on 8545
 yarn workspace @sh/hardhat deploy --network localhost
-yarn next:start       # http://localhost:3000
+yarn next:start       # http://localhost:3000 (next:start and next:dev both run the dev server; next:serve serves a build)
 
 # Frontend only
 yarn next:dev
@@ -75,8 +75,10 @@ yarn hardhat:account
 ```
 src/
   flow/       schema.ts (FlowSchema, step ids/types), refs.ts ({{steps.<id>.<key>}} resolution)
-  registry/   types.ts (StepDefinition contract), define-step.ts, registry.ts (createRegistry, validateFlow)
-  runner/     runner.ts (runFlow → RunResult with per-step records, links, events)
+  registry/   types.ts (StepDefinition contract), define-step.ts, registry.ts (createRegistry, validateFlow),
+              unknown-keys.ts (params a step does not take), catalog.ts (the step catalog the editor, API and MCP serve)
+  runner/     runner.ts (runFlow → RunResult with per-step records, links, events; preflightFlow),
+              public-policy.ts (what a public demo lets anonymous visitors run)
   codegen/    typescript.ts (generateLaunchScript, renderExpr)
   contracts/  artifacts.ts (loadHardhatArtifact: ABI and bytecode from packages/hardhat/artifacts; node only)
   harness/    recipe.ts (generateHarnessRecipe: a flow → a Hedera Harness recipe; STEP_FEE_HBAR cost table)
@@ -88,9 +90,13 @@ src/
   steps/      one folder per namespace (hts/, hcs/, hss/, pyth/, saucerswap/, contract/), one file per step type
   launches/   read.ts (readLaunch: a launch rebuilt from its HCS log, plus its token, pool, lock and schedules now)
   mcp/        server.ts (createLaunchBlocksMcpServer: the MCP tools); scripts/mcp.ts runs it on stdio, bin/mcp.cjs starts it
+  docs/       steps-table.ts (the README's step table, generated from the registry)
+  gallery.ts  the example flows; their JSON lives in flows/
   errors.ts   LaunchBlocksError subclasses with stable `code`s
   browser.ts  the entry for wallet runs in the page (no Node built-ins); editor/ is the editor's entry,
               including editor/share.ts (a flow packed into a `/launch#flow=` link)
+flows/        the gallery's flow documents
+scripts/      run-flow.ts (core:run and core:check), doctor.ts (core:doctor), docs.ts (core:docs), harness-recipe.ts (core:harness), mcp.ts
 test/         mirrors src/; test/helpers/fake-steps.ts has network-free steps for runner/registry tests
 ```
 
@@ -110,24 +116,27 @@ A **step definition** (`defineStep({...})`) bundles, in one object:
 | `ui` | label, category, colour, `fields` (param → editor field; `advanced: true` folds a rarely changed one behind the block's "more settings" box) and `outputs` (what later steps may reference) |
 | `docs` | one-line summary, markdown details, Hedera services and integrations touched |
 | `execute(input, ctx)` | calls the step's operation (the SDK work lives in `src/hedera/ops/` or the integration's module); throw a `LaunchBlocksError` with a `hint` for user-fixable failures |
-| `preflight(params, ctx)` | optional: checks what the step will need before the flow's first step runs (Deploy contract checks its artifact is compiled) |
-| `codegen(ctx)` | body of an async function that does the same with the SDK and `return`s the outputs; use `ctx.expr(key)` for params and `ctx.addImport()` for imports |
+| `preflight(params, ctx)` | optional: checks what the step will need before the flow's first step runs (Deploy contract checks its artifact is compiled). Dry runs call it too, so `ctx` has the network and artifacts but no Hedera client |
+| `checkWiring(params, earlier)` | optional: checks against the earlier steps a param references, as written in the flow (Mint tokens refuses an amount more precise than the token the flow creates, and a token created without a supply key) |
+| `codegen(ctx)` | body of an async function that does the same with the SDK and `return`s the outputs; use `ctx.expr(key)` for params (`ctx.expr(key, { data: true })` for free-form data such as a message) and `ctx.addImport()` for imports |
+
+Validation also reports any param the `input` schema does not know, at any depth: nested params are objects (`"keys": { "admin": false }`), never dotted keys.
 
 #### Adding a step type
 
 Model a new step on **Mint tokens**: `mintFungibleToken` in `src/hedera/ops/tokens.ts` and `src/steps/hts/mint.ts`.
 
-1. Write the operation in `packages/launchblocks/src/hedera/ops/<area>.ts` (or the integration's module, like `src/saucerswap/`) and export it through that folder's `index.ts`, so a generated `launch.ts` can import it. Send transactions through `send`, `submit` or `sendContract` (rule 5), and give it a `build…` function that returns the unsent transaction, for tests.
+1. Write the operation in `packages/launchblocks/src/hedera/ops/<area>.ts` (or the integration's module, like `src/saucerswap/`) and export it through that folder's `index.ts`, so a generated `launch.ts` can import it. Send transactions through `send`, `submit` or `sendContract` (rule 5), and give it a `build…` function that returns the unsent transaction, for tests. Steps and operations also run in the page for wallet runs, so they use no Node built-ins (`fs`, `path`, `dotenv`); `test/editor/browser-safe.test.ts` fails on any.
 2. Create `packages/launchblocks/src/steps/<namespace>/<action>.ts` exporting `defineStep({...})`: `execute` calls the operation, and `codegen` is `ctx => callOperation(ctx, "<operation>", [<param keys>])` from `steps/shared.ts`. Reuse the field kinds in `registry/types.ts` (`tokenId`, `accountId`, `topicId`, `amount`, …): kinds drive which earlier outputs the editor offers to an input. Entity ids, `amount` and `value` are sockets; a `value` socket takes any output, for generic inputs like contract arguments.
 3. Register it in `packages/launchblocks/src/steps/index.ts`, in `BUILT_IN_STEPS` and the named exports.
-4. Test it without a network: in `test/steps/<namespace>.test.ts`, parse `input` and `outputExample` and assert the `codegen` body; in `test/hedera/ops/<area>.test.ts`, check the `build…` transaction. If the step reads anything back, cover the wallet path as `test/hedera/wallet.test.ts` does. Every registered step is also checked by the invariants in `test/steps/built-in-steps.test.ts`.
+4. Test it without a network: in `test/steps/<namespace>.test.ts` (or a file of its own, `test/steps/<namespace>/<action>.test.ts`, as the Harness recipe asks), parse `input` and `outputExample` and assert the `codegen` body, as the `hts.createToken codegen` and `hts.mint codegen` tests do; in `test/hedera/ops/<area>.test.ts`, check the `build…` transaction. If the step reads anything back, cover the wallet path as `test/hedera/wallet.test.ts` does. Every registered step is also checked by the invariants in `test/steps/built-in-steps.test.ts`.
 5. If it produces on-chain entities, list them in `ui.outputs` with the right kind so the runner emits HashScan links.
 6. If its network fee is not small, add it to `STEP_FEE_HBAR` in `src/harness/recipe.ts`: exported recipes fund on-chain checks from that table, the public-run policy budgets with it, and unlisted types count as 2 ℏ.
 7. Optionally, add a gallery flow: `packages/launchblocks/flows/<id>.json` and an entry at the end of `GALLERY` in `src/gallery.ts`. Tests check that every gallery flow passes the public-run policy and that its exported `launch.ts` type-checks.
 8. Regenerate the README's step table with `yarn core:docs` (CI runs `yarn core:docs:check`).
 9. Run `yarn core:test && yarn core:lint && yarn core:check-types` (lint fails on warnings too).
 
-The editor and API discover steps through the registry; there is nothing to register in `packages/nextjs`.
+The editor and API discover steps through the registry; there is nothing to register in `packages/nextjs` as long as the step uses an existing `ui.category` (`hts`, `hcs`, `hss`, `saucerswap`, `oracle`, `contract`). A new category takes three edits: `StepCategory` in `src/registry/types.ts`, `CATEGORY_COLOUR` in `src/steps/shared.ts`, and the toolbox title in `CATEGORY_NAMES` (`packages/nextjs/app/launch/_lib/blocks.ts`). A new Hedera service also needs a `HederaService` value in `src/registry/types.ts`.
 
 `.harness/` holds a hedera-harness recipe that exercises exactly this recipe (adding `hts.burn`). Its `prd.md` is a worked example of the change.
 
@@ -179,7 +188,7 @@ await writeContractAsync({
 
 ### UI
 
-Use `@scaffold-hbar-ui/components` for web3 UI: `Address`, `AddressInput`, `Balance`, `EtherInput`, `IntegerInput`.
+Use `@scaffold-hbar-ui/components` for web3 UI: `Address`, `Balance`, `HederaAddress`, `HederaAddressInput`, `HbarInput`, `BaseInput`, `HederaPortalFaucet`.
 
 Use DaisyUI classes, not raw Tailwind when a DaisyUI component exists:
 
@@ -213,6 +222,6 @@ Prefer `type` over `interface`. No `T` prefix on types. Let TypeScript infer whe
 
 Core package specifics: `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess` are on — spread conditionally (`...(x ? { x } : {})`) instead of assigning `undefined`, and narrow array reads. Use `import type` for types (lint enforces it).
 
-Commits follow Conventional Commits (`feat(core): …`, `fix(nextjs): …`, `docs: …`, `ci: …`) and are GPG-signed. Keep each commit green: tests, lint (a warning fails it), and type checks.
+Commits follow Conventional Commits (`feat(core): …`, `fix(nextjs): …`, `docs: …`, `ci: …`); the template's own repository also signs them with GPG, which a project made from it need not do. Keep each commit green: tests, lint (a warning fails it), and type checks.
 
 When writing prose (README, comments, docs), write `yarn <script>` only where a command is meant: the CLI rewrites that word to `npm run` in projects scaffolded with npm.

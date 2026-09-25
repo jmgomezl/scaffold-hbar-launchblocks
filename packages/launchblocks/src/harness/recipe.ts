@@ -129,6 +129,7 @@ export function scriptCommands(packageManager: string) {
     run: (script: string, args = "") =>
       npm ? `npm run ${script}${args ? ` -- ${args}` : ""}` : `${name} ${script}${args ? ` ${args}` : ""}`,
     /** Other managers' commands, which would write a second lockfile. */
+    // The template's default manager is not listed: the CLI rewrites its name to npm in this file for npm projects.
     forbidden: ["npm", "pnpm"].filter(other => other !== name).flatMap(other => [`${other} install`, `${other} run`]),
   };
 }

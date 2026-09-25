@@ -46,10 +46,6 @@ You need a deployer account with HBAR on the target network. Without funds, depl
    ```bash
    yarn workspace @sh/hardhat deploy --network hederaTestnet
    ```
-   or
-   ```bash
-   yarn workspace @sh/hardhat deploy --network hedera_testnet
-   ```
    You will be prompted to enter the password to decrypt your deployer key.
 
 4. **Verify on Hashscan** (uses deployment JSON under `deployments/<network>/`, which includes compiler metadata and sources):

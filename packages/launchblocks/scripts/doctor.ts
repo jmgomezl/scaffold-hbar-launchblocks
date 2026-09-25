@@ -4,21 +4,34 @@
  *   yarn core:doctor [--env <path>] [--network <net>]
  *
  * Confirms the operator variables are set and parseable, that the account
- * exists on the selected network, and that it holds enough HBAR. Prints the
- * account id, network and balance — never the key.
+ * exists on the selected network, and that it holds enough HBAR for the
+ * gallery's launches, by their estimated cost. Prints the account id,
+ * network and balance — never the key.
  */
 import { config as loadEnv } from "dotenv";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
 import { LaunchBlocksError } from "../src/errors";
+import { FlowSchema } from "../src/flow/schema";
+import { GALLERY } from "../src/gallery";
+import { estimateFlowFees } from "../src/harness/recipe";
 import { ENV_VARS, hederaContextFromEnv, parseNetwork } from "../src/hedera/client";
 import { hashscanUrl } from "../src/hedera/context";
 import { fetchAccount, formatHbar } from "../src/hedera/mirror";
+import { findCallerFile } from "./paths";
 
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
-/** A full launch flow costs well under 5 HBAR on testnet; warn below that. */
-const RECOMMENDED_HBAR = 5n * 100_000_000n;
+/** The launch the README and the studio lead with. */
+const HERO_FLOW = "hts-launch-saucerswap";
+/** Room over an estimate for exchange-rate moves and gas. */
+const HEADROOM = 1.1;
+
+/** What each gallery launch costs, cheapest first (see STEP_FEE_HBAR). */
+const LAUNCH_COSTS = GALLERY.map(entry => ({
+  id: entry.id,
+  hbar: estimateFlowFees(FlowSchema.parse(entry.flow)).perRunHbar,
+})).sort((a, b) => a.hbar - b.hbar);
 
 type Check = { label: string; ok: boolean; detail: string; hint?: string };
 
@@ -31,7 +44,7 @@ function report(checks: Check[]): void {
 
 function envPath(explicit: string | undefined): string | null {
   const candidates = explicit
-    ? [path.resolve(explicit)]
+    ? findCallerFile(explicit).tried
     : [path.join(PACKAGE_ROOT, "..", "nextjs", ".env"), path.resolve(".env")];
   return candidates.find(candidate => existsSync(candidate)) ?? null;
 }
@@ -77,10 +90,10 @@ async function main(): Promise<void> {
   let hedera;
   try {
     hedera = hederaContextFromEnv(process.env, { network });
-    checks.push({ label: "operator key", ok: true, detail: "parsed" });
+    checks.push({ label: "operator id and key", ok: true, detail: "parsed" });
   } catch (error) {
     checks.push({
-      label: "operator key",
+      label: "operator id and key",
       ok: false,
       detail: error instanceof LaunchBlocksError ? error.message : String(error),
       ...(error instanceof LaunchBlocksError && error.hint ? { hint: error.hint } : {}),
@@ -122,27 +135,43 @@ async function main(): Promise<void> {
       });
 
       const hbar = formatHbar(account.balanceTinybar);
+      const balance = Number(account.balanceTinybar) / 1e8;
+      const affordable = LAUNCH_COSTS.filter(launch => launch.hbar * HEADROOM <= balance);
+      const hero = LAUNCH_COSTS.find(launch => launch.id === HERO_FLOW);
+      const cheapest = LAUNCH_COSTS[0];
       checks.push({
         label: "account",
         ok: !account.deleted,
         detail: `${account.accountId} exists on ${network}${account.keyType ? ` (${account.keyType})` : ""}`,
         hint: "The account is deleted; use another one.",
       });
+      const short = LAUNCH_COSTS.filter(launch => !affordable.includes(launch));
       checks.push({
         label: "balance",
-        ok: account.balanceTinybar >= RECOMMENDED_HBAR,
-        detail: `${hbar} ℏ`,
-        hint: `A launch flow needs a few HBAR. Top up at https://portal.hedera.com/faucet`,
+        ok: short.length === 0,
+        detail: `${hbar} ℏ: ${
+          short.length === 0
+            ? "enough for every example launch"
+            : affordable.length === 0
+              ? "not enough for any example launch"
+              : `enough for ${affordable.map(launch => `${launch.id} (~${launch.hbar} ℏ)`).join(", ")}`
+        }`,
+        hint: `${short.map(launch => `${launch.id} needs about ${launch.hbar} ℏ`).join(", ")}. Top up at https://portal.hedera.com/faucet`,
       });
       console.log("");
       report(checks);
       console.log(`\naccount: ${hashscanUrl(network, "account", account.accountId)}`);
-      const advisory = new Set(["balance", "network"]);
-      const blocking = checks.filter(check => !check.ok && !advisory.has(check.label));
+      // Mainnet is a warning; a balance too small for any launch would fail partway, after paying for its first steps.
+      const blocking = checks.filter(
+        check => !check.ok && check.label !== "network" && (check.label !== "balance" || affordable.length === 0),
+      );
+      const next = hero && affordable.includes(hero) ? hero : affordable.at(-1);
       console.log(
-        blocking.length === 0
-          ? "\nReady. Run a flow with: yarn core:run hts-launch-basic"
-          : "\nFix the items above, then run this again.",
+        blocking.length === 0 && next
+          ? `\nReady. Run a launch with: yarn core:run ${next.id}   (about ${next.hbar} ℏ)`
+          : affordable.length === 0 && cheapest
+            ? `\nNot ready: the cheapest example, ${cheapest.id}, needs about ${cheapest.hbar} ℏ.`
+            : "\nFix the items above, then run this again.",
       );
       if (blocking.length > 0) process.exitCode = 1;
       return;

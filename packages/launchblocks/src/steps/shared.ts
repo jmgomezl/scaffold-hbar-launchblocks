@@ -65,6 +65,7 @@ export const CATEGORY_COLOUR = {
   saucerswap: 30,
   oracle: 60,
   contract: 260,
+  // No shipped step uses it: the test helpers' network-free steps do.
   util: 0,
 } as const;
 

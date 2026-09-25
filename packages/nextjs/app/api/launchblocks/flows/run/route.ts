@@ -14,8 +14,8 @@ import {
 type Release = Extract<RunGuard, { release: unknown }>["release"];
 
 export const runtime = "nodejs";
-// A full launch (token, log, SaucerSwap pool) takes 15–30 s on testnet.
-export const maxDuration = 120;
+// A full launch takes about a minute on testnet; the longest gallery flow, about 40 s of it in transactions.
+export const maxDuration = 180;
 /** `maxDuration` only binds on serverless hosts; this stops a run under `next start` too. */
 const RUN_TIMEOUT_MS = 180_000;
 
