@@ -160,6 +160,7 @@ The other gallery flows, also run from the Launch Studio:
 | `hts-launch-usd-price`: a pool opened at $0.00002 a token, pairing 50,000 tokens with 12.41463079 ℏ at Pyth's HBAR/USD of $0.08055012, read from Pyth's contract without a key | [pool 0.0.10700800](https://hashscan.io/testnet/contract/0.0.10700800), [token 0.0.10700795](https://hashscan.io/testnet/token/0.0.10700795), [log 0.0.10700797](https://hashscan.io/testnet/topic/0.0.10700797) |
 | `hts-launch-scheduled-unlocks`: two 250,000-token unlocks, scheduled for 2026-10-23 and 2026-11-22 | [schedule 0.0.10676533](https://hashscan.io/testnet/schedule/0.0.10676533), [schedule 0.0.10676534](https://hashscan.io/testnet/schedule/0.0.10676534), [token 0.0.10676531](https://hashscan.io/testnet/token/0.0.10676531) |
 | A scheduled mint and a scheduled transfer set 60 s out, which the network ran by itself | [schedule 0.0.10676486](https://hashscan.io/testnet/schedule/0.0.10676486), [schedule 0.0.10676488](https://hashscan.io/testnet/schedule/0.0.10676488) |
+| `hts-launch-basic` signed in **HashPack** by a visitor's own testnet account: five approvals, 26.42 ℏ paid by the wallet, which is the token's treasury | [token 0.0.10716072](https://hashscan.io/testnet/token/0.0.10716072), [log 0.0.10716076](https://hashscan.io/testnet/topic/0.0.10716076), [account 0.0.8194954](https://hashscan.io/testnet/account/0.0.8194954) |
 
 What those runs left on-chain, as other apps show it:
 
