@@ -52,6 +52,104 @@ describe("checkPublicFlow()", () => {
   });
 });
 
+describe("checkPublicFlow() against disguised or indirect spending", () => {
+  it("judges a read by the parsed signature: a name like view$ or $pure does not make a write a read", () => {
+    const flow = flowOf(
+      [
+        "function transfer(address view$, uint256 amount) returns (bool)",
+        "function approve(address $pure, uint256 amount) returns (bool)",
+        "function $view$(address to, uint256 amount) returns (bool)",
+      ].map((signature, index) => ({
+        id: `sneak${index}`,
+        type: "contract.call",
+        params: { contractId: "0.0.666", function: signature, arg1: "0.0.9999", arg2: "1" },
+      })),
+    );
+    expect(checkPublicFlow(flow).map(issue => issue.path)).toEqual([
+      "steps[0].params.contractId",
+      "steps[1].params.contractId",
+      "steps[2].params.contractId",
+    ]);
+  });
+
+  it("keeps messages to the launch's own topics and tokens with its own accounts", () => {
+    const flow = flowOf([
+      createToken,
+      { id: "post", type: "hcs.submitMessage", params: { topicId: "0.0.555", message: "hi" } },
+      {
+        id: "give",
+        type: "hts.transfer",
+        params: { tokenId: "{{steps.createToken.tokenId}}", to: "0.0.1001", amount: "1" },
+      },
+      {
+        id: "drop",
+        type: "hts.airdrop",
+        params: { tokenId: "{{steps.createToken.tokenId}}", recipients: [{ accountId: "0.0.1002", amount: "1" }] },
+      },
+    ]);
+    expect(checkPublicFlow(flow).map(issue => issue.path)).toEqual([
+      "steps[1].params.topicId",
+      "steps[2].params.to",
+      "steps[3].params.recipients[0].accountId",
+    ]);
+  });
+
+  it("refuses more gas than the defaults the cost estimate was measured at", () => {
+    const flow = flowOf([
+      createToken,
+      {
+        id: "burn",
+        type: "saucerswap.swap",
+        params: { tokenId: "{{steps.createToken.tokenId}}", hbarAmount: "1", gasLimit: 15_000_000 },
+      },
+    ]);
+    expect(checkPublicFlow(flow)).toEqual([expect.objectContaining({ path: "steps[1].params.gasLimit" })]);
+  });
+});
+
+describe("publicStepGuard() against disguised or indirect spending", () => {
+  const flow = flowOf([
+    createToken,
+    { id: "createLog", type: "hcs.createTopic", params: {} },
+    { id: "post", type: "hcs.submitMessage", params: { topicId: "{{steps.createLog.topicId}}", message: "x" } },
+    {
+      id: "give",
+      type: "hts.transfer",
+      params: { tokenId: "{{steps.createToken.tokenId}}", to: "{{steps.createToken.treasuryAccountId}}", amount: "1" },
+    },
+    {
+      id: "call",
+      type: "contract.call",
+      params: { contractId: "{{steps.createToken.tokenId}}", function: "function set(uint256)", arg1: "1" },
+    },
+  ]);
+  const guard = publicStepGuard(flow);
+  const [, , post, give, call] = flow.steps;
+  const earlier = { createToken: { tokenId: "0.0.500" }, createLog: { topicId: "0.0.600" } };
+
+  it("posts to the topic the run created, and nowhere else", () => {
+    expect(() => guard(post!, { topicId: "0.0.600", message: "x" }, earlier)).not.toThrow();
+    expect(() => guard(post!, { topicId: "0.0.999", message: "x" }, earlier)).toThrow(/not created by this launch/);
+  });
+
+  it("refuses tokens sent to an account the run did not create, the treasury included", () => {
+    expect(() => guard(give!, { tokenId: "0.0.500", to: "0.0.1001", amount: "1" }, earlier)).toThrow(
+      /will not send tokens/,
+    );
+  });
+
+  it("refuses a disguised write and raised gas once the values are known", () => {
+    const disguised = {
+      contractId: "0.0.666",
+      function: "function transfer(address view$, uint256 amount)",
+      gas: 400_000,
+    };
+    expect(() => guard(call!, disguised, earlier)).toThrow(/not created by this launch/);
+    const heavy = { contractId: "0.0.500", function: "function set(uint256)", gas: 5_000_000 };
+    expect(() => guard(call!, heavy, earlier)).toThrow(/gas/);
+  });
+});
+
 describe("publicStepGuard()", () => {
   const flow = flowOf([
     createToken,

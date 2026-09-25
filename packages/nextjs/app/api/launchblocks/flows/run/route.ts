@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import type { BeforeStep, RunContext, RunEvent } from "@sh/launchblocks";
-import { LaunchBlocksError, loadHardhatArtifact, runFlow } from "@sh/launchblocks";
+import { LaunchBlocksError, loadHardhatArtifact, mirrorFromEnv, runFlow } from "@sh/launchblocks";
+import type { RunGuard } from "~~/services/launchblocks/server";
 import { errorResponse, getRegistry, guardRun, operatorContext, readJsonBody } from "~~/services/launchblocks/server";
+
+type Release = Extract<RunGuard, { release: unknown }>["release"];
 
 export const runtime = "nodejs";
 // A full launch (token, log, SaucerSwap pool) takes 15–30 s on testnet.
@@ -23,24 +26,33 @@ const NDJSON = "application/x-ndjson";
  */
 export async function POST(req: Request) {
   let hedera: ReturnType<typeof operatorContext> | undefined;
-  let release: (() => void) | undefined;
+  let release: Release | undefined;
+  // Whether a step began, so a transaction may have gone out. A run that stops before that (no
+  // operator, a failed preflight, a refusal) gives its share of the public budget back.
+  let started = false;
+  const noteStart = (event: RunEvent) => {
+    if (event.type === "step:start") started = true;
+  };
   try {
     const document = await readJsonBody(req);
     const registry = getRegistry();
     const flow = registry.validateFlow(document);
+
+    // Before the guard, so a flow that could never run here uses none of the visitor's runs or the budget.
+    const { network } = mirrorFromEnv(process.env);
+    if (flow.network !== network) {
+      throw new LaunchBlocksError(
+        "NETWORK_MISMATCH",
+        `This flow targets ${flow.network}, but the server's operator is on ${network}`,
+        { hint: "Change the flow's network, or HEDERA_NETWORK in packages/nextjs/.env." },
+      );
+    }
 
     const guard = guardRun(req, flow);
     if ("refused" in guard) return guard.refused;
     release = guard.release;
 
     hedera = operatorContext();
-    if (flow.network !== hedera.network) {
-      throw new LaunchBlocksError(
-        "NETWORK_MISMATCH",
-        `This flow targets ${flow.network}, but the server's operator is on ${hedera.network}`,
-        { hint: "Change the flow's network, or HEDERA_NETWORK in packages/nextjs/.env." },
-      );
-    }
     const ctx: RunContext = {
       network: hedera.network,
       hedera,
@@ -59,9 +71,9 @@ export async function POST(req: Request) {
       hedera = undefined;
       release = undefined;
       return new Response(
-        streamRun(flow, registry, ctx, beforeStep, () => {
+        streamRun(flow, registry, ctx, beforeStep, noteStart, () => {
           client.client.close();
-          done();
+          done({ sentNothing: !started });
         }),
         {
           headers: {
@@ -74,13 +86,13 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await runFlow(flow, { registry, ctx, ...(beforeStep ? { beforeStep } : {}) });
+    const result = await runFlow(flow, { registry, ctx, onEvent: noteStart, ...(beforeStep ? { beforeStep } : {}) });
     return NextResponse.json(result, { status: result.status === "succeeded" ? 200 : 422 });
   } catch (error) {
     return errorResponse(error);
   } finally {
     hedera?.client.close();
-    release?.();
+    release?.({ sentNothing: !started });
   }
 }
 
@@ -91,12 +103,14 @@ function streamRun(
   registry: ReturnType<typeof getRegistry>,
   ctx: RunContext,
   beforeStep: BeforeStep | undefined,
+  onEvent: (event: RunEvent) => void,
   onDone: () => void,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (line: StreamLine) => {
+        if (line.type !== "error") onEvent(line);
         try {
           controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`));
         } catch {

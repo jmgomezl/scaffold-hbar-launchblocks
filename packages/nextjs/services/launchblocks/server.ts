@@ -60,6 +60,8 @@ export function jsonError(status: number, code: string, message: string, extra: 
 /** Errors that are not the request's fault. Everything else a LaunchBlocksError reports is a 400. */
 const HTTP_STATUS: Readonly<Record<string, number>> = {
   CONTRACT_ARTIFACT_MISSING: 404,
+  BODY_TOO_LARGE: 413,
+  BODY_NOT_JSON: 415,
   NETWORK_MISMATCH: 409,
   // The server's own setup: contracts not compiled, no operator, a bad Hermes URL.
   CONTRACT_ARTIFACTS_MISSING: 500,
@@ -88,9 +90,24 @@ export function errorResponse(error: unknown) {
   return jsonError(500, "INTERNAL", "Unexpected server error");
 }
 
+/** Flows are a few KB; this leaves room for any the studio can build. */
+const MAX_BODY_BYTES = 256 * 1024;
+
+/**
+ * The JSON body of a POST. It must be sent as application/json: a browser
+ * sends that type cross-site only after a CORS preflight this app never
+ * grants, so another site cannot post a form or text body in a visitor's name.
+ */
 export async function readJsonBody(req: Request): Promise<unknown> {
+  if (!req.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
+    throw new LaunchBlocksError("BODY_NOT_JSON", "Send the flow as application/json");
+  }
+  const text = await req.text();
+  if (text.length > MAX_BODY_BYTES) {
+    throw new LaunchBlocksError("BODY_TOO_LARGE", `A request body may be at most ${MAX_BODY_BYTES / 1024} KB`);
+  }
   try {
-    return await req.json();
+    return JSON.parse(text);
   } catch {
     throw new LaunchBlocksError("BODY_INVALID", "Request body must be JSON");
   }
@@ -110,12 +127,37 @@ const activeRuns = new Set<string>();
 /** Worst-case HBAR of the public runs started in the last hour. */
 let publicSpend: { at: number; hbar: number }[] = [];
 
-export type RunGuard = { refused: NextResponse } | { release: () => void; beforeStep?: BeforeStep };
+/**
+ * `release` ends the visitor's run. `sentNothing: true` also gives back its
+ * share of the hourly budget, for a run that stopped before its first
+ * transaction (a failed preflight, say).
+ */
+export type RunGuard =
+  | { refused: NextResponse }
+  | { release: (options?: { sentNothing?: boolean }) => void; beforeStep?: BeforeStep };
 
+/** A limit from the environment; blank, negative or non-numeric values keep the default. */
 const envNumber = (name: string, fallback: number) => {
-  const value = Number(process.env[name] ?? fallback);
-  return Number.isFinite(value) ? value : fallback;
+  const raw = process.env[name]?.trim();
+  const value = raw ? Number(raw) : fallback;
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
 };
+
+/**
+ * Browsers say where a request comes from. A run spends the operator's HBAR,
+ * so it must start from this app's own pages, not from a script on another site.
+ */
+function crossSite(req: Request): boolean {
+  const site = req.headers.get("sec-fetch-site");
+  if (site && site !== "same-origin" && site !== "none") return true;
+  const origin = req.headers.get("origin");
+  if (!origin) return false;
+  try {
+    return new URL(origin).host !== req.headers.get("host");
+  } catch {
+    return true;
+  }
+}
 
 /**
  * Decide whether a run may start. Every deployment refuses mainnet without an
@@ -130,6 +172,13 @@ const envNumber = (name: string, fallback: number) => {
  * The caller must call `release()` when the run ends.
  */
 export function guardRun(req: Request, flow: Flow): RunGuard {
+  if (crossSite(req)) {
+    return {
+      refused: jsonError(403, "CROSS_SITE_REFUSED", "Runs start from this app's own pages", {
+        hint: "Open the Launch Studio on this site and press Run there.",
+      }),
+    };
+  }
   if (flow.network === "mainnet" && process.env.LAUNCHBLOCKS_ALLOW_MAINNET !== "true") {
     return {
       refused: jsonError(403, "MAINNET_DISABLED", "Mainnet runs are disabled on this deployment", {
@@ -204,15 +253,17 @@ export function guardRun(req: Request, flow: Flow): RunGuard {
   }
 
   if (!isPublic) return { release: () => undefined };
-  publicSpend.push({ at: Date.now(), hbar: cost });
+  const spend = { at: Date.now(), hbar: cost };
+  publicSpend.push(spend);
   activeRuns.add(key);
   let released = false;
   return {
     beforeStep: publicStepGuard(flow, limits),
-    release: () => {
+    release: ({ sentNothing = false } = {}) => {
       if (released) return;
       released = true;
       activeRuns.delete(key);
+      if (sentNothing) publicSpend = publicSpend.filter(entry => entry !== spend);
     },
   };
 }
@@ -226,6 +277,27 @@ export function guardRun(req: Request, flow: Flow): RunGuard {
 function clientKey(req: Request): string {
   const forwarded = req.headers.get("x-forwarded-for");
   const address = req.headers.get("x-real-ip")?.trim() || forwarded?.split(",").pop()?.trim() || "local";
-  // One IPv6 host usually holds a whole /64; count it as one visitor.
-  return address.includes(":") ? address.split(":").slice(0, 4).join(":") : address;
+  return visitorKey(address);
+}
+
+/**
+ * One key per visitor, whatever form the address came in: IPv4-mapped IPv6
+ * is plain IPv4, case and zero-compression do not matter, and one IPv6 host
+ * usually holds a whole /64, so the /64 is the visitor.
+ */
+export function visitorKey(address: string): string {
+  const text = address.trim().toLowerCase().replace(/%.*$/, "");
+  const mapped = /^[0:]*ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(text);
+  if (mapped) return mapped[1] as string;
+  if (!text.includes(":")) return text;
+  const [head = "", tail = ""] = text.split("::");
+  const left = head ? head.split(":") : [];
+  const right = tail ? tail.split(":") : [];
+  const groups = text.includes("::")
+    ? [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill("0"), ...right]
+    : left;
+  return groups
+    .slice(0, 4)
+    .map(group => group.replace(/^0+(?=.)/, ""))
+    .join(":");
 }

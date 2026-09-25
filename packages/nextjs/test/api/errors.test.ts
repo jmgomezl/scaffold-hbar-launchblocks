@@ -51,4 +51,15 @@ describe("readJsonBody", () => {
   it("rejects a body that is not JSON", async () => {
     await expect(readJsonBody(post("/api", "{not json"))).rejects.toMatchObject({ code: "BODY_INVALID" });
   });
+
+  it("takes only application/json, which another site cannot send without a preflight", async () => {
+    const asText = post("/api", "{}", { "content-type": "text/plain" });
+    await expect(readJsonBody(asText)).rejects.toMatchObject({ code: "BODY_NOT_JSON" });
+    expect((await json(errorResponse(await readJsonBody(asText).catch(error => error)))).status).toBe(415);
+  });
+
+  it("refuses a body over 256 KB", async () => {
+    const huge = post("/api", JSON.stringify({ padding: "x".repeat(300 * 1024) }));
+    await expect(readJsonBody(huge)).rejects.toMatchObject({ code: "BODY_TOO_LARGE" });
+  });
 });

@@ -88,6 +88,36 @@ describe("guardRun on any deployment", () => {
   });
 });
 
+describe("guardRun against other sites", () => {
+  it("refuses a run started from another site's page", async () => {
+    const guardRun = await loadGuard();
+    const fromElsewhere = runRequest("203.0.113.7", { "sec-fetch-site": "cross-site" });
+    expect(await refusal(guardRun(fromElsewhere, galleryFlow()))).toMatchObject({
+      status: 403,
+      body: { error: { code: "CROSS_SITE_REFUSED" } },
+    });
+    const otherOrigin = runRequest("203.0.113.7", { origin: "https://evil.example", host: "launchblocks.example" });
+    expect(await refusal(guardRun(otherOrigin, galleryFlow()))).toMatchObject({ status: 403 });
+    const ownPage = runRequest("203.0.113.7", {
+      origin: "https://launchblocks.example",
+      host: "launchblocks.example",
+      "sec-fetch-site": "same-origin",
+    });
+    allowed(guardRun(ownPage, galleryFlow()));
+  });
+});
+
+describe("visitorKey", () => {
+  it("gives every form of one address, and one IPv6 /64, a single key", async () => {
+    const { visitorKey } = await fresh(() => import("~~/services/launchblocks/server"));
+    expect(visitorKey("::ffff:198.51.100.7")).toBe("198.51.100.7");
+    expect(visitorKey("0:0:0:0:0:FFFF:198.51.100.7")).toBe("198.51.100.7");
+    expect(visitorKey("2001:DB8::1")).toBe(visitorKey("2001:db8:0:0:0:0:0:2"));
+    expect(visitorKey("2001:db8:0001:0002::1")).toBe("2001:db8:1:2");
+    expect(visitorKey("2001:db8:1:3::1")).not.toBe(visitorKey("2001:db8:1:2::1"));
+  });
+});
+
 describe("guardRun on a public demo", () => {
   beforeEach(() => vi.stubEnv("LAUNCHBLOCKS_PUBLIC_DEMO", "true"));
 
@@ -96,7 +126,10 @@ describe("guardRun on a public demo", () => {
     const { status, body } = await refusal(guardRun(runRequest(), validFlow(OUTSIDE_TRANSFER)));
     expect(status).toBe(403);
     expect(body.error.code).toBe("PUBLIC_RUN_REFUSED");
-    expect(body.error.issues).toEqual([expect.objectContaining({ stepId: "send", path: "steps[0].params.tokenId" })]);
+    expect(body.error.issues.map((issue: { path: string }) => issue.path)).toEqual([
+      "steps[0].params.to",
+      "steps[0].params.tokenId",
+    ]);
   });
 
   it("runs every gallery flow, with a per-step check", async () => {
@@ -122,6 +155,24 @@ describe("guardRun on a public demo", () => {
     // Releasing the finished run again must not free the one now in progress.
     first.release();
     expect(await refusal(guardRun(runRequest(), galleryFlow()))).toMatchObject({ status: 429 });
+  });
+
+  it("gives the budget back for a run that sent nothing", async () => {
+    const flow = galleryFlow();
+    const cost = publicRunHbarEstimate(flow, DEFAULT_PUBLIC_RUN_LIMITS);
+    vi.stubEnv("LAUNCHBLOCKS_PUBLIC_HBAR_PER_HOUR", String(cost * 1.5));
+    const guardRun = await loadGuard();
+    allowed(guardRun(runRequest("198.51.100.1"), flow)).release({ sentNothing: true });
+    allowed(guardRun(runRequest("198.51.100.2"), flow)).release();
+    expect(await refusal(guardRun(runRequest("198.51.100.3"), flow))).toMatchObject({ status: 429 });
+  });
+
+  it("keeps a limit when its variable is blank", async () => {
+    vi.stubEnv("LAUNCHBLOCKS_RUNS_PER_HOUR", "");
+    vi.stubEnv("LAUNCHBLOCKS_PUBLIC_HBAR_PER_HOUR", " ");
+    const guardRun = await loadGuard();
+    // Blank means the defaults (20 runs, 400 HBAR), not zero: the run starts and the limits still apply.
+    allowed(guardRun(runRequest(), galleryFlow())).release();
   });
 
   it("stops once the hour's HBAR budget is spent, across visitors", async () => {
