@@ -1,5 +1,5 @@
 import type { Network } from "@sh/launchblocks";
-import { hashscanUrl } from "@sh/launchblocks";
+import { hashscanUrl, secondsToIso } from "@sh/launchblocks";
 
 /**
  * Formatting for launch pages. A launch log is whatever its flow wrote, and
@@ -53,10 +53,11 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?Z$/;
  */
 export function loggedDate(key: string, value: unknown): string | null {
   if (typeof value === "string" && ISO_DATE.test(value)) return formatDate(value);
-  const seconds =
-    typeof value === "number" ? value : typeof value === "string" && /^\d{9,11}$/.test(value) ? Number(value) : NaN;
-  if (/(time|at)$/i.test(key) && Number.isInteger(seconds)) return formatDate(new Date(seconds * 1000).toISOString());
-  return null;
+  if (!/(time|at)$/i.test(key)) return null;
+  // From 2001 on: smaller numbers under such a key are more likely counts than dates.
+  const plausible = typeof value === "number" ? value >= 1e9 : typeof value === "string" && /^\d{10,11}$/.test(value);
+  const iso = plausible ? secondsToIso(value) : null;
+  return iso ? formatDate(iso) : null;
 }
 
 export function formatDate(iso: string): string {

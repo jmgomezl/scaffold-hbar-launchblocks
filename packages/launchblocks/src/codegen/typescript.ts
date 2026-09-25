@@ -238,6 +238,8 @@ function escapeTemplateText(text: string): string {
 }
 
 function renderKey(key: string): string {
+  // `__proto__: …` in an object literal sets the prototype instead of a property; a computed key does not.
+  if (key === "__proto__") return '["__proto__"]';
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : JSON.stringify(key);
 }
 

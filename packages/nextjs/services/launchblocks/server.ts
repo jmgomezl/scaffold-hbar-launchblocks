@@ -148,8 +148,9 @@ const envNumber = (name: string, fallback: number) => {
  * so it must start from this app's own pages, not from a script on another site.
  */
 function crossSite(req: Request): boolean {
+  // Browsers set Sec-Fetch-Site and no page can forge it, and it holds behind a proxy that rewrites Host.
   const site = req.headers.get("sec-fetch-site");
-  if (site && site !== "same-origin" && site !== "none") return true;
+  if (site) return site !== "same-origin" && site !== "none";
   const origin = req.headers.get("origin");
   if (!origin) return false;
   try {
@@ -171,14 +172,18 @@ function crossSite(req: Request): boolean {
  *
  * The caller must call `release()` when the run ends.
  */
-export function guardRun(req: Request, flow: Flow): RunGuard {
-  if (crossSite(req)) {
-    return {
-      refused: jsonError(403, "CROSS_SITE_REFUSED", "Runs start from this app's own pages", {
+/** A 403 for a run another site's page started, or null. Checked before anything else, the body included. */
+export function crossSiteRefusal(req: Request): NextResponse | null {
+  return crossSite(req)
+    ? jsonError(403, "CROSS_SITE_REFUSED", "Runs start from this app's own pages", {
         hint: "Open the Launch Studio on this site and press Run there.",
-      }),
-    };
-  }
+      })
+    : null;
+}
+
+export function guardRun(req: Request, flow: Flow): RunGuard {
+  const elsewhere = crossSiteRefusal(req);
+  if (elsewhere) return { refused: elsewhere };
   if (flow.network === "mainnet" && process.env.LAUNCHBLOCKS_ALLOW_MAINNET !== "true") {
     return {
       refused: jsonError(403, "MAINNET_DISABLED", "Mainnet runs are disabled on this deployment", {

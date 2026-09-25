@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 
 import { buildTopicCreate, buildTopicMessageSubmit, encodeMessage } from "../../../src/hedera/ops/topics";
+import { hcsCreateTopic } from "../../../src/steps";
 import { offlineHederaContext } from "../../helpers/hedera";
 
 const hedera = offlineHederaContext();
@@ -13,6 +14,10 @@ describe("buildTopicCreate()", () => {
     expect(tx.topicMemo).toBe("launch log");
     expect(tx.adminKey?.toString()).toBe(operator);
     expect(tx.submitKey?.toString()).toBe(operator);
+  });
+
+  it("keeps a launch log to its launcher unless the flow asks for a public topic", () => {
+    expect(hcsCreateTopic.input.parse({})).toMatchObject({ adminKey: true, submitKey: true });
   });
 
   it("creates a public, immutable topic when both keys are off", () => {

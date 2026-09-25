@@ -22,6 +22,11 @@ import { openingPrice } from "../saucerswap/pool";
  * created. `readLaunch` reads it back from the mirror node and adds the
  * current state of those entities: the token's supply, the pool's price,
  * what the lock still holds, which schedules have run. It sends nothing.
+ *
+ * A topic without a submit key takes messages from anyone, who could log a
+ * `market.opened` with their own pool. For such a topic only messages paid by
+ * the account that wrote the first one (the launch's own flow) build the
+ * token, pool, lock and schedules; the others are listed and marked.
  */
 
 export type LaunchLogEntry = {
@@ -29,6 +34,8 @@ export type LaunchLogEntry = {
   /** ISO time the message reached consensus. */
   consensusAt: string;
   payerAccountId: string | null;
+  /** False for a message someone else posted to a topic without a submit key: it builds nothing on the page. */
+  fromLauncher: boolean;
   /** The message parsed as a JSON object, when it is one; `data.event` names what happened. */
   data: Record<string, unknown> | null;
   text: string;
@@ -79,6 +86,10 @@ export type LaunchRecord = {
   network: Network;
   memo: string;
   createdAt: string | null;
+  /** True when the topic has no submit key, so anyone can post to it. */
+  openToAll: boolean;
+  /** Who paid for the first message: the launch's own account. */
+  launcherAccountId: string | null;
   entries: LaunchLogEntry[];
   token: LaunchToken | null;
   pool: LaunchPool | null;
@@ -91,6 +102,8 @@ const ENTITY_ID = /^\d+\.\d+\.\d+$/;
 const MAX_ENTRIES = 100;
 const MAX_SCHEDULES = 10;
 const HBAR_DECIMALS = 8;
+/** 95617584000 is 5000-01-01; a Date throws past 275760, so a logged time is checked before it becomes one. */
+const MAX_UNIX_SECONDS = 95_617_584_000;
 
 export async function readLaunch(
   hedera: Pick<HederaContext, "mirrorBaseUrl" | "network">,
@@ -112,14 +125,20 @@ export async function readLaunch(
     });
   }
 
+  const openToAll = !topic.hasSubmitKey;
+  const launcherAccountId = messages[0]?.payerAccountId ?? null;
   const entries = messages.map<LaunchLogEntry>(message => ({
     sequence: message.sequenceNumber,
     consensusAt: mirrorTimestampToIso(message.consensusTimestamp),
     payerAccountId: message.payerAccountId,
+    fromLauncher: !openToAll || message.payerAccountId === launcherAccountId,
     data: parseObject(message.contents),
     text: message.contents,
   }));
-  const events = entries.map(entry => entry.data).filter((data): data is Record<string, unknown> => data !== null);
+  const events = entries
+    .filter(entry => entry.fromLauncher)
+    .map(entry => entry.data)
+    .filter((data): data is Record<string, unknown> => data !== null);
 
   const tokenId = firstString(events, "tokenId", "token.launched");
   const market = events.find(data => data.event === "market.opened");
@@ -138,6 +157,8 @@ export async function readLaunch(
     network: hedera.network,
     memo: topic.memo,
     createdAt: topic.createdTimestamp ? mirrorTimestampToIso(topic.createdTimestamp) : null,
+    openToAll,
+    launcherAccountId,
     entries,
     token,
     pool,
@@ -215,15 +236,22 @@ async function readLock(
   const lpTokenId = stringField(event, "lpTokenId");
   if (!contractId || !lpTokenId || !ENTITY_ID.test(contractId)) return null;
   const held = (await fetchTokenBalances(hedera, contractId, signal)).get(lpTokenId) ?? 0n;
-  const releaseSeconds = Number(stringField(event, "releaseTime"));
   return {
     contractId,
     lpTokenId,
     lockedLp: fromUnits(held, LP_TOKEN_DECIMALS),
-    releaseAt:
-      Number.isFinite(releaseSeconds) && releaseSeconds > 0 ? new Date(releaseSeconds * 1000).toISOString() : null,
+    releaseAt: secondsToIso(event.releaseTime),
     released: held === 0n,
   };
+}
+
+/** Unix seconds, as a number or a digit string, as an ISO date; null for anything else or past year 5000. */
+export function secondsToIso(value: unknown): string | null {
+  const seconds =
+    typeof value === "number" ? value : typeof value === "string" && /^\d+$/.test(value) ? Number(value) : NaN;
+  return Number.isInteger(seconds) && seconds > 0 && seconds < MAX_UNIX_SECONDS
+    ? new Date(seconds * 1000).toISOString()
+    : null;
 }
 
 /** Schedules the log names, as `{ schedule, at }` objects at any depth (see `unlocks.scheduled`). */

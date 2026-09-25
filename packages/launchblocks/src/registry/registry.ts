@@ -74,7 +74,7 @@ function checkSteps(flow: Flow, byType: ReadonlyMap<string, AnyStepDefinition>):
 
     let wiringOk = true;
     for (const target of findRefs(step.params)) {
-      const targetOutputs = exampleOutputs[target.stepId];
+      const targetOutputs = Object.hasOwn(exampleOutputs, target.stepId) ? exampleOutputs[target.stepId] : undefined;
       if (!targetOutputs) {
         const reason =
           target.stepId === step.id
@@ -86,7 +86,7 @@ function checkSteps(flow: Flow, byType: ReadonlyMap<string, AnyStepDefinition>):
         wiringOk = false;
         continue;
       }
-      if (!(target.key in targetOutputs)) {
+      if (!Object.hasOwn(targetOutputs, target.key)) {
         issues.push({
           path: `${base}.params`,
           stepId: step.id,

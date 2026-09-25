@@ -62,6 +62,11 @@ describe("findRefs()", () => {
 });
 
 describe("resolveRefs()", () => {
+  it("finds only real outputs, never an object's inherited properties", () => {
+    expect(() => resolveRefs("{{steps.constructor.name}}", outputs)).toThrow(RefResolutionError);
+    expect(() => resolveRefs("{{steps.createToken.toString}}", outputs)).toThrow(RefResolutionError);
+  });
+
   it("keeps the original type for whole-string references", () => {
     expect(resolveRefs({ decimals: "{{steps.createToken.decimals}}" }, outputs)).toEqual({ decimals: 8 });
   });

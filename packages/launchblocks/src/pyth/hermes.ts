@@ -1,5 +1,6 @@
 import { LaunchBlocksError } from "../errors";
 import type { PythPriceUpdates } from "../hedera/context";
+import { hostOf } from "../hedera/mirror";
 import { HERMES_BASE_URL } from "./config";
 
 export type HermesOptions = {
@@ -19,7 +20,7 @@ export function hermesPriceUpdates(options: HermesOptions): PythPriceUpdates {
   const base = (options.baseUrl?.trim() || HERMES_BASE_URL).replace(/\/+$/, "");
   if (!base.startsWith("https://")) {
     // The API key rides in a header: never send it in the clear.
-    throw new LaunchBlocksError("PYTH_URL_INVALID", `PYTH_HERMES_URL must be an https:// URL, not "${base}"`);
+    throw new LaunchBlocksError("PYTH_URL_INVALID", "PYTH_HERMES_URL must be an https:// URL");
   }
   return async (feedIds, signal) => {
     const query = feedIds.map(id => `ids[]=${encodeURIComponent(id)}`).join("&");
@@ -32,7 +33,9 @@ export function hermesPriceUpdates(options: HermesOptions): PythPriceUpdates {
         headers: { accept: "application/json", authorization: `Bearer ${options.apiKey}` },
       });
     } catch (cause) {
-      throw new LaunchBlocksError("PYTH_UNREACHABLE", `Could not reach Pyth's price service at ${base}`, { cause });
+      throw new LaunchBlocksError("PYTH_UNREACHABLE", `Could not reach Pyth's price service at ${hostOf(base)}`, {
+        cause,
+      });
     }
     if (response.status === 401 || response.status === 403) {
       // Hermes says why in plain text, e.g. which feed the key's plan does not cover. It never echoes the key.

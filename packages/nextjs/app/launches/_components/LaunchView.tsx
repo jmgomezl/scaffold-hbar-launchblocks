@@ -82,7 +82,12 @@ function Fields({ network, data }: { network: Network; data: Record<string, unkn
 function Entry({ network, entry }: { network: Network; entry: LaunchLogEntry }) {
   return (
     <li className="relative ml-6">
-      <span className="hedera-gradient absolute -left-[31px] top-1.5 h-3 w-3 rounded-full ring-4 ring-base-200" />
+      <span
+        className={`absolute -left-[31px] top-1.5 h-3 w-3 rounded-full ring-4 ring-base-200 ${entry.fromLauncher ? "hedera-gradient" : "bg-warning"}`}
+      />
+      {!entry.fromLauncher && (
+        <span className="badge badge-warning badge-soft badge-sm mb-1">Posted by another account</span>
+      )}
       <p className="text-xs text-base-content/60">
         #{entry.sequence} · {formatDate(entry.consensusAt)}
         {entry.payerAccountId && (
@@ -137,6 +142,14 @@ export function LaunchView({ launch }: { launch: LaunchRecord }) {
           {launch.createdAt ? `, opened ${formatDate(launch.createdAt)}` : ""}. Hedera orders and timestamps each one
           and nobody can change it afterwards. Everything here is read from the mirror node as you open the page.
         </p>
+        {launch.openToAll && (
+          <div role="note" className="alert alert-warning alert-soft mt-4 text-sm">
+            <span>
+              This topic has no submit key, so anyone can post to it. The cards below use only the messages paid by{" "}
+              {launch.launcherAccountId ?? "the account"} that wrote the first one; any others are marked in the log.
+            </span>
+          </div>
+        )}
       </section>
 
       {(token || pool || lock || schedules.length > 0) && (

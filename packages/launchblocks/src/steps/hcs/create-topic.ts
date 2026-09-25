@@ -9,7 +9,7 @@ export const hcsCreateTopic = defineStep({
   input: z.object({
     memo: MemoSchema.optional(),
     adminKey: z.boolean().default(true),
-    submitKey: z.boolean().default(false),
+    submitKey: z.boolean().default(true),
   }),
   output: z.object({ topicId: z.string(), transactionId: z.string() }),
   outputExample: { topicId: "0.0.6512400", transactionId: "0.0.4242@1758500050.000000001" },
@@ -21,7 +21,12 @@ export const hcsCreateTopic = defineStep({
     fields: [
       { key: "memo", label: "Memo", kind: "text", placeholder: "LBD launch log" },
       { key: "adminKey", label: "Admin key", kind: "boolean", help: "Operator can update the topic" },
-      { key: "submitKey", label: "Submit key", kind: "boolean", help: "Only the operator can post" },
+      {
+        key: "submitKey",
+        label: "Submit key",
+        kind: "boolean",
+        help: "Only you can post. Leave it on for a launch log: without it anyone can write to the log",
+      },
     ],
     outputs: [
       { key: "topicId", label: "Topic", kind: "topicId" },

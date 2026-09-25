@@ -2,7 +2,14 @@ import { NextResponse } from "next/server";
 import type { BeforeStep, RunContext, RunEvent } from "@sh/launchblocks";
 import { LaunchBlocksError, loadHardhatArtifact, mirrorFromEnv, runFlow } from "@sh/launchblocks";
 import type { RunGuard } from "~~/services/launchblocks/server";
-import { errorResponse, getRegistry, guardRun, operatorContext, readJsonBody } from "~~/services/launchblocks/server";
+import {
+  crossSiteRefusal,
+  errorResponse,
+  getRegistry,
+  guardRun,
+  operatorContext,
+  readJsonBody,
+} from "~~/services/launchblocks/server";
 
 type Release = Extract<RunGuard, { release: unknown }>["release"];
 
@@ -33,6 +40,8 @@ export async function POST(req: Request) {
   const noteStart = (event: RunEvent) => {
     if (event.type === "step:start") started = true;
   };
+  const elsewhere = crossSiteRefusal(req);
+  if (elsewhere) return elsewhere;
   try {
     const document = await readJsonBody(req);
     const registry = getRegistry();

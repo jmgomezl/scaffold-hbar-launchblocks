@@ -139,3 +139,25 @@ test("explains why a run cannot start on a server without an operator", async ({
   await expect(error).toBeVisible();
   await expect(error).toContainText("HEDERA_OPERATOR_ID");
 });
+
+test("sends security headers, so no other site can frame the studio", async ({ request }) => {
+  for (const path of ["/launch", "/api/launchblocks/gallery"]) {
+    const headers = (await request.get(path)).headers();
+    expect(headers).toMatchObject({
+      "x-frame-options": "DENY",
+      "content-security-policy": "frame-ancestors 'none'",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "strict-origin-when-cross-origin",
+    });
+    expect(headers["x-powered-by"]).toBeUndefined();
+  }
+});
+
+test("refuses a run posted from another site before looking at the flow", async ({ request }) => {
+  const response = await request.post("/api/launchblocks/flows/run", {
+    headers: { "content-type": "application/json", "sec-fetch-site": "cross-site", origin: "https://evil.example" },
+    data: {},
+  });
+  expect(response.status()).toBe(403);
+  expect(await response.json()).toMatchObject({ error: { code: "CROSS_SITE_REFUSED" } });
+});

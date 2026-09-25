@@ -84,11 +84,12 @@ function visitResolve(node: unknown, outputs: StepOutputs): unknown {
 }
 
 function lookup(target: StepRef, outputs: StepOutputs): unknown {
-  const stepOutputs = outputs[target.stepId];
+  // Own properties only: `{{steps.constructor.name}}` must not find Object's.
+  const stepOutputs = Object.hasOwn(outputs, target.stepId) ? outputs[target.stepId] : undefined;
   if (!stepOutputs) {
     throw new RefResolutionError(target.raw, `step "${target.stepId}" has not produced outputs yet`);
   }
-  if (!(target.key in stepOutputs)) {
+  if (!Object.hasOwn(stepOutputs, target.key)) {
     const available = Object.keys(stepOutputs);
     throw new RefResolutionError(
       target.raw,

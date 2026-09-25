@@ -44,6 +44,12 @@ describe("launch page formatting", () => {
     expect(loggedDate("symbol", "LBD")).toBeNull();
   });
 
+  it("shows a logged time out of any date's range as logged, instead of failing the page", () => {
+    expect(loggedDate("releaseTime", 1e20)).toBeNull();
+    expect(loggedDate("releaseTime", 8.64e15)).toBeNull();
+    expect(loggedDate("at", 12)).toBeNull();
+  });
+
   it("describes prices, amounts and times", () => {
     expect(priceChange("0.0002", "0.00025")).toBe("+25.00%");
     expect(priceChange("0.0002", "0.00015")).toBe("-25.00%");

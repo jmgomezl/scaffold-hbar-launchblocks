@@ -127,6 +127,49 @@ describe("readLaunch()", () => {
     ]);
   });
 
+  it("on a topic anyone can post to, builds the page only from the launcher's messages", async () => {
+    const stranger = {
+      ...message(3, 1790000050, { event: "market.opened", pairId: "0.0.666", poolUrl: "https://evil.example" }),
+      payer_account_id: "0.0.6666",
+    };
+    mirror({
+      "/topics/0.0.500/messages": {
+        messages: [
+          message(1, 1790000000, { event: "token.launched", tokenId: "0.0.501" }),
+          message(2, 1790000030, {
+            event: "liquidity.locked",
+            lock: "0.0.504",
+            lpTokenId: "0.0.503",
+            releaseTime: "1e20",
+          }),
+          stranger,
+        ],
+      },
+      "/topics/0.0.500": { topic_id: "0.0.500", memo: "open log", created_timestamp: "1789999999.1", submit_key: null },
+      "/accounts/0.0.504/tokens": { tokens: [] },
+    });
+    const launch = await readLaunch(hedera, "0.0.500");
+    expect(launch).toMatchObject({ openToAll: true, launcherAccountId: "0.0.1001", pool: null });
+    expect(launch.entries.map(entry => entry.fromLauncher)).toEqual([true, true, false]);
+    // A release time no date can hold is left out rather than failing the page.
+    expect(launch.lock).toMatchObject({ contractId: "0.0.504", releaseAt: null });
+  });
+
+  it("trusts every message on a topic with a submit key", async () => {
+    mirror({
+      "/topics/0.0.500/messages": {
+        messages: [
+          message(1, 1790000000, "hello"),
+          { ...message(2, 1790000001, "scheduled"), payer_account_id: "0.0.7" },
+        ],
+      },
+      "/topics/0.0.500": { topic_id: "0.0.500", memo: "", submit_key: { _type: "ED25519", key: "ab" } },
+    });
+    const launch = await readLaunch(hedera, "0.0.500");
+    expect(launch.openToAll).toBe(false);
+    expect(launch.entries.every(entry => entry.fromLauncher)).toBe(true);
+  });
+
   it("refuses an id that is not a topic id, and reports a topic that does not exist", async () => {
     const fetch = mirror({});
     await expect(readLaunch(hedera, "../0.0.1")).rejects.toMatchObject({ code: "ENTITY_ID_INVALID" });

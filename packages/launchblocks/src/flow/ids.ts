@@ -3,7 +3,8 @@
  * editor can apply them without pulling in the schema library.
  *
  * Step ids double as variable names in the generated launch script, so they
- * are constrained to camelCase identifiers that are not JavaScript keywords.
+ * are constrained to camelCase identifiers that are not JavaScript keywords
+ * or names a module cannot bind (`eval`, `arguments`) or should not shadow (`undefined`).
  */
 
 export const STEP_ID_PATTERN = /^[a-z][a-zA-Z0-9]*$/;
@@ -57,6 +58,12 @@ export const JS_RESERVED_WORDS = new Set([
   "while",
   "with",
   "yield",
+  // Not keywords, but `const eval = …` is a syntax error in a module, and generated code relies on the others.
+  "arguments",
+  "eval",
+  "undefined",
+  "NaN",
+  "Infinity",
 ]);
 
 /** Identifiers the runner and codegen use themselves; a step cannot shadow them. */

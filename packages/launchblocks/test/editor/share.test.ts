@@ -1,5 +1,6 @@
+import { deflateSync } from "fflate";
 import { describe, expect, it } from "vitest";
-import { decodeFlowFromLink, encodeFlowForLink, studioLinkFor } from "../../src/editor/share";
+import { MAX_SHARE_LINK_CHARS, decodeFlowFromLink, encodeFlowForLink, studioLinkFor } from "../../src/editor/share";
 import { galleryFlow } from "../../src/gallery";
 
 describe("share links", () => {
@@ -20,6 +21,25 @@ describe("share links", () => {
     );
     expect(() => decodeFlowFromLink("not-base64-at-all!")).toThrow(
       expect.objectContaining({ code: "SHARE_LINK_INVALID" }),
+    );
+  });
+
+  it("stop inflating a crafted link long before it could exhaust memory", () => {
+    // 100 MB of spaces deflates to about 100 KB, and 30 KB of it still expands to about 30 MB.
+    const bomb = deflateSync(new Uint8Array(100 * 1024 * 1024).fill(32), { level: 9 }).subarray(0, 30 * 1024);
+    const encoded = Buffer.from(bomb).toString("base64url");
+    expect(encoded.length).toBeLessThan(MAX_SHARE_LINK_CHARS);
+    expect(() => decodeFlowFromLink(encoded)).toThrow(expect.objectContaining({ code: "SHARE_LINK_INVALID" }));
+    expect(() => decodeFlowFromLink("A".repeat(MAX_SHARE_LINK_CHARS + 1))).toThrow(
+      expect.objectContaining({ code: "SHARE_LINK_INVALID" }),
+    );
+  });
+
+  it("refuse to make a link too long to open", () => {
+    const huge = { ...flow, description: undefined, steps: flow.steps.map(step => ({ ...step, label: undefined })) };
+    const noise = Array.from({ length: 60_000 }, (_, index) => ((index * 7919) % 65_521).toString(36)).join("");
+    expect(() => encodeFlowForLink({ ...huge, name: noise } as never)).toThrow(
+      expect.objectContaining({ code: "SHARE_LINK_TOO_LARGE" }),
     );
   });
 });

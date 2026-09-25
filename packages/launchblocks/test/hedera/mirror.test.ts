@@ -48,6 +48,16 @@ describe("fetchAccount()", () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("ECONNREFUSED"));
     await expect(fetchAccount(hedera, "0.0.1")).rejects.toMatchObject({ code: "MIRROR_UNREACHABLE" });
   });
+
+  it("names only the mirror's host in errors, since a private mirror's URL can hold its API key", async () => {
+    const privateMirror = { ...hedera, mirrorBaseUrl: "https://mirror.example/v1/SECRET-KEY" };
+    mockFetch(500, {});
+    const failing = await fetchAccount(privateMirror, "0.0.1").catch((error: Error) => error);
+    expect(failing).toMatchObject({ message: "Mirror node mirror.example answered 500" });
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("ECONNREFUSED"));
+    const unreachable = await fetchAccount(privateMirror, "0.0.1").catch((error: Error) => error);
+    expect((unreachable as Error).message).not.toContain("SECRET");
+  });
 });
 
 describe("fetchTopicMessages()", () => {

@@ -68,14 +68,41 @@ describe("StepIdSchema", () => {
     expect(StepIdSchema.safeParse(id).success).toBe(false);
   });
 
-  it.each(["new", "class", "await", "return"])("rejects JavaScript keyword %j", id => {
-    const result = StepIdSchema.safeParse(id);
-    expect(result.success).toBe(false);
-    if (!result.success) expect(result.error.issues[0]?.message).toContain("keyword");
-  });
+  it.each(["new", "class", "await", "return", "eval", "arguments", "undefined"])(
+    "rejects JavaScript keyword %j",
+    id => {
+      const result = StepIdSchema.safeParse(id);
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error.issues[0]?.message).toContain("keyword");
+    },
+  );
 
   it.each(["steps", "outputs", "ctx", "client"])("rejects reserved runtime identifier %j", id => {
     expect(StepIdSchema.safeParse(id).success).toBe(false);
+  });
+});
+
+describe("FlowSchema limits", () => {
+  const step = (index: number, params: Record<string, unknown> = {}) => ({ id: `step${index}`, type: "a.b", params });
+
+  it("takes up to 50 steps", () => {
+    expect(FlowSchema.safeParse({ ...minimalFlow, steps: Array.from({ length: 50 }, (_, i) => step(i)) }).success).toBe(
+      true,
+    );
+    const tooMany = FlowSchema.safeParse({ ...minimalFlow, steps: Array.from({ length: 51 }, (_, i) => step(i)) });
+    expect(tooMany.error?.issues[0]?.message).toContain("at most 50 steps");
+  });
+
+  it("refuses params nested deeper than 16 levels, without recursing into them", () => {
+    let deep: unknown = "leaf";
+    for (let level = 0; level < 100_000; level++) deep = [deep];
+    const result = FlowSchema.safeParse({ ...minimalFlow, steps: [step(0, { deep })] });
+    expect(result.error?.issues).toEqual([
+      expect.objectContaining({ path: ["steps", 0, "params"], message: "params nest deeper than 16 levels" }),
+    ]);
+    let fine: unknown = "leaf";
+    for (let level = 0; level < 15; level++) fine = { next: fine };
+    expect(FlowSchema.safeParse({ ...minimalFlow, steps: [step(0, { fine })] }).success).toBe(true);
   });
 });
 

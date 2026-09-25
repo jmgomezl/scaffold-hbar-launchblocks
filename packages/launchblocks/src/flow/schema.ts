@@ -43,6 +43,21 @@ export const StepEnvelopeSchema = z.object({
 });
 export type StepEnvelope = z.infer<typeof StepEnvelopeSchema>;
 
+/** Far more than any launch needs; the caps keep validation, references and codegen cheap for any document. */
+export const MAX_FLOW_STEPS = 50;
+export const MAX_PARAM_DEPTH = 16;
+
+/** Whether objects and arrays inside `value` nest more than `limit` levels, checked without recursion. */
+function nestsDeeperThan(value: unknown, limit: number): boolean {
+  const pending: { node: unknown; depth: number }[] = [{ node: value, depth: 0 }];
+  for (let next = pending.pop(); next; next = pending.pop()) {
+    if (typeof next.node !== "object" || next.node === null) continue;
+    if (next.depth > limit) return true;
+    for (const child of Object.values(next.node)) pending.push({ node: child, depth: next.depth + 1 });
+  }
+  return false;
+}
+
 export const FlowSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -50,11 +65,21 @@ export const FlowSchema = z
     name: z.string().min(1).max(120),
     description: z.string().max(2000).optional(),
     network: NetworkSchema.default("testnet"),
-    steps: z.array(StepEnvelopeSchema).min(1, "a flow needs at least one step"),
+    steps: z
+      .array(StepEnvelopeSchema)
+      .min(1, "a flow needs at least one step")
+      .max(MAX_FLOW_STEPS, `a flow has at most ${MAX_FLOW_STEPS} steps`),
   })
   .superRefine((flow, ctx) => {
     const seen = new Map<string, number>();
     flow.steps.forEach((step, index) => {
+      if (nestsDeeperThan(step.params, MAX_PARAM_DEPTH)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["steps", index, "params"],
+          message: `params nest deeper than ${MAX_PARAM_DEPTH} levels`,
+        });
+      }
       const first = seen.get(step.id);
       if (first !== undefined) {
         ctx.addIssue({

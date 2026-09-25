@@ -75,7 +75,14 @@ export async function fetchTopicMessages(
   }));
 }
 
-export type MirrorTopic = { topicId: string; memo: string; createdTimestamp: string | null; deleted: boolean };
+export type MirrorTopic = {
+  topicId: string;
+  memo: string;
+  createdTimestamp: string | null;
+  deleted: boolean;
+  /** Whether posting needs the submit key; without one anyone can write to the topic. */
+  hasSubmitKey: boolean;
+};
 
 /** A topic's memo and creation time, or `null` when there is no such topic. */
 export async function fetchTopic(
@@ -88,6 +95,7 @@ export async function fetchTopic(
     memo?: string;
     created_timestamp?: string | null;
     deleted?: boolean;
+    submit_key?: unknown;
   } | null;
   if (!body) return null;
   return {
@@ -95,6 +103,7 @@ export async function fetchTopic(
     memo: body.memo ?? "",
     createdTimestamp: body.created_timestamp ?? null,
     deleted: body.deleted === true,
+    hasSubmitKey: body.submit_key != null,
   };
 }
 
@@ -146,20 +155,29 @@ export function mirrorTimestampToIso(timestamp: string): string {
   return new Date(Number(timestamp.split(".")[0]) * 1000).toISOString();
 }
 
+/** A URL's host, for messages: a private mirror's URL can carry an API key in its path or query. */
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "the configured URL";
+  }
+}
+
 /** GET a mirror node URL. Returns null on 404; throws with a code otherwise. */
 async function mirrorFetch(url: string, signal?: AbortSignal): Promise<unknown> {
   let response: Response;
   try {
     response = await fetch(url, { ...(signal ? { signal } : {}), headers: { accept: "application/json" } });
   } catch (cause) {
-    throw new LaunchBlocksError("MIRROR_UNREACHABLE", `Could not reach the mirror node at ${url}`, {
+    throw new LaunchBlocksError("MIRROR_UNREACHABLE", `Could not reach the mirror node at ${hostOf(url)}`, {
       cause,
       hint: "Check connectivity and HEDERA_MIRROR_URL.",
     });
   }
   if (response.status === 404) return null;
   if (!response.ok) {
-    throw new LaunchBlocksError("MIRROR_ERROR", `Mirror node returned ${response.status} for ${url}`);
+    throw new LaunchBlocksError("MIRROR_ERROR", `Mirror node ${hostOf(url)} answered ${response.status}`);
   }
   return response.json();
 }
@@ -222,11 +240,11 @@ export async function readContract(
       }),
     });
   } catch (cause) {
-    throw new LaunchBlocksError("MIRROR_UNREACHABLE", `Could not reach the mirror node at ${url}`, { cause });
+    throw new LaunchBlocksError("MIRROR_UNREACHABLE", `Could not reach the mirror node at ${hostOf(url)}`, { cause });
   }
   if (response.status === 429 || response.status >= 500) {
     // The mirror node's trouble, not the contract's: a revert comes back as a 400.
-    throw new LaunchBlocksError("MIRROR_ERROR", `Mirror node returned ${response.status} for ${url}`);
+    throw new LaunchBlocksError("MIRROR_ERROR", `Mirror node ${hostOf(url)} answered ${response.status}`);
   }
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
@@ -273,7 +291,7 @@ export async function simulateContractCall(
       }),
     });
   } catch (cause) {
-    throw new LaunchBlocksError("MIRROR_UNREACHABLE", `Could not reach the mirror node at ${url}`, { cause });
+    throw new LaunchBlocksError("MIRROR_UNREACHABLE", `Could not reach the mirror node at ${hostOf(url)}`, { cause });
   }
   const body = (await response.json().catch(() => ({}))) as {
     result?: string;

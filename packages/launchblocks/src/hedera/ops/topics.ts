@@ -13,7 +13,7 @@ export type CreateTopicParams = {
   memo?: string | undefined;
   /** Operator can update/delete the topic. */
   adminKey: boolean;
-  /** Only the operator can post; leave off for a public topic. */
+  /** Only the operator can post. Off makes a public topic that anyone can write to. */
   submitKey: boolean;
 };
 

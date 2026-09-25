@@ -42,6 +42,12 @@ describe("renderExpr()", () => {
     expect(renderExpr(undefined)).toBe("undefined");
   });
 
+  it("renders a __proto__ key as a property, not a prototype", () => {
+    // JSON.parse makes "__proto__" an own key, as a flow document read from JSON has it.
+    const rendered = renderExpr(JSON.parse('{ "__proto__": 1, "a-b": 2 }'));
+    expect(rendered).toBe('{ ["__proto__"]: 1, "a-b": 2 }');
+  });
+
   it("renders whole references as member access", () => {
     expect(renderExpr(ref("mint", "tokenId"))).toBe("mint.tokenId");
   });
