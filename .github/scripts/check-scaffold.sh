@@ -75,6 +75,8 @@ for flow in packages/launchblocks/flows/*.json; do
   check "dry-run-$id" run core:check "$id"
 done
 check next-build run next:build
+check browser-install run next:e2e:install
+check studio-in-a-browser run next:e2e
 
 echo "-- the production build, served on :$PORT"
 PORT=$PORT run next:serve >"$LOGS/next-serve.log" 2>&1 &

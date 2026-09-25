@@ -25,7 +25,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: process.env.NEXT_PUBLIC_IGNORE_BUILD_ERROR === "true",
     // next lint covers app/ and components/ by default; the API's services and the tests need it too.
-    dirs: ["app", "components", "contracts", "hooks", "services", "utils", "test"],
+    dirs: ["app", "components", "contracts", "hooks", "services", "utils", "test", "e2e"],
   },
   webpack: (config, { dev, isServer }) => {
     config.resolve.fallback = { fs: false, net: false, tls: false };

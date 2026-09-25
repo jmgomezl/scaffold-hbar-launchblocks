@@ -48,6 +48,8 @@
     "next:build": "yarn workspace @sh/nextjs build",
     "next:check-types": "yarn workspace @sh/nextjs check-types",
     "next:dev": "yarn workspace @sh/nextjs dev",
+    "next:e2e": "yarn workspace @sh/nextjs e2e",
+    "next:e2e:install": "yarn workspace @sh/nextjs e2e:install",
     "next:format": "yarn workspace @sh/nextjs format",
     "next:lint": "yarn workspace @sh/nextjs lint",
     "next:serve": "yarn workspace @sh/nextjs serve",

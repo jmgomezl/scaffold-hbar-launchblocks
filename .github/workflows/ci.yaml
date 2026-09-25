@@ -66,6 +66,23 @@ jobs:
       - name: Next.js build
         run: yarn next:build
 
+      # The browser tests do not depend on the Node version: run them once.
+      - name: Install Chromium
+        if: matrix.node == '22'
+        run: yarn next:e2e:install
+
+      - name: Launch Studio in a browser
+        if: matrix.node == '22'
+        run: yarn next:e2e
+
+      - name: Upload the Playwright traces
+        if: failure() && matrix.node == '22'
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-traces
+          path: packages/nextjs/test-results
+          if-no-files-found: ignore
+
       - name: Upload coverage
         if: matrix.node == '20'
         uses: actions/upload-artifact@v7
