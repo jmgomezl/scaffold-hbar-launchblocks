@@ -59,5 +59,23 @@ describe("HtsTokenCreator", function () {
         .to.emit(creator, "TokenMinted")
         .withArgs(tokenAddress, secondMintSupply);
     });
+
+    it("refuses a mint by anyone but the token's creator", async function () {
+      const { creator, alice } = await deployFixture();
+      const tokenAddress = await creator.createToken.staticCall("Guarded", "GRD", parseHtsUnits("1"), DECIMALS, {
+        value: HTS_CREATE_VALUE,
+      });
+      await creator.createToken("Guarded", "GRD", parseHtsUnits("1"), DECIMALS, { value: HTS_CREATE_VALUE });
+      await expect(creator.connect(alice).mintToken(tokenAddress, parseHtsUnits("1000000")))
+        .to.be.revertedWithCustomError(creator, "NotTokenCreator")
+        .withArgs(tokenAddress, alice.address);
+    });
+
+    it("refuses an amount HTS would read as negative", async function () {
+      const { creator } = await deployFixture();
+      await expect(
+        creator.createToken("Huge", "HGE", 2n ** 63n, DECIMALS, { value: HTS_CREATE_VALUE }),
+      ).to.be.revertedWithCustomError(creator, "AmountTooLarge");
+    });
   });
 });

@@ -10,6 +10,9 @@ contract HtsTokenCreator {
     /// HTS response code for success
     int64 public constant SUCCESS = 22;
 
+    /// This contract holds the supply key of every token it creates, so only a token's creator may mint it.
+    mapping(address => address) public creatorOf;
+
     event TokenCreated(address indexed tokenAddress, string name, string symbol);
     event TokenMinted(address indexed tokenAddress, int64 newTotalSupply);
 
@@ -22,6 +25,7 @@ contract HtsTokenCreator {
         uint256 initialSupply,
         uint8 decimals
     ) external payable returns (address tokenAddress) {
+        if (initialSupply > uint64(type(int64).max)) revert AmountTooLarge(initialSupply);
         IHederaTokenService.HederaToken memory token = IHederaTokenService.HederaToken({
             name: name,
             symbol: symbol,
@@ -44,12 +48,15 @@ contract HtsTokenCreator {
             revert HtsCreateFailed(responseCode);
         }
 
+        creatorOf[created] = msg.sender;
         emit TokenCreated(created, name, symbol);
         return created;
     }
 
-    /// Mints additional supply to the token's treasury. Caller must hold supply key.
+    /// Mints additional supply to the token's treasury. Only the account that created the token here may.
     function mintToken(address token, uint256 amount) external returns (int64 newTotalSupply) {
+        if (creatorOf[token] != msg.sender) revert NotTokenCreator(token, msg.sender);
+        if (amount > uint64(type(int64).max)) revert AmountTooLarge(amount);
         (int64 responseCode, int64 newSupply, ) = IHederaTokenService(HTS).mintToken(
             token,
             int64(uint64(amount)),
@@ -86,4 +93,7 @@ contract HtsTokenCreator {
 
     error HtsCreateFailed(int64 responseCode);
     error HtsMintFailed(int64 responseCode);
+    error NotTokenCreator(address token, address caller);
+    /// HTS amounts are int64; a larger uint256 would wrap to a negative number.
+    error AmountTooLarge(uint256 amount);
 }
