@@ -15,7 +15,7 @@ A [Scaffold-HBAR](https://docs.hedera.com/solutions/tools/scaffold-hbar/index) t
 **[Try it live at launchblocks.aivylabs.xyz](https://launchblocks.aivylabs.xyz/launch)**, on Hedera testnet. The app's funded account signs every run, so there is nothing to install, connect or fund; you can also connect your own testnet wallet in the Run panel.
 
 ```bash
-npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblocks
+npx create-scaffold-hbar@latest --template jmgomezl/scaffold-hbar-launchblocks
 ```
 
 ![A live testnet run in the Launch Studio, at three times speed: nine blocks get a tick in turn as each transaction reaches consensus, from creating the token and its SaucerSwap pool to deploying a TokenLock, locking the LP tokens in it, reading the lock back and logging it, while the run log fills with succeeded steps, signed by the default account](docs/images/studio-run.gif)
@@ -44,7 +44,7 @@ npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblock
 1. **Scaffold the project** (the CLI asks which package manager to use; both work) and go into it:
 
    ```bash
-   npm create scaffold-hbar@latest -- --template jmgomezl/scaffold-hbar-launchblocks
+   npx create-scaffold-hbar@latest --template jmgomezl/scaffold-hbar-launchblocks
    cd <your-project>
    ```
 
@@ -246,7 +246,7 @@ Before anything runs, the flow is checked from end to end. That covers the docum
 - **Default account** (the default). The API route runs the flow with `HEDERA_OPERATOR_ID` and `HEDERA_OPERATOR_KEY` and streams events back. The panel names the account; the key never leaves the server.
 - **Your testnet wallet.** The studio connects the wallet with hedera-wallet-connect, loading the connector only when this option is picked. The same runner then runs in the page through `@sh/launchblocks/browser`, with a context built by `walletHederaContext`. Each transaction is frozen for the wallet account and sent to the wallet with `hedera_signAndExecuteTransaction`: one approval per transaction, and the Run panel says roughly how many a flow needs. Nothing else goes through the wallet. Receipts come from free queries, while token details, contract results and pending airdrops come from the mirror node, so the wallet is never asked to approve a paid query. The wallet account's public key, which new tokens use for their keys, is also read from the mirror node, because wallets do not expose it. Accounts with a key list or a threshold key are refused, since one wallet cannot sign for them. So are topic messages longer than one 1024-byte chunk, because each chunk would need its own approval.
 
-The terminal can exercise the same path: `yarn core:run <flow> --wallet` runs with a wallet context whose signer is the SDK's `Wallet` holding the operator key, so every transaction goes through `executeWithSigner` exactly as it would with a browser wallet.
+The terminal can exercise the same path: `yarn core:run -- <flow> --wallet` runs with a wallet context whose signer is the SDK's `Wallet` holding the operator key, so every transaction goes through `executeWithSigner` exactly as it would with a browser wallet.
 
 **Packages**
 
@@ -341,16 +341,17 @@ It refuses a price older than `maxAgeSeconds` (120 by default; 0 accepts any age
 | `yarn core:run <flow.json \| gallery-id>` | Run a flow. Add `--codegen out.ts` to write the script, `--wallet` to sign through a `Signer` as a browser wallet would. Each run's full result is saved under `packages/launchblocks/runs/`. |
 | `yarn next:dev` | Start the app with the Launch Studio at `/launch`. |
 | `yarn core:test` | The core unit tests (vitest). No network. |
-| `yarn core:docs` | Regenerate the step table in this README. |
+| `yarn core:docs` · `yarn core:docs:check` | Regenerate the step table in this README, or only check that it is current. |
 | `yarn core:harness <flow.json>` | Export a flow as a [Hedera Harness recipe](#export-any-launch-as-a-recipe) into `.harness/`, the same files as the studio's **Export → Harness recipe**. |
 | `yarn harness:doctor` · `yarn harness:validate` · `yarn harness:run` | The [Hedera Harness recipe](#extending-it-with-hedera-harness). |
 | `yarn lint` · `yarn check-types` · `yarn test` | Everything, across packages. |
 
 Gallery flows live in `packages/launchblocks/flows/`: `hts-launch-saucerswap` (the full launch), `hts-launch-locked-liquidity` (the launch with its LP tokens locked in a `TokenLock` for 30 days; about 77 ℏ), `hts-launch-usd-price` (the pool opened at a dollar price from Pyth; about 60 ℏ), `hts-launch-scheduled-unlocks` (a reserve that unlocks in two scheduled tranches; about 14 ℏ) and `hts-launch-basic` (token with a 1% fee, HCS log and reserve mint; no pool, about 27 ℏ).
 
-With npm, put `--` before flags meant for the script, or npm takes them itself: `npm run core:run -- <flow> --codegen out.ts`.
+With npm, put `--` before flags meant for the script, or they never reach it: `npm run core:run -- <flow> --codegen out.ts`. `core:run` and `core:check` ignore a `--` from Yarn, so that form works with both.
 
 An exported `launch.ts` calls this package's operations, so it runs inside the repo: save it in `packages/launchblocks/` and run `npx tsx --env-file=../nextjs/.env launch.ts`.
+
 
 ## Adding a step type
 
@@ -436,13 +437,13 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 | `Safe multiple associations failed!` | Out of gas inside the pool contracts. Raise the step's gas limit. |
 | `Could not quote HBAR → …` straight after creating a pool | The mirror node has not caught up yet. The swap step retries; if you call the operations directly, wait a few seconds. |
 | `POOL_EXISTS` | That token already has a SaucerSwap pool against HBAR. Trade against it with `saucerswap.swap`. |
-| npm install fails with `ERESOLVE` | Make sure the root `.npmrc` (`legacy-peer-deps=true`) came with the scaffold; npm workspaces read only the root file. |
+| npm install fails with `ERESOLVE` | Make sure the root `.npmrc` (`legacy-peer-deps=true`) came with the scaffold; with npm, only the root file counts in a workspace project. |
 | `WALLET_REJECTED` | The transaction was declined in the wallet. Run again and approve each request, or switch **Sign with** back to the default account. |
 | `WALLET_KEY_UNSUPPORTED` | The connected account has a key list or threshold key. Connect an account with a single ED25519 or ECDSA key. |
 | `WALLET_MESSAGE_TOO_LONG` | With a wallet, a topic message must fit in one 1024-byte chunk. Shorten it, or run with the default account. |
 | `WALLET_DISCONNECTED` | The WalletConnect session ended. Reconnect in the Run panel and run again. |
 | `CONTRACT_ARTIFACT_MISSING` from **Deploy contract** | The Hardhat contracts are not compiled. Run `yarn hardhat:compile`. |
-| With npm, Hardhat tests fail with `Invalid Chai property: revertedWithCustomError` | Two copies of chai: the matchers attached to vitest's chai 5. Keep `chai` 4 pinned in the root `package.json` so npm hoists the copy both use. |
+| With npm, Hardhat tests fail with `Invalid Chai property: revertedWithCustomError` | Two copies of chai: the matchers attached to vitest's chai 5. Keep `chai` 4 pinned in the root `package.json` so both use the one hoisted copy. |
 
 ## Security notes
 

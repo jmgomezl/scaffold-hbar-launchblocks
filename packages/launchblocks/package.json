@@ -14,10 +14,11 @@
   "scripts": {
     "check-types": "tsc --noEmit",
     "docs": "tsx scripts/docs.ts",
+    "docs:check": "tsx scripts/docs.ts --check",
     "doctor": "tsx scripts/doctor.ts",
     "format": "prettier --write './**/*.ts'",
     "harness-recipe": "tsx scripts/harness-recipe.ts",
-    "lint": "eslint",
+    "lint": "eslint --max-warnings=0",
     "run-flow": "tsx scripts/run-flow.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

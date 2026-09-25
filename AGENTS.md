@@ -27,7 +27,7 @@ Package-prefixed scripts for package-specific work. Keep only truly cross-worksp
 ```bash
 # Local chain + deploy + frontend (separate terminals)
 yarn hardhat:chain    # Hedera-forked Hardhat node on 8545
-yarn hardhat:deploy --network localhost
+yarn workspace @sh/hardhat deploy --network localhost
 yarn next:start       # http://localhost:3000
 
 # Frontend only
@@ -52,7 +52,7 @@ yarn core:run <flow>            # run a flow on testnet (spends HBAR)
 yarn core:doctor                # check the operator before spending anything
 
 # Live networks
-yarn hardhat:deploy --network hederaTestnet   # or hederaMainnet
+yarn workspace @sh/hardhat deploy --network hederaTestnet   # or hederaMainnet
 yarn hardhat:verify:testnet
 
 # Deployer account
@@ -112,8 +112,8 @@ Model a new step on **Mint tokens**: `mintFungibleToken` in `src/hedera/ops/toke
 5. If it produces on-chain entities, list them in `ui.outputs` with the right kind so the runner emits HashScan links.
 6. If its network fee is not small, add it to `STEP_FEE_HBAR` in `src/harness/recipe.ts`: exported recipes fund on-chain checks from that table, the public-run policy budgets with it, and unlisted types count as 2 ℏ.
 7. Optionally, add a gallery flow: `packages/launchblocks/flows/<id>.json` and an entry at the end of `GALLERY` in `src/gallery.ts`. Tests check that every gallery flow passes the public-run policy and that its exported `launch.ts` type-checks.
-8. Regenerate the README's step table with `yarn core:docs` (CI runs `yarn core:docs --check`).
-9. Run `yarn core:test && yarn core:lint --max-warnings=0 && yarn core:check-types`.
+8. Regenerate the README's step table with `yarn core:docs` (CI runs `yarn core:docs:check`).
+9. Run `yarn core:test && yarn core:lint && yarn core:check-types` (lint fails on warnings too).
 
 The editor and API discover steps through the registry; there is nothing to register in `packages/nextjs`.
 
@@ -127,7 +127,7 @@ The editor and API discover steps through the registry; there is nothing to regi
 - Deploy scripts: `packages/hardhat/deploy/`
 - Tests: `packages/hardhat/test/`
 - Config: `packages/hardhat/hardhat.config.ts`
-- Tagged deploy: if `deployHederaToken.tags = ["HederaToken"]`, run `yarn hardhat:deploy --tags HederaToken`
+- Tagged deploy: if `deployHederaToken.tags = ["HederaToken"]`, run `yarn workspace @sh/hardhat deploy --tags HederaToken`
 
 ### After deploy
 
@@ -201,6 +201,6 @@ Prefer `type` over `interface`. No `T` prefix on types. Let TypeScript infer whe
 
 Core package specifics: `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess` are on — spread conditionally (`...(x ? { x } : {})`) instead of assigning `undefined`, and narrow array reads. Use `import type` for types (lint enforces it).
 
-Commits follow Conventional Commits (`feat(core): …`, `fix(nextjs): …`, `docs: …`, `ci: …`) and are GPG-signed. Keep each commit green: tests, lint with `--max-warnings=0`, and type checks.
+Commits follow Conventional Commits (`feat(core): …`, `fix(nextjs): …`, `docs: …`, `ci: …`) and are GPG-signed. Keep each commit green: tests, lint (a warning fails it), and type checks.
 
 When writing prose (README, comments, docs), write `yarn <script>` only where a command is meant: the CLI rewrites that word to `npm run` in projects scaffolded with npm.

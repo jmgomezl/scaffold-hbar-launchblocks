@@ -14,7 +14,7 @@
     "flatten": "hardhat flatten",
     "fork": "MAINNET_FORKING_ENABLED=true HEDERA_FORKING=true hardhat node --network hardhat --no-deploy",
     "format": "prettier --write './**/*.(ts|sol)'",
-    "lint": "eslint",
+    "lint": "eslint --max-warnings=0",
     "lint-staged": "eslint",
     "test": "HEDERA_FORKING=true REPORT_GAS=true hardhat test",
     "verify": "hardhat verify",

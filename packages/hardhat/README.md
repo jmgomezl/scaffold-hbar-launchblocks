@@ -14,7 +14,7 @@ From the repo root, use the explicit `hardhat:*` scripts for this package. Insid
 
 2. **Deploy to the running fork** (terminal 2):
    ```bash
-   yarn hardhat:deploy --network localhost
+   yarn workspace @sh/hardhat deploy --network localhost
    ```
    Use **`localhost`** so Hardhat connects to the long-running node on port 8545.
 
@@ -44,11 +44,11 @@ You need a deployer account with HBAR on the target network. Without funds, depl
 
 3. **Deploy to Hedera testnet** (from repo root):
    ```bash
-   yarn hardhat:deploy --network hederaTestnet
+   yarn workspace @sh/hardhat deploy --network hederaTestnet
    ```
    or
    ```bash
-   yarn hardhat:deploy --network hedera_testnet
+   yarn workspace @sh/hardhat deploy --network hedera_testnet
    ```
    You will be prompted to enter the password to decrypt your deployer key.
 
@@ -56,15 +56,13 @@ You need a deployer account with HBAR on the target network. Without funds, depl
    ```bash
    yarn hardhat:verify:testnet   # all contracts on chain 296
    yarn hardhat:verify:mainnet   # all contracts on chain 295
-   yarn workspace @sh/hardhat verify:contract -- HederaToken testnet
-   yarn workspace @sh/hardhat verify:contract -- HederaToken testnet 0xYourContractAddress
    ```
 
 ## Layout
 
 - `contracts/` — Solidity sources
 - `deploy/` — hardhat-deploy scripts (e.g. `00_deploy_hedera_token.ts`)
-- `scripts/` — generateAccount, importAccount, verifyHedera.js, etc.
+- `scripts/` — generateAccount, importAccount, runHardhatDeployWithPK, etc.
 - `test/` — contract tests
 - `hardhat.config.ts` — networks (`hardhat`, `localhost` for RPC at 127.0.0.1:8545, `hederaTestnet`, `hederaMainnet`)
 

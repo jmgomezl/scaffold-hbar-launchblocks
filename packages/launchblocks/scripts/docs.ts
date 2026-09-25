@@ -2,7 +2,7 @@
  * Regenerate the README's step reference from the registry.
  *
  *   yarn core:docs           rewrite README.md
- *   yarn core:docs --check   exit 1 if README.md is out of date (used in CI)
+ *   yarn core:docs:check     exit 1 if README.md is out of date (used in CI)
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";

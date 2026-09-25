@@ -34,7 +34,7 @@ jobs:
         run: yarn install --immutable
 
       - name: Core lint
-        run: yarn core:lint --max-warnings=0
+        run: yarn core:lint
 
       - name: Core type check
         run: yarn core:check-types
@@ -43,16 +43,16 @@ jobs:
         run: yarn core:test:coverage
 
       - name: README step reference is up to date
-        run: yarn core:docs --check
+        run: yarn core:docs:check
 
       - name: Next.js lint
-        run: yarn next:lint --max-warnings=0
+        run: yarn next:lint
 
       - name: Next.js type check
         run: yarn next:check-types
 
       - name: Hardhat lint
-        run: yarn hardhat:lint --max-warnings=0
+        run: yarn hardhat:lint
 
       - name: Hardhat type check
         run: yarn hardhat:check-types
@@ -92,7 +92,7 @@ jobs:
         run: |
           yarn hardhat:chain &
           timeout 60s bash -c 'until curl -s -X POST http://127.0.0.1:8545 -H "Content-Type: application/json" --data "{\"jsonrpc\":\"2.0\",\"method\":\"web3_clientVersion\",\"params\":[],\"id\":1}" >/dev/null; do sleep 2; done'
-          yarn hardhat:deploy --network localhost
+          yarn workspace @sh/hardhat deploy --network localhost
 
       - name: Hardhat tests
         run: yarn hardhat:test

@@ -44,7 +44,9 @@ function parseArgs(argv: string[]): Args {
       i += 1;
       return value;
     };
-    if (arg === "--dry-run") args.dryRun = true;
+    // Yarn passes a `--` on to the script where npm drops it; skipping it lets one command work with both.
+    if (arg === "--") continue;
+    else if (arg === "--dry-run") args.dryRun = true;
     else if (arg === "--wallet") args.wallet = true;
     else if (arg === "--codegen") args.codegen = next();
     else if (arg === "--env") args.env = next();
