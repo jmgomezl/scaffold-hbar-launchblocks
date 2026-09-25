@@ -25,8 +25,8 @@ describe("share links", () => {
   });
 
   it("stop inflating a crafted link long before it could exhaust memory", () => {
-    // 100 MB of spaces deflates to about 100 KB, and 30 KB of it still expands to about 30 MB.
-    const bomb = deflateSync(new Uint8Array(100 * 1024 * 1024).fill(32), { level: 9 }).subarray(0, 30 * 1024);
+    // 8 MB of spaces deflates to about 8 KB: a short link that expands 30 times past the 256 KB cap.
+    const bomb = deflateSync(new Uint8Array(8 * 1024 * 1024).fill(32), { level: 9 });
     const encoded = Buffer.from(bomb).toString("base64url");
     expect(encoded.length).toBeLessThan(MAX_SHARE_LINK_CHARS);
     expect(() => decodeFlowFromLink(encoded)).toThrow(expect.objectContaining({ code: "SHARE_LINK_INVALID" }));
