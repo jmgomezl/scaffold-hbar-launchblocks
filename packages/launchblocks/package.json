@@ -1,6 +1,6 @@
 {
   "name": "@sh/launchblocks",
-  "version": "1.0.2",
+  "version": "0.1.0",
   "private": true,
   "description": "LaunchBlocks core: flow schema, step registry, runner and codegen for Hedera token launches",
   "main": "src/index.ts",
