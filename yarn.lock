@@ -3888,6 +3888,7 @@ __metadata:
     typescript: ^5.8.2
     usehooks-ts: ^3.1.0
     viem: 2.39.0
+    vitest: ^3.2.0
     wagmi: 2.19.5
     zustand: ^5.0.0
   languageName: unknown

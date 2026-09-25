@@ -9,7 +9,7 @@ Use the package manager this project was created with — see `packageManager` i
 ## Packages
 
 - `packages/launchblocks` (`@sh/launchblocks`) — framework-agnostic core: flow schema, step registry, runner, codegen, Hedera client factory. No React, no Next. Unit-tested with vitest.
-- `packages/nextjs` — the frontend (App Router, RainbowKit, Wagmi, Viem, DaisyUI) plus the API routes that run flows.
+- `packages/nextjs` — the frontend (App Router, RainbowKit, Wagmi, Viem, DaisyUI) plus the API routes that run flows. `test/api/` covers the routes and `services/launchblocks/server.ts` (run guards, public-demo policy, error statuses, streaming) with vitest, calling the handlers directly.
 - `packages/hardhat` — Hardhat (`hardhat-deploy`): the starter's contracts plus `TokenLock`, which the Deploy contract block deploys from the compiled artifacts.
 
 Product rules that shape every change:
@@ -36,7 +36,7 @@ yarn next:dev
 # Quality / build
 yarn lint             # next + hardhat + core
 yarn check-types      # next + hardhat + core
-yarn test             # core (vitest) + hardhat
+yarn test             # core + API (vitest) + hardhat
 yarn format
 yarn next:build
 yarn hardhat:compile
@@ -50,6 +50,9 @@ yarn core:harness <flow.json>   # export a flow as a Hedera Harness recipe into 
 yarn core:check <flow>          # validate a flow and list its steps; sends nothing
 yarn core:run <flow>            # run a flow on testnet (spends HBAR)
 yarn core:doctor                # check the operator before spending anything
+
+# API routes
+yarn next:test
 
 # Live networks
 yarn workspace @sh/hardhat deploy --network hederaTestnet   # or hederaMainnet

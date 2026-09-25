@@ -66,6 +66,7 @@ echo "-- quality gates"
 check lint run lint
 check check-types run check-types
 check core-test run core:test
+check next-test run next:test
 check core-docs run core:docs --check
 check hardhat-compile run hardhat:compile
 check hardhat-test run hardhat:test

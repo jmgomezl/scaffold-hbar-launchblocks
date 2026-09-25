@@ -51,6 +51,9 @@ jobs:
       - name: Next.js type check
         run: yarn next:check-types
 
+      - name: Next.js API tests
+        run: yarn next:test
+
       - name: Hardhat lint
         run: yarn hardhat:lint
 

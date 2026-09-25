@@ -52,7 +52,8 @@
     "next:lint": "yarn workspace @sh/nextjs lint",
     "next:serve": "yarn workspace @sh/nextjs serve",
     "next:start": "yarn workspace @sh/nextjs start",
-    "test": "yarn core:test && yarn hardhat:test",
+    "next:test": "yarn workspace @sh/nextjs test",
+    "test": "yarn core:test && yarn next:test && yarn hardhat:test",
     "postinstall": "husky",
     "precommit": "lint-staged",
     "lint-staged": "lint-staged"

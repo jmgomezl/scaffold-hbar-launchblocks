@@ -341,7 +341,7 @@ It refuses a price older than `maxAgeSeconds` (120 by default; 0 accepts any age
 | `yarn core:check <flow.json \| gallery-id>` | Validate a flow and list its steps; nothing is sent. |
 | `yarn core:run <flow.json \| gallery-id>` | Run a flow. Add `--codegen out.ts` to write the script, `--wallet` to sign through a `Signer` as a browser wallet would. Each run's full result is saved under `packages/launchblocks/runs/`. |
 | `yarn next:dev` | Start the app with the Launch Studio at `/launch`. |
-| `yarn core:test` | The core unit tests (vitest). No network. |
+| `yarn core:test` · `yarn next:test` | Unit tests (vitest) for the core, and for the API routes: run guards, the public-demo policy, error statuses, streaming. No network. |
 | `yarn core:docs` · `yarn core:docs:check` | Regenerate the step table in this README, or only check that it is current. |
 | `yarn core:harness <flow.json>` | Export a flow as a [Hedera Harness recipe](#export-any-launch-as-a-recipe) into `.harness/`, the same files as the studio's **Export → Harness recipe**. |
 | `yarn harness:doctor` · `yarn harness:validate` · `yarn harness:run` | The [Hedera Harness recipe](#extending-it-with-hedera-harness). |
@@ -353,7 +353,7 @@ With npm, put `--` before flags meant for the script, or they never reach it: `n
 
 An exported `launch.ts` calls this package's operations, so it runs inside the repo: save it in `packages/launchblocks/` and run `npx tsx --env-file=../nextjs/.env launch.ts`.
 
-**Checks on every push.** CI lints (a warning fails it), type-checks, runs the tests with coverage, checks the step table above, compiles the contracts and tests them on a Hedera fork, builds the app, and scans the whole git history for committed secrets with gitleaks. **Fresh scaffold** then creates a project from the published template with the latest Scaffold-HBAR CLI, once for each package manager (npm, then Yarn), and checks it item by item as the bounty gate does: files, install, lint, types, tests, a dry run of every gallery flow, the build, and the served app's routes. Its script runs locally too: `.github/scripts/check-scaffold.sh <project> <yarn|npm>`.
+**Checks on every push.** CI lints (a warning fails it), type-checks, runs the core tests with coverage and the API tests, checks the step table above, compiles the contracts and tests them on a Hedera fork, builds the app, and scans the whole git history for committed secrets with gitleaks. **Fresh scaffold** then creates a project from the published template with the latest Scaffold-HBAR CLI, once for each package manager (npm, then Yarn), and checks it item by item as the bounty gate does: files, install, lint, types, tests, a dry run of every gallery flow, the build, and the served app's routes. Its script runs locally too: `.github/scripts/check-scaffold.sh <project> <yarn|npm>`.
 
 ## Adding a step type
 

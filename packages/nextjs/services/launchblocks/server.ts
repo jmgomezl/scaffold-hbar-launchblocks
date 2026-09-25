@@ -57,7 +57,6 @@ export function jsonError(status: number, code: string, message: string, extra: 
   return NextResponse.json<ApiError>({ error: { code, message, ...extra } }, { status });
 }
 
-/** Map thrown errors to HTTP responses without leaking internals. */
 /** Errors that are not the request's fault. Everything else a LaunchBlocksError reports is a 400. */
 const HTTP_STATUS: Readonly<Record<string, number>> = {
   CONTRACT_ARTIFACT_MISSING: 404,
@@ -76,6 +75,7 @@ const HTTP_STATUS: Readonly<Record<string, number>> = {
   PYTH_NOT_ENTITLED: 502,
 };
 
+/** Map thrown errors to HTTP responses without leaking internals. */
 export function errorResponse(error: unknown) {
   if (error instanceof FlowValidationError) {
     return jsonError(400, error.code, "Flow is invalid", { issues: error.issues });
