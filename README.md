@@ -23,7 +23,7 @@ npx create-scaffold-hbar@latest --template jmgomezl/scaffold-hbar-launchblocks
 
 *A real run of `hts-launch-locked-liquidity` on testnet, started from the Launch Studio: a token, its launch log, a SaucerSwap pool, a `TokenLock` contract holding the pool's LP tokens, and two reads of the lock, in 36 seconds. Shown at three times speed.*
 
-**Contents:** [What you get](#what-you-get) · [Quick start](#quick-start) · [See it in action](#see-it-in-action) · [Verified on testnet](#verified-on-testnet) · [How it works](#how-it-works) · [Steps](#steps) · [SaucerSwap](#the-saucerswap-integration) · [Locking and unlocks](#locking-liquidity-and-scheduling-unlocks) · [Pyth](#pricing-a-launch-in-us-dollars-with-pyth) · [Adding a step](#adding-a-step-type) · [Hedera Harness](#extending-it-with-hedera-harness) · [Deploying](#deploying-the-studio) · [Troubleshooting](#troubleshooting)
+**Contents:** [What you get](#what-you-get) · [Quick start](#quick-start) · [See it in action](#see-it-in-action) · [Verified on testnet](#verified-on-testnet) · [Launch pages and share links](#launch-pages-and-share-links) · [AI agents (MCP)](#use-it-from-an-ai-agent-mcp) · [How it works](#how-it-works) · [Steps](#steps) · [SaucerSwap](#the-saucerswap-integration) · [Locking and unlocks](#locking-liquidity-and-scheduling-unlocks) · [Pyth](#pricing-a-launch-in-us-dollars-with-pyth) · [Adding a step](#adding-a-step-type) · [Hedera Harness](#extending-it-with-hedera-harness) · [Deploying](#deploying-the-studio) · [Troubleshooting](#troubleshooting)
 
 ## What you get
 
@@ -35,6 +35,9 @@ npx create-scaffold-hbar@latest --template jmgomezl/scaffold-hbar-launchblocks
 - **Scheduled transactions** — **Schedule token transfer** and **Schedule a mint** use the Schedule Service's long-term schedules (HIP-423): vesting and supply unlocks that the network runs on their date with nobody online.
 - **Fourteen step types** across HTS, HCS, the Schedule Service, smart contracts, SaucerSwap, Pyth and the mirror node, each one schema-checked, documented, tested, and exportable as code.
 - **The app's account or yours** — by default the server's operator account signs and pays, so anyone can press Run with nothing to set up. A visitor can instead connect their own testnet wallet (HashPack, Kabila, or any wallet through [hedera-wallet-connect](https://github.com/hashgraph/hedera-wallet-connect)) and approve each transaction; the launch then runs in their browser, and nothing they create belongs to the app.
+- **A public page for every launch** (`/launches/<topic id>`), rebuilt from the launch's own HCS log: the token, the pool's price now against its opening price, the locked liquidity and its countdown, and whether each schedule has run. The app stores nothing; the log is the record. The Run panel links to it after a run. See [launch pages](#launch-pages-and-share-links).
+- **Launches you can share and price** — **Share** copies a link that opens the same blocks in anyone's studio, with the flow inside the link itself. Before a run, the Run panel says what it will cost, step by step.
+- **An MCP server for coding agents** — Claude Code, Cursor or any MCP client can read the step catalog, build and validate a flow (with its cost), export `launch.ts`, hand back a studio link, dry-run or run it, and read a launch back. `.mcp.json` registers it for Claude Code. See [AI agents](#use-it-from-an-ai-agent-mcp).
 - **A terminal runner** with dry runs, code generation, and a JSON record of every run, plus `core:doctor`, which checks your operator account before you spend anything.
 - **Guards for a public demo** — mainnet stays off unless you turn it on, plus an optional run token and a per-client rate limit.
 
@@ -187,6 +190,16 @@ What those runs left on-chain, as other apps show it:
   </tr>
 </table>
 
+## Launch pages and share links
+
+Every gallery flow opens an HCS topic and writes a JSON event to it at each milestone: `token.launched`, `market.opened`, `liquidity.locked`, `unlocks.scheduled`. That log names everything the launch created, in consensus order, and nobody can change it afterwards. So a launch page needs nothing but the topic id: `/launches/0.0.10676438` reads the log from the mirror node, then shows each entity as it is now. That means the token's supply, the pool's price (from its reserves) against the price it opened at, what the `TokenLock` still holds and when it unlocks, and whether each schedule has executed. Nothing is stored by the app, so a launch run from the terminal, another deployment or `launch.ts` gets the same page.
+
+![The launch page for the locked-liquidity example in dark mode: the header names the token LaunchBlocks Locked Demo and its HCS log 0.0.10676438; cards show 1,000,000 LBL in circulation, the SaucerSwap price of 0.0002 HBAR with 50,000 LBL and 10 HBAR in the pool, and 707.10677118 LP tokens locked until Oct 23, 2026 (in 28 days); below, the log's first entry, Token launched](docs/images/launch-page.png)
+
+`/launches` opens one by topic id and lists [real launches on testnet](https://launchblocks.aivylabs.xyz/launches). The reader is `readLaunch` in `packages/launchblocks/src/launches/`, so the same record is available from code and from the [MCP server](#use-it-from-an-ai-agent-mcp).
+
+**Share** in the studio's toolbar copies a link such as `https://…/launch#flow=rVXBbts4EP0V…`: the flow, compressed (the locked-liquidity example fits in 1,230 characters), in the URL's fragment. Browsers never send the fragment to a server, so a shared launch is stored nowhere but in the link, and whoever opens it gets the same blocks to edit, validate and run with their own account or wallet.
+
 ## Environment variables
 
 All live in `packages/nextjs/.env` and are read on the server only. None of them is prefixed `NEXT_PUBLIC_`, so none can reach the browser.
@@ -206,6 +219,7 @@ All live in `packages/nextjs/.env` and are read on the server only. None of them
 | `LAUNCHBLOCKS_PUBLIC_DEMO` | no | `false` | `true` applies the [public-run policy](#deploying-the-studio) for a deployment whose operator pays for anonymous visitors. |
 | `LAUNCHBLOCKS_PUBLIC_HBAR_PER_HOUR` | no | `400` | With the policy on: the most HBAR all visitors' runs may cost in an hour, counted at each run's worst case. |
 | `LAUNCHBLOCKS_PUBLIC_MAX_HBAR_PER_STEP` | no | `25` | With the policy on: the most HBAR one step may deposit or trade. |
+| `LAUNCHBLOCKS_STUDIO_URL` | no | `http://localhost:3000` | For the [MCP server](#use-it-from-an-ai-agent-mcp) only: where its share links and launch pages point. |
 
 The one public variable is Scaffold-HBAR's `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`, used by RainbowKit and by the studio's wallet option. It falls back to a shared development id; set your own from [WalletConnect Cloud](https://cloud.reown.com) before you deploy.
 
@@ -345,6 +359,7 @@ It refuses a price older than `maxAgeSeconds` (120 by default; 0 accepts any age
 | `yarn core:test` · `yarn next:test` | Unit tests (vitest) for the core, and for the API routes: run guards, the public-demo policy, error statuses, streaming. No network. |
 | `yarn next:e2e` | Drive the Launch Studio in Chromium (Playwright) against the production build: every example loads valid, a bad field is flagged, export works, a run without an operator explains why. Run `yarn next:build` and, once, `yarn next:e2e:install` first. The test server gets no operator, so nothing is spent. |
 | `yarn core:docs` · `yarn core:docs:check` | Regenerate the step table in this README, or only check that it is current. |
+| `yarn core:mcp` | Start the [MCP server](#use-it-from-an-ai-agent-mcp) on stdio. MCP clients should run `node packages/launchblocks/bin/mcp.cjs` instead, with no package manager in between. |
 | `yarn core:harness <flow.json>` | Export a flow as a [Hedera Harness recipe](#export-any-launch-as-a-recipe) into `.harness/`, the same files as the studio's **Export → Harness recipe**. |
 | `yarn harness:doctor` · `yarn harness:validate` · `yarn harness:run` | The [Hedera Harness recipe](#extending-it-with-hedera-harness). |
 | `yarn lint` · `yarn check-types` · `yarn test` | Everything, across packages. |
@@ -409,6 +424,28 @@ yarn core:harness my-launch.json                            # or Export → Harn
 npx hedera-harness validate .harness/my-launch.spec.yaml    # Tiers 0–2, no agent
 npx hedera-harness run .harness/my-launch.spec.yaml         # the agent, then every tier
 ```
+
+## Use it from an AI agent (MCP)
+
+LaunchBlocks is also an [MCP](https://modelcontextprotocol.io) server, so a coding agent can compose launches the way the studio does. Ask for "a token called Rocket with a 1% fee and a SaucerSwap pool at 0.0002 ℏ, locked for 30 days". It reads the catalog, writes the flow, validates it until every schema and reference checks out, tells you what it will cost, and hands you a studio link to review the blocks. Or it runs the flow, if you ask it to.
+
+| Tool | What it does |
+| --- | --- |
+| `list_steps` · `get_step` | The step catalog; one step's params as JSON Schema, with an example of its outputs |
+| `list_examples` · `get_example` | The gallery flows, to start from |
+| `validate_flow` | Every issue, or `ok` with the estimated HBAR cost, step by step |
+| `generate_script` | The flow as `launch.ts` |
+| `share_link` | A studio link that opens the flow as blocks |
+| `run_flow` | A dry run by default (validation, cost, plan). With `dryRun: false`, a real run with the project's operator, returning every output and HashScan link |
+| `read_launch` | A launch from its HCS log, as the [launch page](#launch-pages-and-share-links) shows it |
+
+**Claude Code** picks it up from the project's `.mcp.json` (it asks you to approve it the first time). Anywhere else, add it by hand:
+
+```bash
+claude mcp add launchblocks -- node packages/launchblocks/bin/mcp.cjs
+```
+
+For Cursor and other clients, the command is `node` with the argument `packages/launchblocks/bin/mcp.cjs`, run from the project root. The server reads `packages/nextjs/.env` like `core:run`. Without an operator there, `run_flow` only dry-runs. With one, a real run still needs the agent to pass `dryRun: false`, and mainnet stays off unless `LAUNCHBLOCKS_ALLOW_MAINNET=true`. It speaks over stdio, so its log goes to stderr, and its tools call the same functions as the studio and `core:run` (`packages/launchblocks/src/mcp/server.ts`).
 
 ## Deploying the studio
 

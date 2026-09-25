@@ -50,6 +50,7 @@ yarn core:harness <flow.json>   # export a flow as a Hedera Harness recipe into 
 yarn core:check <flow>          # validate a flow and list its steps; sends nothing
 yarn core:run <flow>            # run a flow on testnet (spends HBAR)
 yarn core:doctor                # check the operator before spending anything
+yarn core:mcp                   # the MCP server on stdio (clients run node packages/launchblocks/bin/mcp.cjs)
 
 # API routes and the studio in a browser
 yarn next:test
@@ -85,10 +86,17 @@ src/
   saucerswap/ config.ts (deployments), pool.ts, swap.ts: the SaucerSwap V1 operations
   pyth/       config.ts (Pyth's Hedera contract, feed ids), hermes.ts (signed updates, API key), price.ts (priceInUsd)
   steps/      one folder per namespace (hts/, hcs/, hss/, pyth/, saucerswap/, contract/), one file per step type
+  launches/   read.ts (readLaunch: a launch rebuilt from its HCS log, plus its token, pool, lock and schedules now)
+  mcp/        server.ts (createLaunchBlocksMcpServer: the MCP tools); scripts/mcp.ts runs it on stdio, bin/mcp.cjs starts it
   errors.ts   LaunchBlocksError subclasses with stable `code`s
-  browser.ts  the entry for wallet runs in the page (no Node built-ins); editor/ is the editor's entry
+  browser.ts  the entry for wallet runs in the page (no Node built-ins); editor/ is the editor's entry,
+              including editor/share.ts (a flow packed into a `/launch#flow=` link)
 test/         mirrors src/; test/helpers/fake-steps.ts has network-free steps for runner/registry tests
 ```
+
+**Launch logs and launch pages.** A flow that opens an HCS topic and writes JSON events to it (`{ "event": "token.launched", "tokenId": … }`) gets a public page at `/launches/<topic id>` (`packages/nextjs/app/launches/`), built by `readLaunch`. It recognises `token.launched`, `market.opened` (`pairId`, `openingPriceHbar`, `poolUrl`), `liquidity.locked` (`lock`, `lpTokenId`, `releaseTime`) and any `{ "schedule": id, "at": … }` object. Other events and fields still show in the timeline, with ids linked to HashScan by their key's name. So a new step that should appear on the page only needs its flow to log it in that shape.
+
+**MCP server.** Its tools (`list_steps`, `get_step`, `list_examples`, `get_example`, `validate_flow`, `generate_script`, `share_link`, `run_flow`, `read_launch`) call the same core functions as the studio and `core:run`: add capability in the core, not in a tool. `run_flow` dry-runs unless `dryRun: false`. stdout is the protocol, so nothing may print there (scripts/mcp.ts sends console output to stderr), and clients start it with `node packages/launchblocks/bin/mcp.cjs`, never through a package manager, which prints its own output. Tests: `test/mcp/server.test.ts`, including one over real stdio.
 
 A **flow** is `{ schemaVersion: 1, id, name, network, steps: [{ id, type, params }] }`. Step ids are camelCase and become variable names in generated code. Params may reference earlier outputs with `{{steps.<id>.<key>}}` — a whole-string reference keeps the output's type; inside longer strings it interpolates.
 
