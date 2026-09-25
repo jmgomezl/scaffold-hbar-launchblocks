@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ApiError } from "../_lib/api";
 import { exportHarnessRecipe, generateScript, toApiError } from "../_lib/api";
+import { HighlightedCode, languageOf } from "./HighlightedCode";
 import type { FlowInput, HarnessRecipe } from "@sh/launchblocks/editor";
 import { strToU8, zipSync } from "fflate";
 import { notification } from "~~/utils/scaffold-hbar";
@@ -87,6 +88,7 @@ export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: b
   const shownRecipeFile = recipe.value?.files[recipeFile];
   const text = tab === "json" ? json : tab === "script" ? (script.source ?? "") : (shownRecipeFile?.content ?? "");
   const error = tab === "script" ? script.error : tab === "harness" ? recipe.error : undefined;
+  const language = tab === "json" ? "json" : tab === "script" ? "typescript" : languageOf(shownRecipeFile?.path ?? "");
   const downloadLabel =
     tab === "json"
       ? `${flow.id}.json`
@@ -130,8 +132,8 @@ export function ExportDialog({ flow, open, onClose }: { flow: FlowInput; open: b
             </div>
           </div>
         ) : (
-          <pre className="max-h-[50vh] overflow-auto rounded-lg bg-base-200 p-3 text-xs">
-            <code>{text || "Generating…"}</code>
+          <pre className="code-view max-h-[50vh] overflow-auto rounded-lg bg-base-200 p-3 text-xs">
+            {text ? <HighlightedCode text={text} language={language} /> : <code>Generating…</code>}
           </pre>
         )}
         <div className="modal-action">

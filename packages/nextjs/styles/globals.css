@@ -206,3 +206,59 @@
   }
 }
 
+/* Highlighted code in the Export dialog (highlight.js token classes), for both themes. */
+.code-view {
+  --code-keyword: #7c3aed;
+  --code-string: #047857;
+  --code-number: #b45309;
+  --code-name: #1d4ed8;
+  --code-attr: #0e7490;
+  --code-comment: #6b7280;
+}
+[data-theme="dark"] .code-view {
+  --code-keyword: #c4b5fd;
+  --code-string: #6ee7b7;
+  --code-number: #fcd34d;
+  --code-name: #93c5fd;
+  --code-attr: #67e8f9;
+  --code-comment: #9ca3af;
+}
+.code-view .hljs-keyword,
+.code-view .hljs-built_in,
+.code-view .hljs-literal,
+.code-view .hljs-section {
+  color: var(--code-keyword);
+}
+.code-view .hljs-string,
+.code-view .hljs-regexp,
+.code-view .hljs-template-variable {
+  color: var(--code-string);
+}
+.code-view .hljs-number,
+.code-view .hljs-bullet {
+  color: var(--code-number);
+}
+.code-view .hljs-title,
+.code-view .hljs-title.function_,
+.code-view .hljs-title.class_,
+.code-view .hljs-type {
+  color: var(--code-name);
+}
+.code-view .hljs-attr,
+.code-view .hljs-attribute,
+.code-view .hljs-property,
+.code-view .hljs-variable {
+  color: var(--code-attr);
+}
+.code-view .hljs-comment,
+.code-view .hljs-meta,
+.code-view .hljs-quote {
+  color: var(--code-comment);
+  font-style: italic;
+}
+.code-view .hljs-emphasis {
+  font-style: italic;
+}
+.code-view .hljs-strong {
+  font-weight: 700;
+}
