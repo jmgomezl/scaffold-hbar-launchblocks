@@ -37,7 +37,7 @@ npx create-scaffold-hbar@latest --template jmgomezl/scaffold-hbar-launchblocks
 - **The app's account or yours** — by default the server's operator account signs and pays, so anyone can press Run with nothing to set up. A visitor can instead connect their own testnet wallet (HashPack, Kabila, or any wallet through [hedera-wallet-connect](https://github.com/hashgraph/hedera-wallet-connect)) and approve each transaction; the launch then runs in their browser, and nothing they create belongs to the app.
 - **A public page for every launch** (`/launches/<topic id>`), rebuilt from the launch's own HCS log: the token, the pool's price now against its opening price, the locked liquidity and its countdown, and whether each schedule has run. The app stores nothing; the log is the record. The Run panel links to it after a run. See [launch pages](#launch-pages-and-share-links).
 - **Launches you can share and price** — **Share** copies a link that opens the same blocks in anyone's studio, with the flow inside the link itself. Before a run, the Run panel says what it will cost, step by step.
-- **An AI companion in the studio** — ask why Run is disabled, what a block does, why a run failed, or what to add next, and get an answer about *this* launch: it sees the blocks, the problems and the last error, and knows every step's docs. Right-click any block, or press **Explain** beside a problem. See [the companion](#an-ai-companion-in-the-studio).
+- **An AI companion in the studio** — ask why Run is disabled, what a block does, why a run failed, or what to add next, and get an answer about *this* launch: it sees the blocks, the problems and the last error, and knows every step's docs. Right-click any block, or press **Explain** beside a problem, or the floating **✨ Ask the assistant** button. See [the companion](#an-ai-companion-in-the-studio).
 - **An MCP server for coding agents** — Claude Code, Cursor or any MCP client can read the step catalog, build and validate a flow (with its cost), export `launch.ts`, hand back a studio link, dry-run or run it, and read a launch back. `.mcp.json` registers it for Claude Code. See [AI agents](#use-it-from-an-ai-agent-mcp).
 - **A terminal runner** with dry runs, code generation, and a JSON record of every run, plus `core:doctor`, which checks your operator account before you spend anything.
 - **Guards for a public demo** — mainnet stays off unless you turn it on, plus an optional run token and a per-client rate limit.
@@ -205,7 +205,7 @@ A launch log gets a submit key by default, so only the account that ran the laun
 
 ## An AI companion in the studio
 
-The **Assistant** tab explains and suggests, in whatever language you write in. It can explain:
+**✨ Ask the assistant** floats at the bottom right of the studio, always in sight. It opens a chat window over the canvas, beside the Run panel, or a sheet on a phone; a dot on the button means there is a problem or a failed run it can explain. It explains and suggests, in whatever language you write in. It can explain:
 
 - a block ("What does Seed SaucerSwap pool do, and how do I fill it in?")
 - why something is flagged, from the **Explain** button beside each problem
@@ -214,7 +214,7 @@ The **Assistant** tab explains and suggests, in whatever language you write in. 
 
 Right-click any block, on the canvas or in the toolbox, for **Ask the assistant about this block**. The chips under the conversation suggest the questions that fit the moment: why you can't run yet, a check before you spend HBAR, what the launch will cost.
 
-![The Launch Studio with a problem on the Seed SaucerSwap pool block, whose HBAR to deposit is 10.123456789: the Assistant tab explains that HBAR has 8 decimal places, one tinybar being 0.00000001, and says to change HBAR to deposit in seedPool to 10.12345678; below, suggested questions and the question box](docs/images/studio-assistant.png)
+![The Launch Studio with a problem on the Seed SaucerSwap pool block, whose HBAR to deposit is 10.123456789: the floating assistant window, open over the canvas beside the Problems panel, explains that HBAR has 8 decimal places, one tinybar being 0.00000001, and says to change HBAR to deposit in seedPool to 10.12345678; below, suggested questions and the question box](docs/images/studio-assistant.png)
 
 It answers about the launch on screen. Each question carries:
 
@@ -228,7 +228,7 @@ The server adds a guide to LaunchBlocks, built from the step registry, so a new 
 
 It only advises. It cannot run anything or change your launch. Answers stream from an OpenAI model (`gpt-5.4-mini` by default: current, fast, and a fraction of the cost of the gpt-4o generation) through `POST /api/launchblocks/assistant` (`packages/nextjs/services/launchblocks/assistant.ts`).
 
-- **Turn it on:** set `OPENAI_API_KEY` in `packages/nextjs/.env`. Without it, the tab says how. Any OpenAI-compatible provider works through `OPENAI_BASE_URL`, and `LAUNCHBLOCKS_ASSISTANT_MODEL` picks the model.
+- **Turn it on:** set `OPENAI_API_KEY` in `packages/nextjs/.env`. Without it, the assistant says how. Any OpenAI-compatible provider works through `OPENAI_BASE_URL`, and `LAUNCHBLOCKS_ASSISTANT_MODEL` picks the model.
 - **What leaves the server:** your question, the conversation, and the launch as JSON. Never the operator key, the AI key or any other variable. On OpenAI, the request asks it not to store the conversation.
 - **What it costs you:** every question spends the deployment's AI credit. Each visitor gets 30 questions an hour and all visitors together 600; the input is capped at 2,000 characters and the answer's length is capped too. The fixed guide comes first in every request, so the provider can cache it.
 

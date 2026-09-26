@@ -9,12 +9,11 @@ import {
   ExclamationTriangleIcon,
   ListBulletIcon,
   PlayIcon,
-  SparklesIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 
 export type PanelMode = "open" | "collapsed" | "closed";
-export type PanelTab = "run" | "problems" | "outputs" | "assistant";
+export type PanelTab = "run" | "problems" | "outputs";
 export type RunSummary = { tone: "info" | "success" | "error"; text: string } | null;
 
 type Props = {
@@ -31,14 +30,13 @@ const TABS: { id: PanelTab; label: string; Icon: typeof PlayIcon }[] = [
   { id: "run", label: "Run", Icon: PlayIcon },
   { id: "problems", label: "Problems", Icon: ExclamationTriangleIcon },
   { id: "outputs", label: "Outputs", Icon: ListBulletIcon },
-  { id: "assistant", label: "Assistant", Icon: SparklesIcon },
 ];
 
 const TONE_TEXT = { info: "text-info", success: "text-success", error: "text-error" } as const;
 const TONE_DOT = { info: "bg-info", success: "bg-success", error: "bg-error" } as const;
 
 /**
- * The Run / Problems / Outputs / Assistant panel, in one of three modes:
+ * The Run / Problems / Outputs panel, in one of three modes:
  *
  * - open: the full panel, with collapse and close controls
  * - collapsed: a slim rail (side by side) or strip (stacked) that stays put,
@@ -110,7 +108,7 @@ export function StudioPanel({ mode, onModeChange, tab, onTabChange, problemCount
   return (
     <aside className="flex w-full flex-col border-t border-base-300 bg-base-100 lg:min-h-0 lg:w-[400px] lg:border-l lg:border-t-0">
       <div className="flex items-center px-2 pt-1">
-        {/* Four tabs fit the 400px panel in one row; on a narrow phone they scroll sideways rather than wrap. */}
+        {/* One row of tabs; on a narrow phone they scroll sideways rather than wrap. */}
         <div
           role="tablist"
           aria-label="Studio panel"
@@ -125,7 +123,6 @@ export function StudioPanel({ mode, onModeChange, tab, onTabChange, problemCount
               className={`tab shrink-0 whitespace-nowrap px-2 ${tab === id ? "tab-active" : ""}`}
               onClick={() => onTabChange(id)}
             >
-              {id === "assistant" && <SparklesIcon className="mr-0.5 h-3 w-3 text-primary" />}
               {label}
               {id === "problems" && problemCount > 0 ? ` (${problemCount})` : ""}
             </button>

@@ -222,9 +222,13 @@ test("refuses a run posted from another site before looking at the flow", async 
 test("says how to turn the assistant on when the server has no AI key", async ({ page }) => {
   await page.goto("/launch?example=hts-launch-basic");
   await expectValid(page, 5);
-  await page.getByRole("tab", { name: "Assistant" }).click();
-  await expect(page.getByText("The assistant is not set up here")).toBeVisible();
-  await expect(page.locator("aside").getByText("OPENAI_API_KEY")).toBeVisible();
+  // It floats at the bottom right of the studio, whatever the panel shows.
+  await page.getByRole("button", { name: "Open the assistant" }).click();
+  const assistant = page.getByRole("dialog", { name: "Assistant" });
+  await expect(assistant.getByText("The assistant is not set up here")).toBeVisible();
+  await expect(assistant.getByText("OPENAI_API_KEY")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(assistant).toBeHidden();
 });
 
 /** Stand in for the assistant: it is on, and every answer is the given text, streamed in two pieces. */
@@ -254,8 +258,10 @@ test("explains a problem from the Problems tab, with the launch in view", async 
   await page.locator(".blocklyHtmlInput").press("Enter");
   await page.getByRole("button", { name: "1 problem" }).click();
 
+  // A problem puts a dot on the floating button; Explain opens the window with the question asked.
+  await expect(page.getByRole("button", { name: "Open the assistant" })).toHaveAttribute("data-attention", "true");
   await page.getByRole("button", { name: "Explain" }).click();
-  await expect(page.getByRole("tab", { name: "Assistant" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("dialog", { name: "Assistant" })).toBeVisible();
   const conversation = page.getByRole("list", { name: "Conversation with the assistant" });
   await expect(conversation.getByText('Explain this problem and how to fix it: "Symbol: Required"')).toBeVisible();
   // The answer's Markdown is drawn as elements, not as raw asterisks.

@@ -10,8 +10,8 @@ import type { BlockWarning, StepBlockInfo, StepStatus, WorkspaceState } from "..
 import { clearSharedFlowFromUrl, shareLinkFor, sharedFlowInUrl } from "../_lib/share";
 import { useHederaWallet } from "../_lib/wallet";
 import { runFlowWithWallet } from "../_lib/walletRun";
+import { AssistantDock } from "./AssistantDock";
 import type { ChatMessage, Suggestion } from "./AssistantPanel";
-import { AssistantPanel } from "./AssistantPanel";
 import type { LoadRequest } from "./BlockEditor";
 import { ExportDialog } from "./ExportDialog";
 import { OutputsPanel } from "./OutputsPanel";
@@ -49,7 +49,7 @@ const PANEL_KEY = "launchblocks.panel";
 const SIGNER_KEY = "launchblocks.signer";
 const HERO_FLOW = "hts-launch-saucerswap";
 
-type Tab = "run" | "problems" | "outputs" | "assistant";
+type Tab = "run" | "problems" | "outputs";
 
 type Focus = { stepId?: string; type?: string };
 
@@ -148,6 +148,7 @@ export function LaunchStudio() {
   const [assistantStatus, setAssistantStatus] = useState<AssistantStatus | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [asking, setAsking] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [selectedStep, setSelectedStep] = useState<StepBlockInfo | null>(null);
   const askAbort = useRef<AbortController | null>(null);
   const [operatorAccountId, setOperatorAccountId] = useState<string | null>(null);
@@ -422,7 +423,7 @@ export function LaunchStudio() {
 
   /** Ask the assistant, with the launch as it is now, and stream the answer into the chat. */
   const ask = async (question: string, focus?: Focus) => {
-    showTab("assistant");
+    setAssistantOpen(true);
     if (!assistantStatus?.enabled || asking) return;
     const history = chat
       .filter(message => message.content && !message.error)
@@ -773,19 +774,22 @@ export function LaunchStudio() {
               <p className="text-sm opacity-70">No problems. The flow is valid and ready to run.</p>
             ))}
           {tab === "outputs" && <OutputsPanel outputs={outputs} />}
-          {tab === "assistant" && (
-            <AssistantPanel
-              status={assistantStatus}
-              messages={chat}
-              busy={asking}
-              suggestions={suggestions}
-              onAsk={(question, focus) => void ask(question, focus)}
-              onStop={() => askAbort.current?.abort()}
-              onClear={() => setChat([])}
-            />
-          )}
         </StudioPanel>
       </div>
+
+      <AssistantDock
+        open={assistantOpen}
+        onOpenChange={setAssistantOpen}
+        attention={problemCount > 0 || !!runError}
+        panelMode={panelMode}
+        status={assistantStatus}
+        messages={chat}
+        busy={asking}
+        suggestions={suggestions}
+        onAsk={(question, focus) => void ask(question, focus)}
+        onStop={() => askAbort.current?.abort()}
+        onClear={() => setChat([])}
+      />
 
       {flow && (
         <ExportDialog
