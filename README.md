@@ -230,7 +230,16 @@ It only advises. It cannot run anything or change your launch. Answers stream fr
 
 - **Turn it on:** set `OPENAI_API_KEY` in `packages/nextjs/.env`. Without it, the assistant says how. Any OpenAI-compatible provider works through `OPENAI_BASE_URL`, and `LAUNCHBLOCKS_ASSISTANT_MODEL` picks the model.
 - **What leaves the server:** your question, the conversation, and the launch as JSON. Never the operator key, the AI key or any other variable. On OpenAI, the request asks it not to store the conversation.
-- **What it costs you:** every question spends the deployment's AI credit. Each visitor gets 30 questions an hour and all visitors together 600; the input is capped at 2,000 characters and the answer's length is capped too. The fixed guide comes first in every request, so the provider can cache it.
+- **What it costs you:** every question spends the deployment's AI credit.
+  - Each visitor gets 30 questions an hour and 100 a day; all visitors together get 600 an hour and 3,000 a day.
+  - To keep the day's totals across restarts, point `LAUNCHBLOCKS_ASSISTANT_USAGE_FILE` at a file.
+  - The question is capped at 2,000 characters, and the answer's length is capped too.
+  - The fixed guide comes first in every request, so the provider can cache it.
+- **Guardrails:**
+  - It has no tools, so the worst it can do is answer badly.
+  - Each question first goes through OpenAI's moderation, and a flagged one gets no answer. If moderation can't be reached, the question goes on.
+  - Its guide tells it to stay on LaunchBlocks and Hedera, never to handle keys, and to treat the launch's text as data, not instructions.
+  - It must never tell anyone to send funds outside their own steps. The server checks every answer in code: when it names an account or address in a sentence about sending, paying or depositing, and that account isn't in the launch's settings, the studio shows a warning under the answer. Settings are what you set in the blocks; a launch's description, memos and messages don't count.
 
 ## Environment variables
 
@@ -256,7 +265,10 @@ All live in `packages/nextjs/.env` and are read on the server only. None of them
 | `OPENAI_API_KEY` | for the assistant | — | Turns on the studio's [AI companion](#an-ai-companion-in-the-studio). Stays on the server. |
 | `LAUNCHBLOCKS_ASSISTANT_MODEL` | no | `gpt-5.4-mini` | The model that answers, e.g. `gpt-5.4-nano` for less. |
 | `OPENAI_BASE_URL` | no | `https://api.openai.com/v1` | Another OpenAI-compatible provider. |
-| `LAUNCHBLOCKS_ASSISTANT_PER_HOUR` · `LAUNCHBLOCKS_ASSISTANT_TOTAL_PER_HOUR` | no | `30` · `600` | Questions per visitor, and for all visitors together, each hour; `0` removes a limit. |
+| `LAUNCHBLOCKS_ASSISTANT_PER_HOUR` · `LAUNCHBLOCKS_ASSISTANT_PER_DAY` | no | `30` · `100` | Questions per visitor, each hour and each day; `0` removes a limit. |
+| `LAUNCHBLOCKS_ASSISTANT_TOTAL_PER_HOUR` · `LAUNCHBLOCKS_ASSISTANT_TOTAL_PER_DAY` | no | `600` · `3000` | Questions for all visitors together, each hour and each day. |
+| `LAUNCHBLOCKS_ASSISTANT_USAGE_FILE` | no | — | A file that keeps the totals for everyone across restarts. |
+| `LAUNCHBLOCKS_ASSISTANT_MODERATION` | no | on | `off` skips OpenAI's moderation check on each question. |
 
 The public variables are Scaffold-HBAR's: `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`, used by RainbowKit and by the studio's wallet option, and `NEXT_PUBLIC_HEDERA_TESTNET_RPC_URL` and `NEXT_PUBLIC_HEDERA_MAINNET_RPC_URL`, the JSON-RPC relays for EVM wallets and Debug Contracts. The WalletConnect id falls back to a shared development id; set your own from [WalletConnect Cloud](https://cloud.reown.com) before you deploy.
 
@@ -515,7 +527,8 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 | `CROSS_SITE_REFUSED` | The run was posted from another site's page. Start it from the studio on the same site. |
 | `ASSISTANT_DISABLED` | The server has no `OPENAI_API_KEY`; set it to turn the assistant on. |
 | `ASSISTANT_KEY_REJECTED` or `ASSISTANT_MODEL_UNAVAILABLE` | The provider refused the key, or the key has no access to `LAUNCHBLOCKS_ASSISTANT_MODEL`. |
-| `ASSISTANT_RATE_LIMITED` or `ASSISTANT_BUSY` | This visitor, or the whole deployment, asked as many questions as allowed this hour; or the provider is rate-limiting or out of credit. |
+| `ASSISTANT_RATE_LIMITED` or `ASSISTANT_BUSY` | This visitor, or the whole deployment, asked as many questions as allowed this hour or today; or the provider is rate-limiting or out of credit. |
+| `ASSISTANT_REFUSED` | OpenAI's moderation flagged the question, so it got no answer. |
 | `INVALID_SIGNATURE`, or doctor says the key does not control the account | Wrong key for the account, or a raw hex key read as the wrong curve. Set `HEDERA_OPERATOR_KEY_TYPE`. |
 | `INSUFFICIENT_PAYER_BALANCE` | Top up at the [faucet](https://portal.hedera.com/faucet). A full launch needs 60–80 ℏ. |
 | `PUBLIC_RUN_REFUSED` | The deployment runs the public-run policy and the flow sends value to something it did not create, attaches HBAR to a contract, or moves too much HBAR at once. Wire the target from an earlier step, or run on your own deployment or with your own wallet. |

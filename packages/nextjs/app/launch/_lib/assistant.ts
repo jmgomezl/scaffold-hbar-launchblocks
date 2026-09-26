@@ -24,16 +24,20 @@ export async function fetchAssistantStatus(): Promise<AssistantStatus> {
   return (await response.json()) as AssistantStatus;
 }
 
+/** A piece of the answer, or, once it is complete, a warning the server's own checks found in it. */
+export type AnswerEvent = { type: "text" | "warning"; text: string };
+
 /**
- * Ask one question and yield the answer's text as it streams in. Refusals
- * (not set up, too many questions) and failures mid-answer throw an ApiError.
+ * Ask one question and yield the answer as it streams in. Refusals (not set
+ * up, too many questions, a question it does not answer) and failures
+ * mid-answer throw an ApiError.
  */
 export async function* askAssistant(
   question: string,
   history: ChatTurn[],
   context: AssistantContext,
   signal?: AbortSignal,
-): AsyncGenerator<string> {
+): AsyncGenerator<AnswerEvent> {
   const response = await fetch(ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/x-ndjson" },
@@ -59,7 +63,8 @@ export async function* askAssistant(
       buffer = buffer.slice(newline + 1);
       if (line) {
         const event = JSON.parse(line) as { type: string; text?: string; error?: ApiError };
-        if (event.type === "text" && event.text) yield event.text;
+        if ((event.type === "text" || event.type === "warning") && event.text)
+          yield { type: event.type, text: event.text };
         if (event.type === "error" && event.error) throw event.error;
       }
       newline = buffer.indexOf("\n");

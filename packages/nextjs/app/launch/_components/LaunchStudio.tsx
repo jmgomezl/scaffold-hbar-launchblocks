@@ -441,8 +441,14 @@ export function LaunchStudio() {
         ...(focus ? { focus } : {}),
         signer: signerMode === "wallet" ? ("wallet" as const) : ("operator" as const),
       };
-      for await (const text of askAssistant(question, history, context, controller.signal)) {
-        setChat(current => withLast(current, last => ({ ...last, content: last.content + text })));
+      for await (const event of askAssistant(question, history, context, controller.signal)) {
+        setChat(current =>
+          withLast(current, last =>
+            event.type === "warning"
+              ? { ...last, warning: event.text }
+              : { ...last, content: last.content + event.text },
+          ),
+        );
       }
     } catch (error) {
       if (!controller.signal.aborted)

@@ -4,9 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import type { ApiError } from "../_lib/api";
 import type { AssistantStatus } from "../_lib/assistant";
 import { Markdown } from "./Markdown";
-import { PaperAirplaneIcon, SparklesIcon, StopIcon } from "@heroicons/react/24/outline";
+import { ExclamationTriangleIcon, PaperAirplaneIcon, SparklesIcon, StopIcon } from "@heroicons/react/24/outline";
 
-export type ChatMessage = { role: "user" | "assistant"; content: string; error?: ApiError };
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+  error?: ApiError;
+  /** From the server's checks on the finished answer, e.g. an account the launch does not use. */
+  warning?: string;
+};
 
 export type Suggestion = { label: string; question: string; focus?: { stepId?: string; type?: string } };
 
@@ -94,6 +100,12 @@ export function AssistantPanel({ status, messages, busy, suggestions, onAsk, onS
                   <Markdown text={message.content} />
                 ) : message.error ? null : (
                   <span className="loading loading-dots loading-sm opacity-60" aria-label="Writing" />
+                )}
+                {message.warning && (
+                  <div role="alert" className="alert alert-warning alert-soft mt-2 items-start px-3 py-2 text-xs">
+                    <ExclamationTriangleIcon className="h-4 w-4 shrink-0" />
+                    <span>{message.warning}</span>
+                  </div>
                 )}
                 {message.error && (
                   <div className="mt-1 text-xs">

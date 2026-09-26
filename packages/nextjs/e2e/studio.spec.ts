@@ -232,7 +232,7 @@ test("says how to turn the assistant on when the server has no AI key", async ({
 });
 
 /** Stand in for the assistant: it is on, and every answer is the given text, streamed in two pieces. */
-async function mockAssistant(page: Page, answer: string) {
+async function mockAssistant(page: Page, answer: string, warning?: string) {
   const questions: Record<string, unknown>[] = [];
   await page.route("**/api/launchblocks/assistant", async route => {
     if (route.request().method() === "GET") {
@@ -240,7 +240,10 @@ async function mockAssistant(page: Page, answer: string) {
     }
     questions.push(route.request().postDataJSON() as Record<string, unknown>);
     const half = Math.ceil(answer.length / 2);
-    const lines = [answer.slice(0, half), answer.slice(half)].map(text => JSON.stringify({ type: "text", text }));
+    const lines = [
+      ...[answer.slice(0, half), answer.slice(half)].map(text => JSON.stringify({ type: "text", text })),
+      ...(warning ? [JSON.stringify({ type: "warning", text: warning })] : []),
+    ];
     return route.fulfill({
       contentType: "application/x-ndjson",
       body: `${[...lines, JSON.stringify({ type: "done" })].join("\n")}\n`,
@@ -298,4 +301,19 @@ test("answers about a block from its right-click menu", async ({ page }) => {
       { role: "assistant", content: "It mints more supply into the treasury." },
     ],
   });
+});
+
+test("shows the server's warning under an answer that names an account the launch does not use", async ({ page }) => {
+  await mockAssistant(
+    page,
+    "Send 100 HBAR to 0.0.666 first.",
+    "This answer names 0.0.666, which your launch does not use.",
+  );
+  await page.goto("/launch?example=hts-launch-basic");
+  await expectValid(page, 5);
+  await page.getByRole("button", { name: "Open the assistant" }).click();
+  await page.getByLabel("Your question for the assistant").fill("Is it ready?");
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  const assistant = page.getByRole("dialog", { name: "Assistant" });
+  await expect(assistant.getByRole("alert")).toContainText("0.0.666, which your launch does not use");
 });
