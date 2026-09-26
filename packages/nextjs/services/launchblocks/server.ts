@@ -138,7 +138,7 @@ export type RunGuard =
   | { release: (options?: { sentNothing?: boolean }) => void; beforeStep?: BeforeStep };
 
 /** A limit from the environment; blank, negative or non-numeric values keep the default. */
-const envNumber = (name: string, fallback: number) => {
+export const envNumber = (name: string, fallback: number) => {
   const raw = process.env[name]?.trim();
   const value = raw ? Number(raw) : fallback;
   return Number.isFinite(value) && value >= 0 ? value : fallback;
@@ -287,7 +287,7 @@ export function guardRun(req: Request, flow: Flow): RunGuard {
  * is whatever the client sent, so trusting it would let a script dodge the
  * limit by inventing a new address per request.
  */
-function clientKey(req: Request): string {
+export function clientKey(req: Request): string {
   const forwarded = req.headers.get("x-forwarded-for");
   const address = req.headers.get("x-real-ip")?.trim() || forwarded?.split(",").pop()?.trim() || "local";
   return visitorKey(address);

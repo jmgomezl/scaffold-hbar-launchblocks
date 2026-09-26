@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { ApiError, RunResult, StepRecord } from "../_lib/api";
 import type { StepStatus } from "../_lib/blocks";
 import type { FeeEstimate } from "@sh/launchblocks/editor";
-import { ArrowTopRightOnSquareIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
+import { ArrowTopRightOnSquareIcon, ChevronRightIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import { notification } from "~~/utils/scaffold-hbar";
 
 export type RunState =
@@ -32,6 +32,8 @@ type Props = {
   payer: string;
   /** Problems that keep the run from starting. */
   problems: number;
+  /** Ask the assistant, when this deployment has one. */
+  onAsk?: (question: string) => void;
 };
 
 const hbar = (value: number) => `${value.toLocaleString("en-US", { maximumFractionDigits: 2 })} ℏ`;
@@ -126,7 +128,7 @@ function LaunchPageCard({ topicId }: { topicId: string }) {
  * id and timing; expanding one shows its explorer links and details. Failed
  * steps start expanded so an error is never hidden behind a click.
  */
-export function RunPanel({ steps, run, estimate, signedBy, payer, problems }: Props) {
+export function RunPanel({ steps, run, estimate, signedBy, payer, problems, onAsk }: Props) {
   const records = run.phase === "idle" ? {} : run.records;
   // Explicit user choices per step; unset rows follow the default (open only when failed).
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -164,6 +166,15 @@ export function RunPanel({ steps, run, estimate, signedBy, payer, problems }: Pr
           <span className="font-semibold">{run.error.code}</span>
           <span>{run.error.message}</span>
           {run.error.hint && <span className="opacity-80">{run.error.hint}</span>}
+          {onAsk && (
+            <button
+              type="button"
+              className="btn btn-xs mt-1 gap-1"
+              onClick={() => onAsk("Why couldn't the run start, and what should I do?")}
+            >
+              <SparklesIcon className="h-3.5 w-3.5" /> Ask the assistant
+            </button>
+          )}
         </div>
       )}
       {run.phase === "done" && (
@@ -247,6 +258,15 @@ export function RunPanel({ steps, run, estimate, signedBy, payer, problems }: Pr
                     <div className="mt-1 text-xs text-error">
                       {record.error.message}
                       {record.error.hint && <div className="mt-0.5 opacity-80">{record.error.hint}</div>}
+                      {onAsk && (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs mt-1 gap-1 text-primary"
+                          onClick={() => onAsk(`Why did ${step.id} fail, and what should I do now?`)}
+                        >
+                          <SparklesIcon className="h-3.5 w-3.5" /> Ask why
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

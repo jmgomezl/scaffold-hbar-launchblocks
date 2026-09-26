@@ -23,7 +23,7 @@ npx create-scaffold-hbar@latest --template jmgomezl/scaffold-hbar-launchblocks
 
 *A real run of `hts-launch-locked-liquidity` on testnet, started from the Launch Studio: a token, its launch log, a SaucerSwap pool, a `TokenLock` contract holding the pool's LP tokens, and two reads of the lock, in 36 seconds. Shown at three times speed.*
 
-**Contents:** [What you get](#what-you-get) · [Quick start](#quick-start) · [See it in action](#see-it-in-action) · [Verified on testnet](#verified-on-testnet) · [Launch pages and share links](#launch-pages-and-share-links) · [AI agents (MCP)](#use-it-from-an-ai-agent-mcp) · [How it works](#how-it-works) · [Steps](#steps) · [SaucerSwap](#the-saucerswap-integration) · [Locking and unlocks](#locking-liquidity-and-scheduling-unlocks) · [Pyth](#pricing-a-launch-in-us-dollars-with-pyth) · [Adding a step](#adding-a-step-type) · [Hedera Harness](#extending-it-with-hedera-harness) · [Environment variables](#environment-variables) · [Scripts](#scripts) · [Deploying](#deploying-the-studio) · [Troubleshooting](#troubleshooting) · [Security notes](#security-notes)
+**Contents:** [What you get](#what-you-get) · [Quick start](#quick-start) · [See it in action](#see-it-in-action) · [Verified on testnet](#verified-on-testnet) · [Launch pages and share links](#launch-pages-and-share-links) · [AI companion](#an-ai-companion-in-the-studio) · [AI agents (MCP)](#use-it-from-an-ai-agent-mcp) · [How it works](#how-it-works) · [Steps](#steps) · [SaucerSwap](#the-saucerswap-integration) · [Locking and unlocks](#locking-liquidity-and-scheduling-unlocks) · [Pyth](#pricing-a-launch-in-us-dollars-with-pyth) · [Adding a step](#adding-a-step-type) · [Hedera Harness](#extending-it-with-hedera-harness) · [Environment variables](#environment-variables) · [Scripts](#scripts) · [Deploying](#deploying-the-studio) · [Troubleshooting](#troubleshooting) · [Security notes](#security-notes)
 
 ## What you get
 
@@ -37,6 +37,7 @@ npx create-scaffold-hbar@latest --template jmgomezl/scaffold-hbar-launchblocks
 - **The app's account or yours** — by default the server's operator account signs and pays, so anyone can press Run with nothing to set up. A visitor can instead connect their own testnet wallet (HashPack, Kabila, or any wallet through [hedera-wallet-connect](https://github.com/hashgraph/hedera-wallet-connect)) and approve each transaction; the launch then runs in their browser, and nothing they create belongs to the app.
 - **A public page for every launch** (`/launches/<topic id>`), rebuilt from the launch's own HCS log: the token, the pool's price now against its opening price, the locked liquidity and its countdown, and whether each schedule has run. The app stores nothing; the log is the record. The Run panel links to it after a run. See [launch pages](#launch-pages-and-share-links).
 - **Launches you can share and price** — **Share** copies a link that opens the same blocks in anyone's studio, with the flow inside the link itself. Before a run, the Run panel says what it will cost, step by step.
+- **An AI companion in the studio** — ask why Run is disabled, what a block does, why a run failed, or what to add next, and get an answer about *this* launch: it sees the blocks, the problems and the last error, and knows every step's docs. Right-click any block, or press **Explain** beside a problem. See [the companion](#an-ai-companion-in-the-studio).
 - **An MCP server for coding agents** — Claude Code, Cursor or any MCP client can read the step catalog, build and validate a flow (with its cost), export `launch.ts`, hand back a studio link, dry-run or run it, and read a launch back. `.mcp.json` registers it for Claude Code. See [AI agents](#use-it-from-an-ai-agent-mcp).
 - **A terminal runner** with dry runs, code generation, and a JSON record of every run, plus `core:doctor`, which checks your operator account before you spend anything.
 - **Guards for a public demo** — mainnet stays off unless you turn it on, plus an optional run token and a per-client rate limit.
@@ -202,6 +203,35 @@ A launch log gets a submit key by default, so only the account that ran the laun
 
 **Share** in the studio's toolbar copies a link such as `https://…/launch#flow=rVXBbts4EP0V…`: the flow, compressed (the locked-liquidity example fits in 1,230 characters), in the URL's fragment. Browsers never send the fragment to a server, so a shared launch is stored nowhere but in the link, and whoever opens it gets the same blocks to edit, validate and run with their own account or wallet.
 
+## An AI companion in the studio
+
+The **Assistant** tab explains and suggests, in whatever language you write in. It can explain:
+
+- a block ("What does Seed SaucerSwap pool do, and how do I fill it in?")
+- why something is flagged, from the **Explain** button beside each problem
+- why a run failed, from **Ask why** in the Run panel
+- what to add next
+
+Right-click any block, on the canvas or in the toolbox, for **Ask the assistant about this block**. The chips under the conversation suggest the questions that fit the moment: why you can't run yet, a check before you spend HBAR, what the launch will cost.
+
+![The Launch Studio with a problem on the Seed SaucerSwap pool block, whose HBAR to deposit is 10.123456789: the Assistant tab explains that HBAR has 8 decimal places, one tinybar being 0.00000001, and says to change HBAR to deposit in seedPool to 10.12345678; below, suggested questions and the question box](docs/images/studio-assistant.png)
+
+It answers about the launch on screen. Each question carries:
+
+- the flow;
+- the problems, from the same checks the runner makes;
+- its cost;
+- the last run's error;
+- the block you asked about.
+
+The server adds a guide to LaunchBlocks, built from the step registry, so a new step type is known as soon as it is registered. The guide covers every block's docs, fields and outputs, the example launches with their costs, and what each Hedera status means.
+
+It only advises. It cannot run anything or change your launch. Answers stream from an OpenAI model (`gpt-5.4-mini` by default: current, fast, and a fraction of the cost of the gpt-4o generation) through `POST /api/launchblocks/assistant` (`packages/nextjs/services/launchblocks/assistant.ts`).
+
+- **Turn it on:** set `OPENAI_API_KEY` in `packages/nextjs/.env`. Without it, the tab says how. Any OpenAI-compatible provider works through `OPENAI_BASE_URL`, and `LAUNCHBLOCKS_ASSISTANT_MODEL` picks the model.
+- **What leaves the server:** your question, the conversation, and the launch as JSON. Never the operator key, the AI key or any other variable. On OpenAI, the request asks it not to store the conversation.
+- **What it costs you:** every question spends the deployment's AI credit. Each visitor gets 30 questions an hour and all visitors together 600; the input is capped at 2,000 characters and the answer's length is capped too. The fixed guide comes first in every request, so the provider can cache it.
+
 ## Environment variables
 
 All live in `packages/nextjs/.env` and are read on the server only. None of them is prefixed `NEXT_PUBLIC_`, so none can reach the browser.
@@ -223,6 +253,10 @@ All live in `packages/nextjs/.env` and are read on the server only. None of them
 | `LAUNCHBLOCKS_PUBLIC_MAX_HBAR_PER_STEP` | no | `25` | With the policy on: the most HBAR one step may deposit or trade. |
 | `LAUNCHBLOCKS_STUDIO_URL` | no | `http://localhost:3000` | For the [MCP server](#use-it-from-an-ai-agent-mcp) only: where its share links and launch pages point. |
 | `LAUNCHBLOCKS_ARTIFACTS_DIR` | no | `packages/hardhat/artifacts/contracts` | Where **Deploy contract** finds compiled contracts, for a script run from outside the project. |
+| `OPENAI_API_KEY` | for the assistant | — | Turns on the studio's [AI companion](#an-ai-companion-in-the-studio). Stays on the server. |
+| `LAUNCHBLOCKS_ASSISTANT_MODEL` | no | `gpt-5.4-mini` | The model that answers, e.g. `gpt-5.4-nano` for less. |
+| `OPENAI_BASE_URL` | no | `https://api.openai.com/v1` | Another OpenAI-compatible provider. |
+| `LAUNCHBLOCKS_ASSISTANT_PER_HOUR` · `LAUNCHBLOCKS_ASSISTANT_TOTAL_PER_HOUR` | no | `30` · `600` | Questions per visitor, and for all visitors together, each hour; `0` removes a limit. |
 
 The public variables are Scaffold-HBAR's: `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`, used by RainbowKit and by the studio's wallet option, and `NEXT_PUBLIC_HEDERA_TESTNET_RPC_URL` and `NEXT_PUBLIC_HEDERA_MAINNET_RPC_URL`, the JSON-RPC relays for EVM wallets and Debug Contracts. The WalletConnect id falls back to a shared development id; set your own from [WalletConnect Cloud](https://cloud.reown.com) before you deploy.
 
@@ -279,7 +313,7 @@ The terminal can exercise the same path: `yarn core:run -- <flow> --wallet` runs
 | `packages/nextjs` | The Launch Studio (`app/launch`), API routes (`app/api/launchblocks`), and the Scaffold-HBAR app shell. |
 | `packages/hardhat` | The starter's contracts, tests and deploy scripts. |
 
-**API routes** (all under `/api/launchblocks`): `GET steps` (catalog with a JSON Schema for each step), `GET gallery`, `POST flows/validate`, `POST flows/codegen`, `POST flows/harness`, `POST flows/run` (the full result, or NDJSON events with `Accept: application/x-ndjson`), `GET operator` (the default account's id, never its key), `GET artifacts/<Contract>` (a compiled contract's ABI and bytecode, for wallet runs that deploy one), and `GET pyth/updates` (signed Pyth price updates for wallet runs, fetched with the server's key, for the feeds the steps use only).
+**API routes** (all under `/api/launchblocks`): `GET steps` (catalog with a JSON Schema for each step), `GET gallery`, `POST flows/validate`, `POST flows/codegen`, `POST flows/harness`, `POST flows/run` (the full result, or NDJSON events with `Accept: application/x-ndjson`), `GET operator` (the default account's id, never its key), `GET`/`POST assistant` (whether the assistant is on, and an answer streamed as NDJSON), `GET artifacts/<Contract>` (a compiled contract's ABI and bytecode, for wallet runs that deploy one), and `GET pyth/updates` (signed Pyth price updates for wallet runs, fetched with the server's key, for the feeds the steps use only).
 
 ## Steps
 
@@ -479,6 +513,9 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 | `MAINNET_DISABLED` | Mainnet runs are off unless `LAUNCHBLOCKS_ALLOW_MAINNET=true`. |
 | `RUN_TOKEN_REQUIRED` or `RATE_LIMITED` | The deployment sets `LAUNCHBLOCKS_RUN_TOKEN` (the studio asks for it), or this visitor used up `LAUNCHBLOCKS_RUNS_PER_HOUR`. |
 | `CROSS_SITE_REFUSED` | The run was posted from another site's page. Start it from the studio on the same site. |
+| `ASSISTANT_DISABLED` | The server has no `OPENAI_API_KEY`; set it to turn the assistant on. |
+| `ASSISTANT_KEY_REJECTED` or `ASSISTANT_MODEL_UNAVAILABLE` | The provider refused the key, or the key has no access to `LAUNCHBLOCKS_ASSISTANT_MODEL`. |
+| `ASSISTANT_RATE_LIMITED` or `ASSISTANT_BUSY` | This visitor, or the whole deployment, asked as many questions as allowed this hour; or the provider is rate-limiting or out of credit. |
 | `INVALID_SIGNATURE`, or doctor says the key does not control the account | Wrong key for the account, or a raw hex key read as the wrong curve. Set `HEDERA_OPERATOR_KEY_TYPE`. |
 | `INSUFFICIENT_PAYER_BALANCE` | Top up at the [faucet](https://portal.hedera.com/faucet). A full launch needs 60–80 ℏ. |
 | `PUBLIC_RUN_REFUSED` | The deployment runs the public-run policy and the flow sends value to something it did not create, attaches HBAR to a contract, or moves too much HBAR at once. Wire the target from an earlier step, or run on your own deployment or with your own wallet. |
@@ -503,6 +540,7 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 ## Security notes
 
 - The operator key stays on the server. It is never logged or returned by the API, and `core:doctor` prints only whether it is set and its length.
+- `OPENAI_API_KEY` stays on the server too. The assistant sends the provider only the question, the conversation and the launch, never another variable, and the provider's own error text (which can quote part of a key) is never passed on.
 - `PYTH_API_KEY` stays on the server too, and travels only to Hermes over HTTPS. Wallet runs get price updates through the app's route, which serves only the feeds the steps use and reuses an answer for a few seconds.
 - The operator is the treasury and holds every key it enables, so a flow never needs a second signer. The flip side: anyone who can reach an unguarded run endpoint can spend its HBAR. Use the run guards.
 - A wallet run never touches the operator key, and the page never sees the wallet's private key: the wallet signs each transaction after the visitor approves it. The studio offers wallet runs on testnet only.

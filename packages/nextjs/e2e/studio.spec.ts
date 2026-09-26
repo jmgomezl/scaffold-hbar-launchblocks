@@ -218,3 +218,78 @@ test("refuses a run posted from another site before looking at the flow", async 
   expect(response.status()).toBe(403);
   expect(await response.json()).toMatchObject({ error: { code: "CROSS_SITE_REFUSED" } });
 });
+
+test("says how to turn the assistant on when the server has no AI key", async ({ page }) => {
+  await page.goto("/launch?example=hts-launch-basic");
+  await expectValid(page, 5);
+  await page.getByRole("tab", { name: "Assistant" }).click();
+  await expect(page.getByText("The assistant is not set up here")).toBeVisible();
+  await expect(page.locator("aside").getByText("OPENAI_API_KEY")).toBeVisible();
+});
+
+/** Stand in for the assistant: it is on, and every answer is the given text, streamed in two pieces. */
+async function mockAssistant(page: Page, answer: string) {
+  const questions: Record<string, unknown>[] = [];
+  await page.route("**/api/launchblocks/assistant", async route => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({ json: { enabled: true, model: "test-model" } });
+    }
+    questions.push(route.request().postDataJSON() as Record<string, unknown>);
+    const half = Math.ceil(answer.length / 2);
+    const lines = [answer.slice(0, half), answer.slice(half)].map(text => JSON.stringify({ type: "text", text }));
+    return route.fulfill({
+      contentType: "application/x-ndjson",
+      body: `${[...lines, JSON.stringify({ type: "done" })].join("\n")}\n`,
+    });
+  });
+  return questions;
+}
+
+test("explains a problem from the Problems tab, with the launch in view", async ({ page }) => {
+  const questions = await mockAssistant(page, "Give the token a **symbol**, such as `RKT`.");
+  await page.goto("/launch?example=hts-launch-basic");
+  await expectValid(page, 5);
+  await page.locator(".blocklyEditableField", { hasText: "LBD" }).first().click();
+  await page.locator(".blocklyHtmlInput").fill("");
+  await page.locator(".blocklyHtmlInput").press("Enter");
+  await page.getByRole("button", { name: "1 problem" }).click();
+
+  await page.getByRole("button", { name: "Explain" }).click();
+  await expect(page.getByRole("tab", { name: "Assistant" })).toHaveAttribute("aria-selected", "true");
+  const conversation = page.getByRole("list", { name: "Conversation with the assistant" });
+  await expect(conversation.getByText('Explain this problem and how to fix it: "Symbol: Required"')).toBeVisible();
+  // The answer's Markdown is drawn as elements, not as raw asterisks.
+  await expect(conversation.locator("strong", { hasText: "symbol" })).toBeVisible();
+  await expect(conversation.locator("code", { hasText: "RKT" })).toBeVisible();
+
+  expect(questions).toHaveLength(1);
+  expect(questions[0]).toMatchObject({
+    focus: { stepId: "createToken" },
+    signer: "operator",
+    flow: { id: "hts-launch-basic", steps: expect.arrayContaining([expect.objectContaining({ id: "createToken" })]) },
+  });
+});
+
+test("answers about a block from its right-click menu", async ({ page }) => {
+  const questions = await mockAssistant(page, "It mints more supply into the treasury.");
+  await page.goto("/launch?example=hts-launch-basic");
+  await expectValid(page, 5);
+  await page.locator(".blocklyBlockCanvas .blocklyText", { hasText: "Mint tokens" }).first().click({ button: "right" });
+  await page.locator(".blocklyContextMenu").getByText("Ask the assistant about this block").click();
+
+  await expect(page.getByText("It mints more supply into the treasury.")).toBeVisible();
+  expect(questions[0]).toMatchObject({
+    question: expect.stringContaining('"Mint tokens" block (mintReserve)'),
+    focus: { stepId: "mintReserve", type: "hts.mint" },
+  });
+  // A follow-up carries the conversation so far.
+  await page.getByLabel("Your question for the assistant").fill("And how much does it cost?");
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  await expect.poll(() => questions.length).toBe(2);
+  expect(questions[1]).toMatchObject({
+    history: [
+      { role: "user", content: expect.stringContaining("Mint tokens") },
+      { role: "assistant", content: "It mints more supply into the treasury." },
+    ],
+  });
+});

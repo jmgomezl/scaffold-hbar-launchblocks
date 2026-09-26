@@ -566,6 +566,48 @@ export function stepIdGuard(workspace: Blockly.WorkspaceSvg) {
   };
 }
 
+/** A step block, as the assistant needs it: its id in the flow, its type and its title. */
+export type StepBlockInfo = { stepId: string; type: string; label: string; inToolbox: boolean };
+
+/** The step a block stands for, or null for any other block (the Launch block, an output reporter). */
+export function stepBlockInfo(block: Blockly.Block | null | undefined, catalog: Catalog): StepBlockInfo | null {
+  if (!block || !isStepBlock(block) || !block.lbStepType) return null;
+  return {
+    stepId: String(block.getFieldValue(ID_FIELD)),
+    type: block.lbStepType,
+    label: catalog.get(block.lbStepType)?.ui.label ?? block.lbStepType,
+    inToolbox: block.isInFlyout,
+  };
+}
+
+const ASK_ITEM = "lb_ask_assistant";
+let askAboutBlock: ((step: StepBlockInfo) => void) | null = null;
+let askCatalog: Catalog | null = null;
+
+/**
+ * "Ask the assistant about this block" in each step block's right-click menu.
+ * The registry is global to Blockly, so the item is added once and calls
+ * whichever handler the editor registered last; with none, it is hidden.
+ */
+export function registerAskAboutBlock(catalog: Catalog, handler: ((step: StepBlockInfo) => void) | null): void {
+  askAboutBlock = handler;
+  askCatalog = catalog;
+  const registry = Blockly.ContextMenuRegistry.registry;
+  if (registry.getItem(ASK_ITEM)) return;
+  registry.register({
+    id: ASK_ITEM,
+    scopeType: Blockly.ContextMenuRegistry.ScopeType.BLOCK,
+    weight: -10,
+    displayText: "✨ Ask the assistant about this block",
+    preconditionFn: scope =>
+      askAboutBlock && askCatalog && stepBlockInfo(scope.block, askCatalog) ? "enabled" : "hidden",
+    callback: scope => {
+      const step = askCatalog ? stepBlockInfo(scope.block, askCatalog) : null;
+      if (step) askAboutBlock?.(step);
+    },
+  });
+}
+
 export type StepStatus = "pending" | "running" | "succeeded" | "failed" | "skipped";
 
 const STATUS_ICON: Record<StepStatus, string> = {

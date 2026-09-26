@@ -4,10 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { FlowIssue, GalleryEntry, StepRecord } from "../_lib/api";
 import { fetchCatalog, fetchGallery, fetchOperator, runFlowStream, toApiError, validateFlow } from "../_lib/api";
-import type { BlockWarning, StepStatus, WorkspaceState } from "../_lib/blocks";
+import type { AssistantStatus } from "../_lib/assistant";
+import { askAssistant, fetchAssistantStatus } from "../_lib/assistant";
+import type { BlockWarning, StepBlockInfo, StepStatus, WorkspaceState } from "../_lib/blocks";
 import { clearSharedFlowFromUrl, shareLinkFor, sharedFlowInUrl } from "../_lib/share";
 import { useHederaWallet } from "../_lib/wallet";
 import { runFlowWithWallet } from "../_lib/walletRun";
+import type { ChatMessage, Suggestion } from "./AssistantPanel";
+import { AssistantPanel } from "./AssistantPanel";
 import type { LoadRequest } from "./BlockEditor";
 import { ExportDialog } from "./ExportDialog";
 import { OutputsPanel } from "./OutputsPanel";
@@ -20,7 +24,7 @@ import { StudioPanel } from "./StudioPanel";
 import type { Catalog, EditorDocument, FeeEstimate, FlowInput, StepCatalogEntry } from "@sh/launchblocks/editor";
 import { editorToFlow, flowIdFromName, flowToEditor, indexCatalog, outputsOf } from "@sh/launchblocks/editor";
 import { useTheme } from "next-themes";
-import { EyeIcon, LinkIcon } from "@heroicons/react/24/outline";
+import { EyeIcon, LinkIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import { notification } from "~~/utils/scaffold-hbar";
 
 const BlockEditor = dynamic(() => import("./BlockEditor"), {
@@ -45,7 +49,13 @@ const PANEL_KEY = "launchblocks.panel";
 const SIGNER_KEY = "launchblocks.signer";
 const HERO_FLOW = "hts-launch-saucerswap";
 
-type Tab = "run" | "problems" | "outputs";
+type Tab = "run" | "problems" | "outputs" | "assistant";
+
+type Focus = { stepId?: string; type?: string };
+
+/** The chat with its last message changed, e.g. as the answer streams in. */
+const withLast = (chat: ChatMessage[], change: (last: ChatMessage) => ChatMessage) =>
+  chat.length ? [...chat.slice(0, -1), change(chat[chat.length - 1] as ChatMessage)] : chat;
 
 /** Earlier builds stored "shown" / "hidden"; read them as open / closed. */
 function parsePanelMode(value: string | null): PanelMode {
@@ -134,6 +144,12 @@ export function LaunchStudio() {
   const [panelMode, setPanelMode] = useState<PanelMode>("open");
   // Who signs runs: the app's operator account unless the visitor picks their wallet.
   const [signerMode, setSignerMode] = useState<SignerMode>("operator");
+  // The assistant: whether this deployment has it, the conversation, and the block the person has selected.
+  const [assistantStatus, setAssistantStatus] = useState<AssistantStatus | null>(null);
+  const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [asking, setAsking] = useState(false);
+  const [selectedStep, setSelectedStep] = useState<StepBlockInfo | null>(null);
+  const askAbort = useRef<AbortController | null>(null);
   const [operatorAccountId, setOperatorAccountId] = useState<string | null>(null);
   const wallet = useHederaWallet(signerMode === "wallet");
   const fileInput = useRef<HTMLInputElement>(null);
@@ -380,12 +396,119 @@ export function LaunchStudio() {
       : { tone: "error", text: `Failed at ${run.result.error?.stepId}` };
   }, [run]);
 
+  // What went wrong in the last run, for the assistant: a refusal before it started, or the step that failed.
+  const runError = useMemo(() => {
+    if (run.phase === "error") {
+      const { code, message, hint } = run.error;
+      return { code, message, ...(hint ? { hint } : {}) };
+    }
+    if (run.phase === "idle") return undefined;
+    const failed = Object.values(run.records).find(record => record.status === "failed" && record.error);
+    if (!failed?.error) return undefined;
+    const { code, message, hint } = failed.error;
+    return { code, message, ...(hint ? { hint } : {}), stepId: failed.id };
+  }, [run]);
+
   const running = run.phase === "running";
   const walletSigner = signerMode === "wallet" && wallet.state.status === "connected" ? wallet.signer() : null;
   const signerReady = signerMode === "operator" || !!walletSigner;
   // A block outside the Launch block counts as a problem: it looks like part of the launch but would not run.
   const problemCount = issues.length + workspace.detachedIds.length;
   const canRun = !!flow && flow.steps.length > 0 && problemCount === 0 && !validating && !running && signerReady;
+
+  useEffect(() => {
+    fetchAssistantStatus().then(setAssistantStatus, () => setAssistantStatus({ enabled: false, model: null }));
+  }, []);
+
+  /** Ask the assistant, with the launch as it is now, and stream the answer into the chat. */
+  const ask = async (question: string, focus?: Focus) => {
+    showTab("assistant");
+    if (!assistantStatus?.enabled || asking) return;
+    const history = chat
+      .filter(message => message.content && !message.error)
+      .slice(-10)
+      .map(({ role, content }) => ({ role, content }));
+    setChat(current => [...current, { role: "user", content: question }, { role: "assistant", content: "" }]);
+    setAsking(true);
+    const controller = new AbortController();
+    askAbort.current = controller;
+    try {
+      const context = {
+        ...(flow ? { flow } : {}),
+        detachedStepIds: workspace.detachedIds,
+        ...(runError ? { runError } : {}),
+        ...(focus ? { focus } : {}),
+        signer: signerMode === "wallet" ? ("wallet" as const) : ("operator" as const),
+      };
+      for await (const text of askAssistant(question, history, context, controller.signal)) {
+        setChat(current => withLast(current, last => ({ ...last, content: last.content + text })));
+      }
+    } catch (error) {
+      if (!controller.signal.aborted)
+        setChat(current => withLast(current, last => ({ ...last, error: toApiError(error) })));
+    } finally {
+      if (controller.signal.aborted) {
+        setChat(current => withLast(current, last => (last.content ? last : { ...last, content: "*Stopped.*" })));
+      }
+      setAsking(false);
+      askAbort.current = null;
+    }
+  };
+  const askRef = useRef(ask);
+  askRef.current = ask;
+  // Stable, so the editor registers its right-click item once.
+  const askAboutBlock = useCallback(
+    (step: StepBlockInfo) =>
+      void askRef.current(
+        step.inToolbox
+          ? `What does the "${step.label}" block do, and when would I use it in a launch?`
+          : `What does the "${step.label}" block (${step.stepId}) do in this launch, and how should I fill it in?`,
+        step.inToolbox ? { type: step.type } : { stepId: step.stepId, type: step.type },
+      ),
+    [],
+  );
+
+  /** Questions worth asking now: about the selected block, a failed run, the problems, or what comes next. */
+  const suggestions = useMemo(() => {
+    const list: Suggestion[] = [];
+    if (selectedStep && !selectedStep.inToolbox) {
+      list.push({
+        label: `What does ${selectedStep.stepId} do?`,
+        question: `What does the "${selectedStep.label}" block (${selectedStep.stepId}) do in this launch, and how should I fill it in?`,
+        focus: { stepId: selectedStep.stepId, type: selectedStep.type },
+      });
+    }
+    if (runError)
+      list.push({ label: "Why did the run fail?", question: "Why did the run fail, and what should I do now?" });
+    if (problemCount) {
+      list.push({
+        label: "Why can't I run this yet?",
+        question: "Why can't I run this launch yet? Walk me through fixing each problem.",
+      });
+    }
+    if (!flow?.steps.length) {
+      list.push({
+        label: "Help me build a launch",
+        question: "Help me build a token launch with a SaucerSwap market, block by block.",
+      });
+    } else if (!problemCount) {
+      list.push(
+        {
+          label: "Check it before I run it",
+          question: "Check this launch before I run it: will it do what I expect, and is anything risky or missing?",
+        },
+        {
+          label: "What will it cost?",
+          question: "What will this launch cost, step by step, and where does the HBAR go?",
+        },
+      );
+    }
+    list.push({
+      label: "What could I add next?",
+      question: "What could I add next to make this launch better, and why?",
+    });
+    return list.slice(0, 4);
+  }, [selectedStep, runError, problemCount, flow]);
 
   const startRun = async (runToken?: string) => {
     if (!flow) return;
@@ -566,6 +689,8 @@ export function LaunchStudio() {
               statuses={statuses}
               warnings={warnings}
               dark={resolvedTheme === "dark"}
+              onSelectStep={setSelectedStep}
+              {...(assistantStatus?.enabled ? { onAskAboutBlock: askAboutBlock } : {})}
             />
           ) : (
             <div className="absolute inset-0 grid place-items-center text-sm opacity-60">Loading step catalog…</div>
@@ -598,6 +723,7 @@ export function LaunchStudio() {
                 run={run}
                 estimate={issues.length ? null : estimate}
                 problems={problemCount}
+                {...(assistantStatus?.enabled ? { onAsk: (question: string) => void ask(question) } : {})}
                 payer={signerMode === "wallet" ? "your wallet" : "the default account"}
                 signedBy={
                   signerMode === "wallet"
@@ -617,12 +743,29 @@ export function LaunchStudio() {
                 {workspace.detachedIds.map(id => (
                   <li key={`detached-${id}`} className="rounded-lg border border-warning/40 p-2">
                     <span className="font-mono font-semibold">{id}</span> is outside the Launch block and will not run.
+                    {assistantStatus?.enabled && (
+                      <ExplainButton
+                        onClick={() =>
+                          void ask(`Why won't ${id} run, and how do I include it in the launch?`, { stepId: id })
+                        }
+                      />
+                    )}
                   </li>
                 ))}
                 {issues.map((issue, index) => (
                   <li key={`${issue.path}-${index}`} className="rounded-lg border border-error/40 p-2">
                     {issue.stepId && <span className="font-mono font-semibold">{issue.stepId} · </span>}
                     {issueText(issue, flow, catalog)}
+                    {assistantStatus?.enabled && (
+                      <ExplainButton
+                        onClick={() =>
+                          void ask(
+                            `Explain this problem and how to fix it: "${issueText(issue, flow, catalog)}"`,
+                            issue.stepId ? { stepId: issue.stepId } : undefined,
+                          )
+                        }
+                      />
+                    )}
                   </li>
                 ))}
               </ul>
@@ -630,6 +773,17 @@ export function LaunchStudio() {
               <p className="text-sm opacity-70">No problems. The flow is valid and ready to run.</p>
             ))}
           {tab === "outputs" && <OutputsPanel outputs={outputs} />}
+          {tab === "assistant" && (
+            <AssistantPanel
+              status={assistantStatus}
+              messages={chat}
+              busy={asking}
+              suggestions={suggestions}
+              onAsk={(question, focus) => void ask(question, focus)}
+              onStop={() => askAbort.current?.abort()}
+              onClear={() => setChat([])}
+            />
+          )}
         </StudioPanel>
       </div>
 
@@ -644,5 +798,14 @@ export function LaunchStudio() {
         />
       )}
     </div>
+  );
+}
+
+/** "Explain" beside a problem: asks the assistant about it. */
+function ExplainButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="btn btn-ghost btn-xs mt-1 gap-1 text-primary" onClick={onClick}>
+      <SparklesIcon className="h-3.5 w-3.5" /> Explain
+    </button>
   );
 }

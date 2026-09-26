@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { BlockWarning, StepStatus, WorkspaceState } from "../_lib/blocks";
+import type { BlockWarning, StepBlockInfo, StepStatus, WorkspaceState } from "../_lib/blocks";
 import {
   applyStatuses,
   applyWarnings,
@@ -9,7 +9,9 @@ import {
   defineBlocks,
   flowBlock,
   readDocument,
+  registerAskAboutBlock,
   registerOutputsCategory,
+  stepBlockInfo,
   stepIdGuard,
   writeDocument,
 } from "../_lib/blocks";
@@ -45,6 +47,10 @@ type Props = {
   statuses: Record<string, StepStatus | undefined>;
   warnings: ReadonlyMap<string, BlockWarning[]>;
   dark: boolean;
+  /** The step block the person selected, or null; for the assistant's suggestions. */
+  onSelectStep?: (step: StepBlockInfo | null) => void;
+  /** "Ask the assistant about this block" from a block's right-click menu. */
+  onAskAboutBlock?: (step: StepBlockInfo) => void;
 };
 
 /**
@@ -52,11 +58,23 @@ type Props = {
  * needs the DOM. It reports every structural change as a WorkspaceState and
  * takes status and warnings to paint back onto blocks.
  */
-export default function BlockEditor({ catalog, load, onChange, onLoadProblems, statuses, warnings, dark }: Props) {
+export default function BlockEditor({
+  catalog,
+  load,
+  onChange,
+  onLoadProblems,
+  statuses,
+  warnings,
+  dark,
+  onSelectStep,
+  onAskAboutBlock,
+}: Props) {
   const host = useRef<HTMLDivElement>(null);
   const workspace = useRef<Blockly.WorkspaceSvg | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onSelectRef = useRef(onSelectStep);
+  onSelectRef.current = onSelectStep;
   const syncTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
@@ -89,6 +107,11 @@ export default function BlockEditor({ catalog, load, onChange, onLoadProblems, s
       syncTimer.current = setTimeout(() => onChangeRef.current(readDocument(ws, catalog)), 200);
     };
     ws.addChangeListener(event => {
+      if (event.type === Blockly.Events.SELECTED) {
+        const id = (event as Blockly.Events.Selected).newElementId;
+        onSelectRef.current?.(stepBlockInfo(id ? ws.getBlockById(id) : null, catalog));
+        return;
+      }
       if (event.isUiEvent || ws.isDragging()) return;
       sync();
     });
@@ -131,6 +154,11 @@ export default function BlockEditor({ catalog, load, onChange, onLoadProblems, s
     // Only a new load request (nonce) should rebuild the workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load?.nonce, catalog]);
+
+  useEffect(() => {
+    registerAskAboutBlock(catalog, onAskAboutBlock ?? null);
+    return () => registerAskAboutBlock(catalog, null);
+  }, [catalog, onAskAboutBlock]);
 
   useEffect(() => {
     workspace.current?.setTheme(dark ? darkTheme : lightTheme);

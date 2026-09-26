@@ -26,6 +26,7 @@ export default defineConfig({
     url: `${BASE_URL}/api/launchblocks/steps`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    env: { HEDERA_OPERATOR_ID: "", HEDERA_OPERATOR_KEY: "", LAUNCHBLOCKS_PUBLIC_DEMO: "" },
+    // No operator and no AI key: nothing a test does can spend HBAR or AI credit.
+    env: { HEDERA_OPERATOR_ID: "", HEDERA_OPERATOR_KEY: "", LAUNCHBLOCKS_PUBLIC_DEMO: "", OPENAI_API_KEY: "" },
   },
 });
