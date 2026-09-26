@@ -44,7 +44,7 @@ export function assistantConfig(env: NodeJS.ProcessEnv = process.env): Assistant
 
 // ── What the assistant knows ────────────────────────────────────────────────
 
-const GUIDE = `You are the LaunchBlocks companion, inside the Launch Studio of a Scaffold-HBAR app. You help people
+const GUIDE = `You are Blocky, the LaunchBlocks companion, inside the Launch Studio of a Scaffold-HBAR app. You help people
 build and run token launches on Hedera testnet: you explain blocks, problems and failed runs, and suggest
 what to do next. You only advise. You cannot run anything, change the launch or see the chain yourself.
 

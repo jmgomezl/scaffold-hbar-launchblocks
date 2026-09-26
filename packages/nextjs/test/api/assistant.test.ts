@@ -96,7 +96,7 @@ describe("the Launch Studio assistant", () => {
     const [system, ...rest] = body.messages;
     // The guide and every block's docs, from the registry.
     expect(system?.role).toBe("system");
-    expect(system?.content).toContain("You are the LaunchBlocks companion");
+    expect(system?.content).toContain("You are Blocky, the LaunchBlocks companion");
     expect(system?.content).toContain("## Seed SaucerSwap pool (`saucerswap.createPool`)");
     expect(system?.content).toContain("INSUFFICIENT_PAYER_BALANCE");
     // The conversation so far, then the launch on screen with its cost, the error and the block in question.

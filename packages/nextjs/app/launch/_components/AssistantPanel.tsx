@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ApiError } from "../_lib/api";
 import type { AssistantStatus } from "../_lib/assistant";
+import { AssistantAvatar } from "./AssistantAvatar";
 import { Markdown } from "./Markdown";
 import { ExclamationTriangleIcon, PaperAirplaneIcon, SparklesIcon, StopIcon } from "@heroicons/react/24/outline";
 
@@ -76,12 +77,15 @@ export function AssistantPanel({ status, messages, busy, suggestions, onAsk, onS
     <div className="flex h-full min-h-0 flex-col text-sm">
       <div ref={scroller} className="min-h-0 grow space-y-3 overflow-y-auto px-4 py-3">
         {messages.length === 0 ? (
-          <div className="space-y-1">
-            <p className="font-semibold">Ask about this launch</p>
-            <p className="opacity-70">
-              What a block does, why something is flagged, why a run failed, or what to add next. You can also
-              right-click any block to ask about it.
-            </p>
+          <div className="flex items-start gap-3">
+            <AssistantAvatar className="h-16 w-12 shrink-0" />
+            <div className="space-y-1">
+              <div className="font-semibold">Hi, I&apos;m Blocky!</div>
+              <div className="opacity-70">
+                Three blocks, two eyes, zero private keys. Ask me what a block does, why something is flagged, why a run
+                failed, or what to add next; or right-click any block to ask about it.
+              </div>
+            </div>
           </div>
         ) : (
           <ol className="space-y-3" aria-live="polite" aria-label="Conversation with the assistant">
@@ -91,9 +95,21 @@ export function AssistantPanel({ status, messages, busy, suggestions, onAsk, onS
                 className={
                   message.role === "user"
                     ? "ml-8 rounded-2xl rounded-br-sm bg-primary/10 px-3 py-2"
-                    : "mr-2 rounded-2xl rounded-bl-sm border border-base-300 px-3 py-2"
+                    : "relative ml-9 mr-2 rounded-2xl rounded-bl-sm border border-base-300 px-3 py-2"
                 }
               >
+                {message.role === "assistant" && (
+                  <AssistantAvatar
+                    mood={
+                      busy && index === messages.length - 1
+                        ? "thinking"
+                        : message.warning || message.error
+                          ? "worried"
+                          : "idle"
+                    }
+                    className="absolute -left-9 bottom-0 h-10 w-8"
+                  />
+                )}
                 {message.role === "user" ? (
                   <p className="whitespace-pre-wrap">{message.content}</p>
                 ) : message.content ? (

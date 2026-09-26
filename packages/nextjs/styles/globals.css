@@ -271,3 +271,80 @@
 .code-view .hljs-strong {
   font-weight: 700;
 }
+
+/*
+ * Blocky, the studio assistant's avatar (app/launch/_components/AssistantAvatar.tsx): it bobs and
+ * blinks; its flame is a pilot light that roars, and its sparkle pulses, while it thinks.
+ */
+@keyframes lb-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1.5px);
+  }
+}
+@keyframes lb-blink {
+  0%,
+  93%,
+  100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes lb-roar {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(1.45) scaleX(0.9);
+  }
+}
+@keyframes lb-pulse {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.35) rotate(20deg);
+  }
+}
+.lb-avatar {
+  overflow: visible;
+  animation: lb-bob 3.2s ease-in-out infinite;
+}
+.lb-avatar .lb-eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: lb-blink 5s infinite;
+}
+.lb-avatar .lb-flame,
+.lb-avatar .lb-sparkle {
+  transform-box: fill-box;
+  transform-origin: top center;
+}
+.lb-avatar .lb-flame {
+  transform: scaleY(0.55);
+}
+.lb-avatar .lb-sparkle {
+  transform-origin: center;
+}
+.lb-avatar[data-mood="thinking"] .lb-flame {
+  animation: lb-roar 0.28s ease-in-out infinite;
+}
+.lb-avatar[data-mood="thinking"] .lb-sparkle {
+  animation: lb-pulse 0.9s ease-in-out infinite;
+}
+.lb-avatar[data-mood="thinking"] .lb-eyes {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lb-avatar,
+  .lb-avatar * {
+    animation: none !important;
+  }
+}
