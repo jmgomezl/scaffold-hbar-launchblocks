@@ -139,7 +139,12 @@ export const htsCreateToken = defineStep({
       { key: "name", label: "Name", kind: "text", placeholder: "LaunchBlocks Demo" },
       { key: "symbol", label: "Symbol", kind: "text", placeholder: "LBD" },
       { key: "decimals", label: "Decimals", kind: "number", help: "0–18; 8 matches HBAR" },
-      { key: "initialSupply", label: "Initial supply", kind: "amount", help: "Whole tokens minted to the treasury" },
+      {
+        key: "initialSupply",
+        label: "Initial supply",
+        kind: "amount",
+        help: "Tokens minted to the treasury, not smallest units",
+      },
       {
         key: "supplyType",
         label: "Supply",

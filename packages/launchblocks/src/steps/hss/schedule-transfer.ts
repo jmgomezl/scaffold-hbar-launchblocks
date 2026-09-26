@@ -47,7 +47,7 @@ export const hssScheduleTransfer = defineStep({
     fields: [
       { key: "tokenId", label: "Token", kind: "tokenId" },
       { key: "to", label: "To account", kind: "accountId" },
-      { key: "amount", label: "Amount", kind: "amount", help: "Whole tokens" },
+      { key: "amount", label: "Amount", kind: "amount", help: "In tokens, not smallest units: 1.5 is one and a half" },
       ...scheduleFields,
     ],
     outputs: scheduleOutputs,

@@ -16,7 +16,7 @@ export const AccountIdSchema = z
   .trim()
   .regex(ACCOUNT_PATTERN, "expected an account id like 0.0.12345 or a 0x EVM address");
 
-/** Human amounts in whole tokens: a non-negative number or decimal string. Large values must be strings. */
+/** Human amounts in tokens (not smallest units): a non-negative number or decimal string. Large values must be strings. */
 export const AmountSchema = z.union([
   z.number().nonnegative().finite(),
   z

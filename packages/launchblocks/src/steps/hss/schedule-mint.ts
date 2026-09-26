@@ -36,7 +36,7 @@ export const hssScheduleMint = defineStep({
     tooltip: "Schedule new supply that the network mints later by itself, e.g. a supply unlock on a date.",
     fields: [
       { key: "tokenId", label: "Token", kind: "tokenId" },
-      { key: "amount", label: "Amount", kind: "amount", help: "Whole tokens" },
+      { key: "amount", label: "Amount", kind: "amount", help: "In tokens, not smallest units: 1.5 is one and a half" },
       ...scheduleFields,
     ],
     outputs: scheduleOutputs,

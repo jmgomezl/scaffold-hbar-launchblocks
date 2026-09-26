@@ -38,7 +38,7 @@ export const htsMint = defineStep({
     tooltip: "Mint more supply into the treasury. The token needs a supply key.",
     fields: [
       { key: "tokenId", label: "Token", kind: "tokenId" },
-      { key: "amount", label: "Amount", kind: "amount", help: "Whole tokens" },
+      { key: "amount", label: "Amount", kind: "amount", help: "In tokens, not smallest units: 1.5 is one and a half" },
     ],
     outputs: [
       { key: "tokenId", label: "Token", kind: "tokenId" },

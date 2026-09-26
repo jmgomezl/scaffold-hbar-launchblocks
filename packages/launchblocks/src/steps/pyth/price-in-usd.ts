@@ -45,7 +45,12 @@ export const pythPriceInUsd = defineStep({
     tooltip:
       "Work out the HBAR to pair with your tokens so the pool opens at a US dollar price, from Pyth's HBAR/USD feed on Hedera.",
     fields: [
-      { key: "tokenAmount", label: "Tokens to deposit", kind: "amount", help: "Whole tokens" },
+      {
+        key: "tokenAmount",
+        label: "Tokens to deposit",
+        kind: "amount",
+        help: "In tokens, not smallest units: 1.5 is one and a half",
+      },
       { key: "tokenPriceUsd", label: "Opening price (USD)", kind: "amount", help: "The price of one token" },
       {
         key: "maxAgeSeconds",

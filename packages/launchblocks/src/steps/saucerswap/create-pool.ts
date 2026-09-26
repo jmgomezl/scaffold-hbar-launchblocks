@@ -65,7 +65,12 @@ export const saucerswapCreatePool = defineStep({
     tooltip: "Create the token's first SaucerSwap V1 pool against HBAR. The two amounts set the opening price.",
     fields: [
       { key: "tokenId", label: "Token", kind: "tokenId" },
-      { key: "tokenAmount", label: "Tokens to deposit", kind: "amount", help: "Whole tokens" },
+      {
+        key: "tokenAmount",
+        label: "Tokens to deposit",
+        kind: "amount",
+        help: "In tokens, not smallest units: 1.5 is one and a half",
+      },
       {
         key: "hbarAmount",
         label: "HBAR to deposit",
