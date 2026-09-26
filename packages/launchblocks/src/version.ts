@@ -3,4 +3,4 @@
  * package.json version stays put: the app depends on it by version range (npm workspaces link a local
  * package only when the range matches), so changing it would send installs to the npm registry.
  */
-export const LAUNCHBLOCKS_VERSION = "1.1.1";
+export const LAUNCHBLOCKS_VERSION = "1.1.2";
