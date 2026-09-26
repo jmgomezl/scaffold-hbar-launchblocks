@@ -1,7 +1,7 @@
 {
   "name": "scaffold-hbar-launchblocks",
   "description": "Visual, block-based token launchpad on Hedera: compose a launch as JSON steps, run it on testnet, and seed a SaucerSwap pool so the token is tradeable.",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "create-scaffold-hbar": {
     "capabilities": {
       "frontend": [
