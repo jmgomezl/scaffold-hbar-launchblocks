@@ -146,6 +146,7 @@ test("exports the launch as flow JSON and as a launch.ts that calls the core", a
   await expect(code).toContainText('"id": "hts-launch-basic"');
   await page.getByRole("tab", { name: "launch.ts" }).click();
   await expect(code).toContainText("await createFungibleToken(ctx");
+  await expect(page.getByText(/not a standalone npm package/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Download launch.ts" })).toBeEnabled();
 });
 
@@ -321,7 +322,9 @@ test("shows the server's warning under an answer that names an account the launc
 test("warns when a launch accepts a Pyth price of any age", async ({ page }) => {
   await page.goto("/launch?example=hts-launch-usd-price");
   await expectValid(page, 5);
-  await expect(page.getByRole("alert").filter({ hasText: "Pyth freshness check is off." })).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "Pyth freshness check is off." })).toContainText(
+    "2026-08-23 at 22:59:15 UTC",
+  );
   await page.getByLabel("Load an example flow").selectOption("hts-launch-basic");
   await expectValid(page, 5);
   await expect(page.getByText("Pyth freshness check is off.")).toHaveCount(0);
@@ -338,4 +341,53 @@ test("the side panel collapses but never closes, even for a browser that remembe
   await expect(page.getByRole("button", { name: "Close panel" })).toHaveCount(0);
   await page.getByRole("button", { name: "Collapse panel" }).click();
   await expect(page.getByRole("button", { name: "Expand panel" })).toBeVisible();
+});
+
+test("the homepage opens the flagship SaucerSwap launch", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Open Launch Studio", exact: true }).click();
+  await expectValid(page, 6);
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await expect(page.locator("dialog[open] pre code")).toContainText('"id": "hts-launch-saucerswap"');
+});
+
+test("folds HCS payloads without changing exported messages", async ({ page, request }) => {
+  const { flows } = await (await request.get("/api/launchblocks/gallery")).json();
+  const original = flows.find((entry: GalleryEntry) => entry.id === "hts-launch-saucerswap").flow;
+  await page.goto("/launch?example=hts-launch-saucerswap");
+  await expectValid(page, 6);
+  const canvas = page.locator(".blocklyBlockCanvas");
+  await expect(canvas.getByText("Message", { exact: true })).toHaveCount(0);
+  const toggle = canvas.locator(".blocklyLabelField", { hasText: "message & chunk settings" }).first();
+  await toggle.locator("xpath=preceding-sibling::*[1]").click();
+  await expect(canvas.getByText("Message", { exact: true })).toBeVisible();
+  await toggle.locator("xpath=preceding-sibling::*[1]").click();
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  const exported = JSON.parse((await page.locator("dialog[open] pre code").textContent())!);
+  for (const step of original.steps.filter((step: { type: string }) => step.type === "hcs.submitMessage")) {
+    expect(exported.steps.find((item: { id: string }) => item.id === step.id).params.message).toEqual(
+      step.params.message,
+    );
+  }
+});
+
+test("distinguishes an account still loading from an account check failure", async ({ page }) => {
+  let release: () => void = () => undefined;
+  const pending = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  await page.route("**/api/launchblocks/operator", async route => {
+    await pending;
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Unavailable" }),
+    });
+  });
+  await page.goto("/launch?example=hts-launch-basic");
+  await expect(page.getByText("Checking demo account…", { exact: true })).toBeVisible();
+  await expect(page.getByText(/None is set yet/)).toHaveCount(0);
+  release();
+  await expect(page.getByText(/Could not check the demo account/)).toBeVisible();
+  await expect(page.getByText(/None is set yet/)).toHaveCount(0);
 });

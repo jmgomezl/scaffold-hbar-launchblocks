@@ -34,7 +34,7 @@ export const GALLERY: readonly GalleryEntry[] = [
     id: "hts-launch-usd-price",
     title: "Token launch priced in USD",
     blurb:
-      "Open the market at a dollar price: Pyth's HBAR/USD feed on Hedera works out the HBAR to pair with 50,000 tokens at $0.00002 each, then the token, its launch log and the SaucerSwap pool follow. It uses the price already on-chain and logs its age.",
+      "Open the market at a dollar price: Pyth's HBAR/USD feed on Hedera works out the HBAR to pair with 50,000 tokens at $0.00002 each, then the token, its launch log and the SaucerSwap pool follow. Historical demo: freshness is disabled; the verified run used a price published 2026-08-23 at 22:59:15 UTC. Fresh updates were rejected in our September 24 check.",
     flow: htsLaunchUsdPrice as FlowInput,
   },
   {

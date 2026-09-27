@@ -51,7 +51,7 @@ const STEPS = [
   {
     Icon: CodeBracketIcon,
     title: "Export",
-    body: "Share it as a link, download it as JSON for the CLI or as a launch.ts script, or let a coding agent build it over MCP.",
+    body: "Share it as a link, download it as JSON for the CLI or as a launch.ts script for this workspace, or let a coding agent build it over MCP.",
   },
 ];
 
@@ -67,7 +67,7 @@ const UNDER_THE_HOOD = [
   },
   {
     name: "Pyth",
-    body: "Open the pool at a US dollar price, from Pyth's HBAR/USD feed on Hedera. Every price is checked for age and confidence before anything is spent.",
+    body: "USD pricing from Pyth's HBAR/USD feed. Historical demo only: fresh updates were rejected on Hedera in our September 24 check. The recorded example accepts a price published August 23, 2026 at 22:59:15 UTC.",
   },
   {
     name: "Schedule Service",
@@ -116,7 +116,10 @@ const Home: NextPage = () => {
               every transaction as it lands.
             </p>
             <div className="flex flex-wrap gap-3">
-              <Link href="/launch" className="btn btn-lg border-none bg-white text-hedera-violet hover:bg-white/90">
+              <Link
+                href="/launch?example=hts-launch-saucerswap"
+                className="btn btn-lg border-none bg-white text-hedera-violet hover:bg-white/90"
+              >
                 <RocketLaunchIcon className="h-5 w-5" />
                 Open Launch Studio
               </Link>

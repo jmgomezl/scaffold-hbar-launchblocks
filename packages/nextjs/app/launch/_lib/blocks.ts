@@ -216,7 +216,9 @@ function stepDefinition(entry: StepCatalogEntry) {
       if (advanced.length) {
         this.appendDummyInput("__more")
           .appendField(new Blockly.FieldCheckbox("FALSE", showAdvanced), ADVANCED_FIELD)
-          .appendField(`more settings (${advanced.length})`);
+          .appendField(
+            entry.type === "hcs.submitMessage" ? "message & chunk settings" : `more settings (${advanced.length})`,
+          );
         this.lbAdvancedKeys = advanced.map(field => field.key);
         this.lbAdvancedInputs = rows.filter(isAdvancedRow).map(row => appendRow(this, entry, row));
         for (const input of this.lbAdvancedInputs) input.setVisible(false);

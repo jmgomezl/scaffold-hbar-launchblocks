@@ -40,9 +40,10 @@ export const hcsSubmitMessage = defineStep({
         key: "message",
         label: "Message",
         kind: "json",
+        advanced: true,
         help: 'Text or JSON; e.g. {"event":"launch","tokenId":"{{steps.createToken.tokenId}}"}',
       },
-      { key: "maxChunks", label: "Max chunks", kind: "number", help: "1024 bytes per chunk" },
+      { key: "maxChunks", label: "Max chunks", kind: "number", advanced: true, help: "1024 bytes per chunk" },
     ],
     outputs: [
       { key: "topicId", label: "Topic", kind: "topicId" },

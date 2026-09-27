@@ -154,6 +154,7 @@ export function LaunchStudio() {
   const [selectedStep, setSelectedStep] = useState<StepBlockInfo | null>(null);
   const askAbort = useRef<AbortController | null>(null);
   const [operatorAccountId, setOperatorAccountId] = useState<string | null>(null);
+  const [operatorStatus, setOperatorStatus] = useState<"loading" | "ready" | "error">("loading");
   const wallet = useHederaWallet(signerMode === "wallet");
   const fileInput = useRef<HTMLInputElement>(null);
   const nonce = useRef(0);
@@ -298,8 +299,11 @@ export function LaunchStudio() {
     setPanelMode(parsePanelMode(readStorage(PANEL_KEY, () => window.localStorage)));
     if (readStorage(SIGNER_KEY, () => window.localStorage) === "wallet") setSignerMode("wallet");
     fetchOperator().then(
-      operator => setOperatorAccountId(operator.accountId),
-      () => undefined,
+      operator => {
+        setOperatorAccountId(operator.accountId);
+        setOperatorStatus("ready");
+      },
+      () => setOperatorStatus("error"),
     );
   }, []);
 
@@ -713,7 +717,8 @@ export function LaunchStudio() {
                   <span>
                     <strong>Pyth freshness check is off.</strong> This launch accepts the last on-chain price regardless
                     of its age, so its USD price may be outdated. Set Max age above 0 in Price in USD with Pyth to
-                    reject stale prices.
+                    reject stale prices. Our verified USD demo used a price published 2026-08-23 at 22:59:15 UTC; fresh
+                    updates were rejected in our September 24 check. Each run logs the actual publish time.
                   </span>
                 </div>
               )}
@@ -721,6 +726,7 @@ export function LaunchStudio() {
                 mode={signerMode}
                 onModeChange={changeSignerMode}
                 operatorAccountId={operatorAccountId}
+                operatorStatus={operatorStatus}
                 wallet={wallet.state}
                 onConnect={extensionId => void wallet.connect(extensionId)}
                 onDisconnect={() => void wallet.disconnect()}

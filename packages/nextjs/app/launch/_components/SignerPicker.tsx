@@ -42,6 +42,7 @@ type Props = {
   mode: SignerMode;
   onModeChange: (mode: SignerMode) => void;
   operatorAccountId: string | null;
+  operatorStatus: "loading" | "ready" | "error";
   wallet: WalletState;
   onConnect: (extensionId?: string) => void;
   onDisconnect: () => void;
@@ -57,6 +58,7 @@ export function SignerPicker({
   mode,
   onModeChange,
   operatorAccountId,
+  operatorStatus,
   wallet,
   onConnect,
   onDisconnect,
@@ -80,7 +82,11 @@ export function SignerPicker({
           <span className="font-medium">Default account</span>{" "}
           <span className="badge badge-primary badge-sm align-middle">no setup</span>
           <span className="block text-xs opacity-70">
-            {operatorAccountId ? (
+            {operatorStatus === "loading" ? (
+              "Checking demo account…"
+            ) : operatorStatus === "error" ? (
+              "Could not check the demo account. Reload to try again, or connect your wallet."
+            ) : operatorAccountId ? (
               <>
                 The app&apos;s testnet account <AccountLink accountId={operatorAccountId} /> signs and pays for the run.
                 Nothing to connect or fund.

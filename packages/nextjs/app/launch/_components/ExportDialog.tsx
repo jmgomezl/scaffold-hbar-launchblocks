@@ -19,7 +19,7 @@ const EXPORT_TABS: { id: Tab; label: string }[] = [
 const DESCRIPTION: Record<Tab, string> = {
   json: "The flow document: open it again here, run it with the core:run script, or commit it next to your app.",
   script:
-    "A TypeScript script that performs the same steps by calling the functions the runner uses. Save it in packages/launchblocks and run it with npx tsx --env-file=../nextjs/.env launch.ts.",
+    "A workspace script that imports @sh/launchblocks from this repository, not a standalone npm package. Save it in packages/launchblocks and run it there with npx tsx --env-file=../nextjs/.env launch.ts.",
   harness:
     "A Hedera Harness recipe: a coding agent adds this launch to your app's examples, unchanged, and the harness grades the work itself, up to running the launch on testnet with its own funded account.",
 };
