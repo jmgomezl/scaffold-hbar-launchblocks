@@ -422,7 +422,7 @@ Gallery flows live in `packages/launchblocks/flows/`: `hts-launch-saucerswap` (t
 
 With npm, put `--` before flags meant for the script, or they never reach it: `npm run core:run -- <flow> --codegen out.ts`. `core:run` and `core:check` skip a stray `--`, so that form works with either package manager.
 
-An exported `launch.ts` imports the workspace package `@sh/launchblocks`; it is code export, not a standalone published npm package. It runs inside the repo: save it in `packages/launchblocks/` and run `npx tsx --env-file=../nextjs/.env launch.ts`.
+An exported `launch.ts` imports the workspace package `@sh/launchblocks`; it is code export, not a standalone published package. It runs inside the repo: save it in `packages/launchblocks/` and run `npx tsx --env-file=../nextjs/.env launch.ts`.
 
 **Checks on every push.** CI lints (a warning fails it), type-checks, runs the core tests with coverage and the API tests, checks the step table above, compiles the contracts and tests them on a Hedera fork, builds the app and drives the studio in Chromium, and scans the whole git history for committed secrets with gitleaks. **Fresh scaffold** then creates a project from the published template with the latest Scaffold-HBAR CLI, once with each package manager the template supports, and checks it item by item as the bounty gate does: files, install, lint, types, tests, a dry run of every gallery flow, the build, the served app's routes, and the studio in a browser. Its script runs locally too: `.github/scripts/check-scaffold.sh <project> <package-manager>`.
 

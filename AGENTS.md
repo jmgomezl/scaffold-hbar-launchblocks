@@ -225,3 +225,5 @@ Core package specifics: `exactOptionalPropertyTypes` and `noUncheckedIndexedAcce
 Commits follow Conventional Commits (`feat(core): …`, `fix(nextjs): …`, `docs: …`, `ci: …`); the template's own repository also signs them with GPG, which a project made from it need not do. Keep each commit green: tests, lint (a warning fails it), and type checks.
 
 When writing prose (README, comments, docs), write `yarn <script>` only where a command is meant: the CLI rewrites that word to `npm run` in projects scaffolded with npm.
+
+Keep package-manager names out of other prose, including export descriptions and test assertions: the scaffold CLI can interpret them as commands and rewrite them.

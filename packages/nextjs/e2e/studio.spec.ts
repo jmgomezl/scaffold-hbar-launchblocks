@@ -146,7 +146,7 @@ test("exports the launch as flow JSON and as a launch.ts that calls the core", a
   await expect(code).toContainText('"id": "hts-launch-basic"');
   await page.getByRole("tab", { name: "launch.ts" }).click();
   await expect(code).toContainText("await createFungibleToken(ctx");
-  await expect(page.getByText(/not a standalone npm package/)).toBeVisible();
+  await expect(page.getByText(/not a standalone package/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Download launch.ts" })).toBeEnabled();
 });
 
