@@ -318,6 +318,9 @@
   overflow: visible;
   animation: lb-bob 3.2s ease-in-out infinite;
 }
+.lb-avatar .lb-pupils {
+  transition: transform 100ms ease-out;
+}
 .lb-avatar .lb-eyes {
   transform-box: fill-box;
   transform-origin: center;
@@ -343,7 +346,41 @@
 .lb-avatar[data-mood="thinking"] .lb-eyes {
   animation: none;
 }
+/* A small enamel-like badge keeps Blocky's face clear in either theme. */
+.lb-assistant-trigger {
+  border: 1px solid rgb(255 255 255 / 24%);
+  box-shadow:
+    0 6px 18px rgb(39 24 111 / 24%),
+    inset 0 1px 0 rgb(255 255 255 / 22%);
+  transition:
+    transform 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+.lb-assistant-badge {
+  background: linear-gradient(145deg, #fff, #ede9ff);
+  box-shadow:
+    0 1px 3px rgb(25 16 77 / 18%),
+    inset 0 1px 0 #fff;
+}
+@media (hover: hover) {
+  .lb-assistant-trigger:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 9px 24px rgb(39 24 111 / 30%),
+      inset 0 1px 0 rgb(255 255 255 / 30%);
+  }
+}
+.lb-assistant-trigger:active {
+  transform: translateY(0);
+}
 @media (prefers-reduced-motion: reduce) {
+  .lb-assistant-trigger,
+  .lb-avatar .lb-pupils {
+    transition: none;
+  }
+  .lb-assistant-trigger:hover {
+    transform: none;
+  }
   .lb-avatar,
   .lb-avatar * {
     animation: none !important;

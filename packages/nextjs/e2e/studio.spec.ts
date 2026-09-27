@@ -391,3 +391,62 @@ test("distinguishes an account still loading from an account check failure", asy
   await expect(page.getByText(/Could not check the demo account/)).toBeVisible();
   await expect(page.getByText(/None is set yet/)).toHaveCount(0);
 });
+
+test("Blocky's gaze follows the mouse within its eyes and respects reduced motion", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/launch?example=hts-launch-basic");
+  await expectValid(page, 5);
+  const pupils = page.getByRole("button", { name: "Open the assistant" }).locator(".lb-pupils");
+  const gaze = () =>
+    pupils.evaluate(element => {
+      const matrix = new DOMMatrix(getComputedStyle(element).transform);
+      return { x: matrix.e, y: matrix.f };
+    });
+  await page.mouse.move(10, 10);
+  await expect.poll(async () => (await gaze()).x).toBeLessThan(0);
+  await expect.poll(async () => (await gaze()).y).toBeLessThan(0);
+  const upLeft = await gaze();
+  expect(Math.hypot(upLeft.x, upLeft.y)).toBeLessThanOrEqual(1.16);
+  await page.mouse.move(1270, 890);
+  await expect.poll(async () => (await gaze()).x).toBeGreaterThan(0);
+  await expect.poll(async () => (await gaze()).y).toBeGreaterThan(0);
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect.poll(gaze).toEqual({ x: 0.4, y: 0.5 });
+  await page.mouse.move(10, 10);
+  expect(await gaze()).toEqual({ x: 0.4, y: 0.5 });
+  await expect(pupils).toHaveCSS("transition-duration", "0s");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.mouse.move(20, 20);
+  await expect.poll(async () => (await gaze()).x).toBeLessThan(0);
+});
+
+test("Blocky keeps its thinking gaze while an answer is pending", async ({ page }) => {
+  let finish: () => void = () => undefined;
+  const pending = new Promise<void>(resolve => {
+    finish = resolve;
+  });
+  await page.route("**/api/launchblocks/assistant", async route => {
+    if (route.request().method() === "GET") return route.fulfill({ json: { enabled: true, model: "test-model" } });
+    await pending;
+    await route.fulfill({ contentType: "application/x-ndjson", body: JSON.stringify({ type: "done" }) + "\n" });
+  });
+  await page.goto("/launch?example=hts-launch-basic");
+  await expectValid(page, 5);
+  await page.getByRole("button", { name: "Open the assistant" }).click();
+  await page.getByLabel("Your question for the assistant").fill("What does this block do?");
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  const avatar = page.locator(".lb-assistant-trigger .lb-avatar");
+  try {
+    await expect(avatar).toHaveAttribute("data-mood", "thinking");
+    await page.mouse.move(10, 10);
+    await expect(avatar.locator(".lb-pupils")).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0.9, -0.9)");
+  } finally {
+    finish();
+  }
+  await expect(avatar).toHaveAttribute("data-mood", "idle");
+  await page.mouse.move(20, 20);
+  await expect
+    .poll(() => avatar.locator(".lb-pupils").evaluate(element => new DOMMatrix(getComputedStyle(element).transform).e))
+    .toBeLessThan(0);
+});

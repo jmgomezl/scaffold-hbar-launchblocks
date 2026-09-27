@@ -65,7 +65,7 @@ export function AssistantDock({ open, onOpenChange, onClear, attention, panelMod
           className={`fixed inset-x-2 bottom-2 ${LAYER} flex outline-none h-[75dvh] flex-col overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-2xl lg:inset-x-auto lg:bottom-20 lg:h-[min(620px,calc(100dvh-12rem))] lg:w-[400px] ${RIGHT_OF_PANEL[panelMode]}`}
         >
           <header className="flex items-center gap-2 border-b border-base-300 px-4 py-2">
-            <AssistantAvatar mood={mood} className="h-11 w-9 shrink-0" />
+            <AssistantAvatar mood={mood} followPointer className="h-11 w-9 shrink-0" />
             <div className="leading-tight">
               <div className="font-semibold">Blocky</div>
               <div className="text-[11px] opacity-60">Your LaunchBlocks assistant</div>
@@ -105,10 +105,10 @@ export function AssistantDock({ open, onOpenChange, onClear, attention, panelMod
         data-attention={attention && !open ? "true" : undefined}
         aria-label={open ? "Minimise the assistant" : "Open the assistant"}
         // Plain utilities, not daisyUI's .btn, whose own background would cover the gradient.
-        className={`fixed bottom-4 right-4 ${LAYER} inline-flex h-12 cursor-pointer items-center gap-2 rounded-full bg-linear-135 from-hedera-ultraviolet to-hedera-azure pl-1.5 pr-5 font-semibold text-white shadow-xl transition max-sm:w-12 max-sm:justify-center max-sm:px-0 hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary lg:right-32 ${open ? "max-lg:hidden" : ""}`}
+        className={`lb-assistant-trigger fixed bottom-4 right-4 ${LAYER} inline-flex h-14 cursor-pointer items-center gap-2.5 rounded-full bg-linear-135 from-hedera-ultraviolet to-hedera-azure pl-1.5 pr-5 font-semibold tracking-tight text-white max-sm:w-14 max-sm:justify-center max-sm:px-0 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-primary lg:right-32 ${open ? "max-lg:hidden" : ""}`}
       >
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/95 shadow-inner">
-          <AssistantAvatar mood={mood} className="h-8 w-7" />
+        <span className="lb-assistant-badge grid h-11 w-11 shrink-0 place-items-center rounded-full">
+          <AssistantAvatar mood={mood} followPointer className="h-10 w-8" />
         </span>
         {/* On a phone the button is just Blocky, so it covers less of the page. */}
         <span className="max-sm:sr-only">{open ? "Hide Blocky" : "Ask Blocky"}</span>

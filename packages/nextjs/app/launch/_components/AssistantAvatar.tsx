@@ -1,8 +1,11 @@
+"use client";
+
+import { useEffect, useRef } from "react";
 import { BLOCK_COLOUR } from "~~/components/LaunchBlocksMark";
 
 export type AvatarMood = "idle" | "thinking" | "worried";
 
-/** Where the pupils look: at you, up while it thinks, and straight at you, a little alarmed, when worried. */
+/** Resting gaze; thinking keeps its upward look even when cursor tracking is enabled. */
 const PUPILS: Record<AvatarMood, { dx: number; dy: number }> = {
   idle: { dx: 0.4, dy: 0.5 },
   thinking: { dx: 0.9, dy: -0.9 },
@@ -18,10 +21,76 @@ const PUPILS: Record<AvatarMood, { dx: number; dy: number }> = {
  * with a problem or a warning on screen, it looks worried. Motion stops for
  * people who ask for reduced motion.
  */
-export function AssistantAvatar({ mood = "idle", className }: { mood?: AvatarMood; className?: string }) {
+export function AssistantAvatar({
+  mood = "idle",
+  className,
+  followPointer = false,
+}: {
+  mood?: AvatarMood;
+  className?: string;
+  /** Enable on the launcher and chat header, not on every past message. */
+  followPointer?: boolean;
+}) {
+  const avatar = useRef<SVGSVGElement>(null);
+  const pupils = useRef<SVGGElement>(null);
   const { dx, dy } = PUPILS[mood];
+
+  useEffect(() => {
+    const svg = avatar.current;
+    const gaze = pupils.current;
+    if (!svg || !gaze) return;
+    gaze.style.transform = `translate(${dx}px, ${dy}px)`;
+    if (!followPointer || mood === "thinking") return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let frame = 0;
+    let pointer = { x: 0, y: 0 };
+    const reset = () => {
+      cancelAnimationFrame(frame);
+      frame = 0;
+      gaze.style.transform = `translate(${dx}px, ${dy}px)`;
+    };
+    const look = () => {
+      frame = 0;
+      const matrix = svg.getScreenCTM();
+      if (!matrix) return;
+      // Use the actual SVG eye centre, including its scale and gentle bob.
+      const centre = new DOMPoint(10.9, 14).matrixTransform(matrix);
+      const x = pointer.x - centre.x;
+      const y = pointer.y - centre.y;
+      // Keep pupils inside their whites; ease toward the centre for a nearby cursor.
+      const scale = 1.15 / Math.max(80, Math.hypot(x, y));
+      gaze.style.transform = `translate(${x * scale}px, ${y * scale}px)`;
+    };
+    const onMove = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse" || reducedMotion.matches) return;
+      pointer = { x: event.clientX, y: event.clientY };
+      if (!frame) frame = requestAnimationFrame(look);
+    };
+    const onLeave = (event: PointerEvent) => {
+      if (!event.relatedTarget) reset();
+    };
+    window.addEventListener("pointermove", onMove, { passive: true, capture: true });
+    window.addEventListener("pointerout", onLeave);
+    window.addEventListener("blur", reset);
+    window.addEventListener("resize", reset);
+    reducedMotion.addEventListener("change", reset);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("pointermove", onMove, true);
+      window.removeEventListener("pointerout", onLeave);
+      window.removeEventListener("blur", reset);
+      window.removeEventListener("resize", reset);
+      reducedMotion.removeEventListener("change", reset);
+    };
+  }, [followPointer, mood, dx, dy]);
   return (
-    <svg viewBox="0 0 32 42" className={`lb-avatar ${className ?? ""}`} data-mood={mood} aria-hidden="true">
+    <svg
+      ref={avatar}
+      viewBox="0 0 32 42"
+      className={`lb-avatar ${className ?? ""}`}
+      data-mood={mood}
+      aria-hidden="true"
+    >
       {/* The rocket flame under the base: a pilot light, roaring while it thinks. */}
       <g className="lb-flame">
         <path d="M11 34Q16 44 21 34Z" fill="#ff8863" />
@@ -55,8 +124,12 @@ export function AssistantAvatar({ mood = "idle", className }: { mood?: AvatarMoo
       <g className="lb-eyes">
         <circle cx="7.6" cy="14" r="2.6" fill="#fff" stroke="#11151d" strokeWidth="0.4" />
         <circle cx="14.2" cy="14" r="2.6" fill="#fff" stroke="#11151d" strokeWidth="0.4" />
-        <circle cx={7.6 + dx} cy={14 + dy} r="1.15" fill="#11151d" />
-        <circle cx={14.2 + dx} cy={14 + dy} r="1.15" fill="#11151d" />
+        <g ref={pupils} className="lb-pupils" style={{ transform: `translate(${dx}px, ${dy}px)` }}>
+          <circle cx="7.6" cy="14" r="1.15" fill="#11151d" />
+          <circle cx="14.2" cy="14" r="1.15" fill="#11151d" />
+          <circle cx="7.25" cy="13.65" r="0.3" fill="#fff" />
+          <circle cx="13.85" cy="13.65" r="0.3" fill="#fff" />
+        </g>
       </g>
 
       {/* Brows, only when worried: raised toward the middle (sloping down toward it would read as angry). */}
