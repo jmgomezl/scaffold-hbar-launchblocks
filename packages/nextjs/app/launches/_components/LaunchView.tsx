@@ -221,14 +221,17 @@ export function LaunchView({ launch }: { launch: LaunchRecord }) {
             </Card>
           )}
           {lock && (
-            <Card title="Liquidity lock">
+            <Card title="Reported liquidity lock">
               <p className="text-2xl font-bold">
-                {lock.released ? "Released" : `${formatAmount(lock.lockedLp)} LP locked`}
+                {lock.released ? "No LP tokens held" : `${formatAmount(lock.lockedLp)} LP held`}
               </p>
               <p className="text-sm text-base-content/70">
                 {lock.releaseAt
-                  ? `${lock.released ? "Release time was" : "Nobody can withdraw it until"} ${formatDate(lock.releaseAt)} (${relativeTime(lock.releaseAt)}).`
+                  ? `Release time reported in the log: ${formatDate(lock.releaseAt)} (${relativeTime(lock.releaseAt)}).`
                   : "The log does not say when it unlocks."}
+              </p>
+              <p className="mt-2 text-xs text-base-content/70">
+                The balance is current. This page has not verified the contract code or its withdrawal restrictions.
               </p>
               <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
                 <External href={hashscanUrl(network, "contract", lock.contractId)}>Lock {lock.contractId}</External>

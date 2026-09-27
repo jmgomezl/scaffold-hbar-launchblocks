@@ -317,3 +317,12 @@ test("shows the server's warning under an answer that names an account the launc
   const assistant = page.getByRole("dialog", { name: "Assistant" });
   await expect(assistant.getByRole("alert")).toContainText("0.0.666, which your launch does not use");
 });
+
+test("warns when a launch accepts a Pyth price of any age", async ({ page }) => {
+  await page.goto("/launch?example=hts-launch-usd-price");
+  await expectValid(page, 5);
+  await expect(page.getByRole("alert").filter({ hasText: "Pyth freshness check is off." })).toBeVisible();
+  await page.getByLabel("Load an example flow").selectOption("hts-launch-basic");
+  await expectValid(page, 5);
+  await expect(page.getByText("Pyth freshness check is off.")).toHaveCount(0);
+});

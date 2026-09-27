@@ -64,9 +64,9 @@ export type LaunchPool = {
 export type LaunchLock = {
   contractId: string;
   lpTokenId: string;
-  /** LP tokens the lock holds now. */
+  /** LP tokens the reported lock address holds now; not proof of withdrawal restrictions. */
   lockedLp: string;
-  /** ISO time the lock allows release, from the log. */
+  /** ISO release time claimed by the log; not independently verified against contract code or state. */
   releaseAt: string | null;
   released: boolean;
 };

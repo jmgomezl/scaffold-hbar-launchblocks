@@ -714,6 +714,17 @@ export function LaunchStudio() {
         >
           {tab === "run" && (
             <>
+              {flow?.steps.some(
+                step => step.type === "pyth.priceInUsd" && Number(step.params?.maxAgeSeconds) === 0,
+              ) && (
+                <div role="alert" className="alert alert-warning mb-3 text-sm">
+                  <span>
+                    <strong>Pyth freshness check is off.</strong> This launch accepts the last on-chain price regardless
+                    of its age, so its USD price may be outdated. Set Max age above 0 in Price in USD with Pyth to
+                    reject stale prices.
+                  </span>
+                </div>
+              )}
               <SignerPicker
                 mode={signerMode}
                 onModeChange={changeSignerMode}
