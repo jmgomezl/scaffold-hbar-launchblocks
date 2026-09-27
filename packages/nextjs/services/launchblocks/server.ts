@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { reservePublicRun } from "./public-budget";
 import type { BeforeStep, Flow, HederaContext, PublicRunLimits, StepRegistry } from "@sh/launchblocks";
 import {
   DEFAULT_PUBLIC_RUN_LIMITS,
@@ -123,10 +124,6 @@ const HOUR_MS = 60 * 60 * 1000;
 
 type Window = { count: number; resetAt: number };
 const windows = new Map<string, Window>();
-/** Visitors with a run in progress; public deployments allow one each. */
-const activeRuns = new Set<string>();
-/** Worst-case HBAR of the public runs started in the last hour. */
-let publicSpend: { at: number; hbar: number }[] = [];
 
 /**
  * `release` ends the visitor's run. `sentNothing: true` also gives back its
@@ -164,12 +161,12 @@ function crossSite(req: Request): boolean {
 /**
  * Decide whether a run may start. Every deployment refuses mainnet without an
  * explicit flag, a missing shared token when one is set, and more runs per
- * hour per visitor than allowed (in memory, per instance).
+ * hour per visitor than allowed (shared persistent storage for public runs).
  *
  * A public deployment (`LAUNCHBLOCKS_PUBLIC_DEMO=true`), whose operator pays
  * for anonymous visitors, also applies the core's public-run policy: value
  * only goes to tokens and contracts the run creates, capped per step; one run
- * at a time per visitor; and an hourly HBAR budget across all visitors.
+ * at a time per visitor; and an hourly HBAR reservation budget across all visitors and workers.
  *
  * The caller must call `release()` when the run ends.
  */
@@ -213,7 +210,6 @@ export function guardRun(req: Request, flow: Flow): RunGuard {
     maxSteps: DEFAULT_PUBLIC_RUN_LIMITS.maxSteps,
     maxHbarPerStep: envNumber("LAUNCHBLOCKS_PUBLIC_MAX_HBAR_PER_STEP", DEFAULT_PUBLIC_RUN_LIMITS.maxHbarPerStep),
   };
-  let cost = 0;
   if (isPublic) {
     const issues = checkPublicFlow(flow, limits);
     if (issues.length) {
@@ -224,23 +220,33 @@ export function guardRun(req: Request, flow: Flow): RunGuard {
         }),
       };
     }
-    if (activeRuns.has(key)) {
+    const file = process.env.LAUNCHBLOCKS_PUBLIC_USAGE_FILE?.trim();
+    if (!file)
       return {
-        refused: jsonError(429, "RUN_IN_PROGRESS", "Your previous run is still going", {
-          hint: "Wait for it to finish, then run again.",
+        refused: jsonError(503, "PUBLIC_STORAGE_REQUIRED", "Public runs need persistent budget storage", {
+          hint: "Set LAUNCHBLOCKS_PUBLIC_USAGE_FILE to an absolute path on a persistent volume shared by all workers for this operator.",
         }),
       };
-    }
-    const now = Date.now();
-    publicSpend = publicSpend.filter(entry => entry.at > now - HOUR_MS);
-    const spent = publicSpend.reduce((sum, entry) => sum + entry.hbar, 0);
-    const budget = envNumber("LAUNCHBLOCKS_PUBLIC_HBAR_PER_HOUR", DEFAULT_PUBLIC_HBAR_PER_HOUR);
-    cost = publicRunHbarEstimate(flow, limits);
-    if (spent + cost > budget) {
-      const retryIn = Math.ceil(((publicSpend[0]?.at ?? now) + HOUR_MS - now) / 60_000);
+    try {
+      const reservation = reservePublicRun({
+        file,
+        visitor: key,
+        hbar: publicRunHbarEstimate(flow, limits),
+        budget: envNumber("LAUNCHBLOCKS_PUBLIC_HBAR_PER_HOUR", DEFAULT_PUBLIC_HBAR_PER_HOUR),
+        runsPerHour: envNumber("LAUNCHBLOCKS_RUNS_PER_HOUR", DEFAULT_RUNS_PER_HOUR),
+      });
+      if ("refused" in reservation) {
+        const { code, message, hint } = reservation.refused;
+        return { refused: jsonError(429, code, message, { hint }) };
+      }
       return {
-        refused: jsonError(429, "PUBLIC_BUDGET_SPENT", "This demo's HBAR budget for the hour is spent", {
-          hint: `It frees up in about ${retryIn} minutes. You can also sign with your own testnet wallet.`,
+        beforeStep: publicStepGuard(flow, limits),
+        release: ({ sentNothing = false } = {}) => reservation.release(sentNothing),
+      };
+    } catch {
+      return {
+        refused: jsonError(503, "PUBLIC_STORAGE_UNAVAILABLE", "Public budget storage is busy or unavailable", {
+          hint: "Try again shortly. The operator must check the persistent ledger and its lock if this continues; no run was started.",
         }),
       };
     }
@@ -265,20 +271,7 @@ export function guardRun(req: Request, flow: Flow): RunGuard {
     }
   }
 
-  if (!isPublic) return { release: () => undefined };
-  const spend = { at: Date.now(), hbar: cost };
-  publicSpend.push(spend);
-  activeRuns.add(key);
-  let released = false;
-  return {
-    beforeStep: publicStepGuard(flow, limits),
-    release: ({ sentNothing = false } = {}) => {
-      if (released) return;
-      released = true;
-      activeRuns.delete(key);
-      if (sentNothing) publicSpend = publicSpend.filter(entry => entry !== spend);
-    },
-  };
+  return { release: () => undefined };
 }
 
 /**

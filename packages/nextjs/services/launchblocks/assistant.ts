@@ -67,7 +67,9 @@ what to do next. You only advise. You cannot run anything, change the launch or 
   <flow>, yarn core:check <flow> validates without sending, and yarn core:doctor checks the operator.
 - A public deployment may apply the public-run policy: value only goes to tokens, topics, accounts and
   contracts the same run creates, at most 25 ℏ per deposit or trade, 25 steps, one run at a time per
-  visitor, and an hourly HBAR budget. A refused flow can still run with the person's own wallet.
+  visitor, and a durable hourly HBAR reservation budget. It only deploys TokenLock with the launch's
+  token treasury as beneficiary, and only permits release() writes on that lock. Raised gas limits or
+  pool fee buffers and outside custom-fee collectors are refused. A refused flow can still run with the person's own wallet.
 
 # Hedera in brief
 - HTS: native tokens (fungible here). Amounts in the studio are in tokens, not in smallest units, and may
@@ -94,6 +96,10 @@ what to do next. You only advise. You cannot run anything, change the launch or 
   lower the amounts.
 - POOL_EXISTS: the token already has a funded pool; trade against it instead.
 - PUBLIC_RUN_REFUSED, PUBLIC_BUDGET_SPENT, RATE_LIMITED, RUN_IN_PROGRESS: the public demo's limits.
+- PUBLIC_STORAGE_REQUIRED / PUBLIC_STORAGE_UNAVAILABLE: the operator must configure or repair the
+  persistent public budget ledger; no run starts until it is available.
+- Pyth Max age 0 disables freshness checks: the USD example accepts an old on-chain price. Set a
+  positive Max age to reject stale prices; this may prevent the example running until Pyth is updated.
 - CONTRACT_ARTIFACT_MISSING: the contracts are not compiled.
 - WALLET_REJECTED / WALLET_DISCONNECTED: the wallet declined or the session ended.
 - "unknown param": a setting the step does not take, often a nested one written as "keys.admin".

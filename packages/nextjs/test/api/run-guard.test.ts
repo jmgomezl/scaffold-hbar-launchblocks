@@ -1,5 +1,8 @@
 import { DEFAULT_PUBLIC_RUN_LIMITS, GALLERY, publicRunHbarEstimate } from "@sh/launchblocks";
 import type { Flow } from "@sh/launchblocks";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RunGuard } from "~~/services/launchblocks/server";
 import { OUTSIDE_TRANSFER, clearServerEnv, fresh, galleryFlow, json, validFlow } from "~~/test/helpers";
@@ -23,8 +26,14 @@ function allowed(guard: RunGuard) {
   return guard;
 }
 
-beforeEach(clearServerEnv);
+let usageDir: string;
+beforeEach(() => {
+  clearServerEnv();
+  usageDir = mkdtempSync(path.join(tmpdir(), "launchblocks-budget-"));
+  vi.stubEnv("LAUNCHBLOCKS_PUBLIC_USAGE_FILE", path.join(usageDir, "usage.json"));
+});
 afterEach(() => {
+  rmSync(usageDir, { recursive: true, force: true });
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
@@ -121,6 +130,27 @@ describe("visitorKey", () => {
 describe("guardRun on a public demo", () => {
   beforeEach(() => vi.stubEnv("LAUNCHBLOCKS_PUBLIC_DEMO", "true"));
 
+  it("fails closed when persistent storage is not configured", async () => {
+    vi.stubEnv("LAUNCHBLOCKS_PUBLIC_USAGE_FILE", "");
+    const guardRun = await loadGuard();
+    expect(await refusal(guardRun(runRequest(), galleryFlow()))).toMatchObject({
+      status: 503,
+      body: { error: { code: "PUBLIC_STORAGE_REQUIRED" } },
+    });
+  });
+
+  it("keeps the hourly reservation after reloading server modules", async () => {
+    const flow = galleryFlow();
+    vi.stubEnv("LAUNCHBLOCKS_PUBLIC_HBAR_PER_HOUR", String(publicRunHbarEstimate(flow) * 1.5));
+    const first = await loadGuard();
+    allowed(first(runRequest(), flow)).release();
+    const restarted = await loadGuard();
+    expect(await refusal(restarted(runRequest("198.51.100.20"), flow))).toMatchObject({
+      status: 429,
+      body: { error: { code: "PUBLIC_BUDGET_SPENT" } },
+    });
+  });
+
   it("refuses a flow that sends value to something the launch did not create", async () => {
     const guardRun = await loadGuard();
     const { status, body } = await refusal(guardRun(runRequest(), validFlow(OUTSIDE_TRANSFER)));
@@ -137,7 +167,7 @@ describe("guardRun on a public demo", () => {
     for (const { id } of GALLERY) {
       const guard = allowed(guardRun(runRequest(), galleryFlow(id)));
       expect(guard.beforeStep).toBeTypeOf("function");
-      guard.release();
+      guard.release({ sentNothing: true });
     }
   });
 

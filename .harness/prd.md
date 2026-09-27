@@ -60,6 +60,11 @@ Export `htsBurn = defineStep({ ... })` with:
 Register it in `packages/launchblocks/src/steps/index.ts`: put it in
 `BUILT_IN_STEPS` directly after `htsMint`, and in the named exports.
 
+Public runs refuse new types by default. In `src/runner/public-policy.ts`, add
+`"hts.burn": ["tokenId"]` to `TARGETS`, approving burns only for tokens created
+by this run. Add policy tests for a wired new token (allowed) and an existing
+token (refused), including the resolved runtime guard.
+
 ### 3. Tests — no network
 
 - `packages/launchblocks/test/steps/hts/burn.test.ts`. The input rejects a zero

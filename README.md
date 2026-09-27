@@ -258,7 +258,8 @@ All live in `packages/nextjs/.env` and are read on the server only. None of them
 | `LAUNCHBLOCKS_RUN_TOKEN` | no | — | If set, runs through the API need an `x-launchblocks-token` header; the studio asks for it. |
 | `LAUNCHBLOCKS_RUNS_PER_HOUR` | no | `20` | Per-client run limit for a public deployment; `0` turns it off. |
 | `LAUNCHBLOCKS_PUBLIC_DEMO` | no | `false` | `true` applies the [public-run policy](#deploying-the-studio) for a deployment whose operator pays for anonymous visitors. |
-| `LAUNCHBLOCKS_PUBLIC_HBAR_PER_HOUR` | no | `400` | With the policy on: the most HBAR all visitors' runs may cost in an hour, counted at each run's worst case. |
+| `LAUNCHBLOCKS_PUBLIC_HBAR_PER_HOUR` | no | `400` | With the policy on: Hourly reservation limit across visitors and workers; deposits plus conservative fee estimates, not a guaranteed network-fee ceiling. |
+| `LAUNCHBLOCKS_PUBLIC_USAGE_FILE` | if public | — | Absolute path to a durable budget ledger, shared by all workers using this operator. Missing or unavailable storage refuses public runs. |
 | `LAUNCHBLOCKS_PUBLIC_MAX_HBAR_PER_STEP` | no | `25` | With the policy on: the most HBAR one step may deposit or trade. |
 | `LAUNCHBLOCKS_STUDIO_URL` | no | `http://localhost:3000` | For the [MCP server](#use-it-from-an-ai-agent-mcp) only: where its share links and launch pages point. |
 | `LAUNCHBLOCKS_ARTIFACTS_DIR` | no | `packages/hardhat/artifacts/contracts` | Where **Deploy contract** finds compiled contracts, for a script run from outside the project. |
@@ -468,7 +469,7 @@ A launch you build can become a recipe of its own. In the Launch Studio, **Expor
 | 3 | The studio lists the example and loads it as valid, the gallery API lists it, and its export has one section per step. |
 | 3.5 | For testnet flows, the launch runs **on testnet** by its gallery id, as the harness's funded throwaway account. |
 
-The spec funds that account from a cost estimate: measured fees per step type, plus the HBAR the flow hands over to pools and swaps, times three attempts with 25% headroom. The harness sweeps back what is left. The files go to `.harness/<flow-id>.spec.yaml` and `.harness/<flow-id>/`, beside the template's own recipe, because the harness takes a spec's parent directory as the project root. A flow that is already a gallery example is refused; rename the launch first.
+The spec funds that account from a cost estimate: measured fees per step type, plus the HBAR the flow hands over to pools and swaps, times three attempts with 25% headroom. The harness sweeps back what is left. The files go to `.harness/<flow-id>.spec.yaml` and `.harness/<flow-id>/`, beside the template's own recipe, because the harness takes a spec's parent directory as the project root. The studio exports a gallery example under a new `-copy` id so the recipe can add it as a new launch. The terminal exporter refuses an existing gallery id; rename the launch first there.
 
 This was checked with the real harness on the basic flow under a new name, `treasury-launch`. `validate` failed with 6 findings before the flow was in the gallery, all about the missing copy and its registration, and passed with none after, Playwright gate included. The Tier 3.5 command ran the flow on testnet as signer: token [`0.0.10676025`](https://hashscan.io/testnet/token/0.0.10676025), 26.42 ℏ in fees against an estimate of 26.7 ℏ.
 
@@ -506,11 +507,15 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 
 - Leave `LAUNCHBLOCKS_ALLOW_MAINNET` unset, and consider `LAUNCHBLOCKS_RUN_TOKEN`: every run spends the operator's HBAR.
 - Without a run token, set `LAUNCHBLOCKS_PUBLIC_DEMO=true`. Anyone can otherwise write a flow that sends the operator's HBAR away: a **Call contract** with HBAR attached to their own contract, or a pool or trade of a token they hold. The policy (`src/runner/public-policy.ts`) lets every gallery launch run, and refuses the rest before or during the run:
-  - value, tokens and messages only go to tokens, topics, accounts and contracts the same run creates; no contract call or deployment carries HBAR, and gas limits stay at their defaults;
+  - value, tokens and messages only go to tokens, topics, accounts and contracts the same run creates; no contract call or deployment carries HBAR, both pool gas limits stay at or below their defaults, and the pool creation fee buffer is capped at 200 basis points;
+  - token custom fees use only the default treasury collector;
+  - contract deployments are limited to `TokenLock`, holding a token this run creates and paying only the operator treasury. Contract writes can only call `release()` on that lock. New step types need explicit policy approval;
   - at most `LAUNCHBLOCKS_PUBLIC_MAX_HBAR_PER_STEP` per deposit or trade, and 25 steps per flow;
-  - one run at a time per visitor, and at most `LAUNCHBLOCKS_PUBLIC_HBAR_PER_HOUR` across all visitors, counted at each run's worst case.
+  - one run at a time per visitor, and a shared hourly reservation limit of `LAUNCHBLOCKS_PUBLIC_HBAR_PER_HOUR`. Reservations include deposits (the step cap for wired amounts), twice the measured fees, and allowances for HCS chunks and airdrop recipients. Network fees and exchange rates vary: this is a conservative estimate, not a guaranteed spending ceiling.
+- Set `LAUNCHBLOCKS_PUBLIC_USAGE_FILE` to an absolute path outside the release directory, such as `/var/lib/launchblocks/public-usage.json`, writable by the app and shared by every worker using this operator. The ledger survives deploys and restarts; missing configuration, corrupt data and storage failures refuse runs before spending. Use persistent local storage with atomic file creation and rename; separate serverless filesystems do not share a budget.
+- If a process dies while writing, its `.lock` file may remain. Stop **all** LaunchBlocks workers using the ledger before removing a stale lock, then restart them. Preserve the ledger itself: deleting it resets the budget. A crashed run keeps its reservation for the hour, while its visitor lease expires after four minutes.
 - A run posted from another site's page is refused (`CROSS_SITE_REFUSED`), and the run API takes only JSON bodies up to 256 KB, so no page can start runs from its visitors' browsers.
-- `LAUNCHBLOCKS_RUNS_PER_HOUR` (default 20) then limits each visitor: it counts runs per visitor, per server instance, and IPv6 visitors by their /64. It identifies visitors by `X-Real-IP`, which the proxy must set (`proxy_set_header X-Real-IP $remote_addr;` in nginx), rather than by the first `X-Forwarded-For` entry, which visitors can forge.
+- `LAUNCHBLOCKS_RUNS_PER_HOUR` (default 20) then limits each visitor: public mode persists counts in the shared ledger; private mode counts per server instance. IPv6 visitors are grouped by their /64. It identifies visitors by `X-Real-IP`, which the proxy must set (`proxy_set_header X-Real-IP $remote_addr;` in nginx), rather than by the first `X-Forwarded-For` entry, which visitors can forge.
 - Behind nginx, keep response buffering off for `/api/launchblocks/flows/run`. The route already sends `X-Accel-Buffering: no` so run events stream.
 - A full launch takes about a minute; the route stops a run after 180 s, and asks serverless hosts for the same (`maxDuration`).
 - Wallet runs happen in the visitor's browser and spend their HBAR, so the run token and rate limit do not apply to them. Set your own `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`.
@@ -531,7 +536,8 @@ The app is a standard Next.js server; flows run in its API routes with the opera
 | `ASSISTANT_REFUSED` | OpenAI's moderation flagged the question, so it got no answer. |
 | `INVALID_SIGNATURE`, or doctor says the key does not control the account | Wrong key for the account, or a raw hex key read as the wrong curve. Set `HEDERA_OPERATOR_KEY_TYPE`. |
 | `INSUFFICIENT_PAYER_BALANCE` | Top up at the [faucet](https://portal.hedera.com/faucet). A full launch needs 60–80 ℏ. |
-| `PUBLIC_RUN_REFUSED` | The deployment runs the public-run policy and the flow sends value to something it did not create, attaches HBAR to a contract, or moves too much HBAR at once. Wire the target from an earlier step, or run on your own deployment or with your own wallet. |
+| `PUBLIC_RUN_REFUSED` | The flow violates the public-run policy: targets must come from this run, locks pay its treasury, contract writes only release its lock, and gas, fees and deposits are capped. Read the reported issue; use your own deployment or wallet for other flows. |
+| `PUBLIC_STORAGE_REQUIRED` or `PUBLIC_STORAGE_UNAVAILABLE` | Set `LAUNCHBLOCKS_PUBLIC_USAGE_FILE` to durable shared storage. Check permissions, disk space and ledger integrity; see the stale-lock recovery instructions above. Runs fail closed while storage is unavailable. |
 | `PUBLIC_BUDGET_SPENT` or `RUN_IN_PROGRESS` | The public demo's hourly HBAR budget is used up, or your previous run is still going. Wait, or sign with your own wallet. |
 | `PYTH_PRICE_STALE` | Pyth's HBAR/USD on Hedera is older than **Max age**. Set Max age to 0 to accept the price as it is; fresh prices need `PYTH_API_KEY` and a Pyth contract on Hedera that accepts current updates. |
 | `PYTH_UPDATE_REJECTED` | Pyth's contract on Hedera would reject the signed update (`InvalidWormholeVaa`); nothing was sent. Unset `PYTH_API_KEY` to use the on-chain price. |

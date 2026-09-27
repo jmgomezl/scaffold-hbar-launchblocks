@@ -8,20 +8,12 @@ import { OUTSIDE_TRANSFER, clearServerEnv, fresh, galleryInput, json, post, stub
 
 const loadRun = () => fresh(() => import("~~/app/api/launchblocks/flows/run/route"));
 
-/** Deploys a contract that was never compiled: the run stops in preflight, before any transaction. */
-const DEPLOY_UNCOMPILED: FlowInput = {
-  schemaVersion: 1,
-  id: "deploy-uncompiled",
-  name: "Deploy an uncompiled contract",
-  network: "testnet",
-  steps: [{ id: "deploy", type: "contract.deploy", params: { contract: "NeverCompiled" } }],
-};
-
 let artifactsDir: string;
 beforeEach(() => {
   clearServerEnv();
   artifactsDir = mkdtempSync(path.join(tmpdir(), "launchblocks-artifacts-"));
   vi.stubEnv("LAUNCHBLOCKS_ARTIFACTS_DIR", artifactsDir);
+  vi.stubEnv("LAUNCHBLOCKS_PUBLIC_USAGE_FILE", path.join(artifactsDir, "budget.json"));
 });
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -113,7 +105,8 @@ describe("POST /api/launchblocks/flows/run", () => {
     vi.stubEnv("LAUNCHBLOCKS_PUBLIC_DEMO", "true");
     stubOperator();
     const { POST } = await loadRun();
-    const stream = (ip: string) => POST(post("/run", DEPLOY_UNCOMPILED, { accept: "application/x-ndjson" }, ip));
+    const stream = (ip: string) =>
+      POST(post("/run", galleryInput("hts-launch-locked-liquidity"), { accept: "application/x-ndjson" }, ip));
 
     const response = await stream("198.51.100.4");
     expect(response.headers.get("content-type")).toMatch(/application\/x-ndjson/);

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { resolveRefs } from "../../src/flow/refs";
 import { GALLERY } from "../../src/gallery";
 import { createRegistry } from "../../src/registry/registry";
 import { checkPublicFlow, publicRunHbarEstimate, publicStepGuard } from "../../src/runner/public-policy";
@@ -33,6 +34,7 @@ describe("checkPublicFlow()", () => {
     ]);
     expect(checkPublicFlow(flow).map(issue => issue.path)).toEqual([
       "steps[0].params.payableHbar",
+      "steps[0].params.function",
       "steps[0].params.contractId",
       "steps[1].params.hbarAmount",
       "steps[1].params.tokenId",
@@ -66,8 +68,11 @@ describe("checkPublicFlow() against disguised or indirect spending", () => {
       })),
     );
     expect(checkPublicFlow(flow).map(issue => issue.path)).toEqual([
+      "steps[0].params.function",
       "steps[0].params.contractId",
+      "steps[1].params.function",
       "steps[1].params.contractId",
+      "steps[2].params.function",
       "steps[2].params.contractId",
     ]);
   });
@@ -144,7 +149,7 @@ describe("publicStepGuard() against disguised or indirect spending", () => {
       function: "function transfer(address view$, uint256 amount)",
       gas: 400_000,
     };
-    expect(() => guard(call!, disguised, earlier)).toThrow(/not created by this launch/);
+    expect(() => guard(call!, disguised, earlier)).toThrow(/only release/);
     const heavy = { contractId: "0.0.500", function: "function set(uint256)", gas: 5_000_000 };
     expect(() => guard(call!, heavy, earlier)).toThrow(/gas/);
   });
@@ -204,6 +209,169 @@ describe("publicRunHbarEstimate()", () => {
     const usd = registry.validateFlow(GALLERY.find(entry => entry.id === "hts-launch-usd-price")!.flow);
     const hero = registry.validateFlow(GALLERY.find(entry => entry.id === "hts-launch-saucerswap")!.flow);
     expect(publicRunHbarEstimate(usd)).toBeGreaterThanOrEqual(25);
-    expect(publicRunHbarEstimate(hero)).toBeLessThan(80);
+    expect(publicRunHbarEstimate(hero)).toBeGreaterThan(100);
+    expect(publicRunHbarEstimate(hero)).toBeLessThan(140);
+  });
+});
+
+describe("public contract containment", () => {
+  const locked = () =>
+    structuredClone(registry.validateFlow(GALLERY.find(entry => entry.id === "hts-launch-locked-liquidity")!.flow));
+
+  it("executes every gallery's runtime checks with resolved outputs", () => {
+    for (const { flow: document } of GALLERY) {
+      const flow = registry.validateFlow(document);
+      const guard = publicStepGuard(flow);
+      const outputs: Record<string, Record<string, unknown>> = {};
+      for (const step of flow.steps) {
+        const definition = registry.get(step.type);
+        guard(step, definition.input.parse(resolveRefs(step.params, outputs)), outputs);
+        outputs[step.id] = definition.outputExample;
+      }
+    }
+  });
+
+  it.each([
+    "0x1111111111111111111111111111111111111111",
+    "{{steps.createToken.symbol}}",
+    "{{steps.createToken.treasuryAccountId}}0",
+  ])("refuses an external or disguised lock beneficiary: %s", beneficiary => {
+    const flow = locked();
+    const deploy = flow.steps.find(step => step.id === "deployLock")!;
+    deploy.params.arg2 = beneficiary;
+    deploy.params.arg3 = "0";
+    expect(checkPublicFlow(flow)).toContainEqual(expect.objectContaining({ path: "steps[4].params.arg2" }));
+    expect(() =>
+      publicStepGuard(flow)(
+        deploy,
+        { ...deploy.params, arg2: "0.0.999" },
+        {
+          createToken: { treasuryAccountId: "0.0.4242" },
+        },
+      ),
+    ).toThrow(/beneficiary/);
+  });
+
+  it("checks the resolved beneficiary too, and blocks arbitrary constructors", () => {
+    const flow = locked();
+    const deploy = flow.steps.find(step => step.id === "deployLock")!;
+    expect(() =>
+      publicStepGuard(flow)(
+        deploy,
+        { ...deploy.params, arg2: "0.0.999" },
+        {
+          createToken: { treasuryAccountId: "0.0.4242" },
+        },
+      ),
+    ).toThrow(/treasury/);
+    deploy.params.contract = "HederaToken";
+    expect(checkPublicFlow(flow)).toContainEqual(expect.objectContaining({ path: "steps[4].params.contract" }));
+  });
+
+  it("refuses ERC20 approvals on a token the run created", () => {
+    const flow = flowOf([
+      createToken,
+      {
+        id: "approve",
+        type: "contract.call",
+        params: {
+          contractId: "{{steps.createToken.tokenId}}",
+          function: "function approve(address spender, uint256 amount) returns (bool)",
+          arg1: "0.0.999",
+          arg2: "1000",
+        },
+      },
+    ]);
+    expect(checkPublicFlow(flow)).toContainEqual(expect.objectContaining({ path: "steps[1].params.function" }));
+    expect(() =>
+      publicStepGuard(flow)(
+        flow.steps[1]!,
+        { ...flow.steps[1]!.params, contractId: "0.0.500" },
+        { createToken: { tokenId: "0.0.500" } },
+      ),
+    ).toThrow(/only release/);
+  });
+
+  it("allows release of the reviewed lock and rejects mutations of old tokens", () => {
+    const flow = locked();
+    flow.steps.push({
+      id: "release",
+      type: "contract.call",
+      params: { contractId: "{{steps.deployLock.contractId}}", function: "function release() returns (uint256)" },
+    });
+    expect(checkPublicFlow(flow)).toEqual([]);
+    for (const type of ["hts.mint", "hss.scheduleMint", "hts.associate"]) {
+      const old = { ...flow, steps: [{ id: "oldToken", type, params: { tokenId: "0.0.999", amount: "1" } }] };
+      expect(checkPublicFlow(old)).toContainEqual(expect.objectContaining({ path: "steps[0].params.tokenId" }));
+    }
+    expect(checkPublicFlow({ ...flow, steps: [{ id: "newStep", type: "new.unreviewed", params: {} }] })).not.toEqual(
+      [],
+    );
+  });
+});
+
+describe("public spending reservations", () => {
+  it.each([
+    ["gasLimit", 8_000_000],
+    ["createPairGasLimit", 15_000_000],
+    ["feeBufferBps", 10_000],
+  ])("caps %s before and after reference resolution", (key, value) => {
+    const flow = flowOf([
+      createToken,
+      {
+        id: "pool",
+        type: "saucerswap.createPool",
+        params: {
+          tokenId: "{{steps.createToken.tokenId}}",
+          tokenAmount: "100",
+          hbarAmount: "1",
+          [key]: value,
+        },
+      },
+    ]);
+    expect(checkPublicFlow(flow)).toContainEqual(expect.objectContaining({ path: `steps[1].params.${key}` }));
+    expect(() =>
+      publicStepGuard(flow)(
+        flow.steps[1]!,
+        { ...flow.steps[1]!.params, tokenId: "0.0.500" },
+        { createToken: { tokenId: "0.0.500" } },
+      ),
+    ).toThrow();
+  });
+
+  it("reserves every allowed HCS chunk, including a wired chunk count", () => {
+    const flow = flowOf([
+      { id: "log", type: "hcs.createTopic", params: {} },
+      {
+        id: "post",
+        type: "hcs.submitMessage",
+        params: {
+          topicId: "{{steps.log.topicId}}",
+          message: "x",
+          maxChunks: 1,
+        },
+      },
+    ]);
+    const single = publicRunHbarEstimate(flow);
+    flow.steps[1]!.params.maxChunks = 20;
+    expect(publicRunHbarEstimate(flow) - single).toBeCloseTo(3.8);
+    flow.steps[1]!.params.maxChunks = "{{steps.log.sequenceNumber}}";
+    expect(publicRunHbarEstimate(flow) - single).toBeCloseTo(3.8);
+  });
+});
+
+describe("public token fee collectors", () => {
+  it.each(["fractionalFee", "fixedHbarFee"])("refuses an outside %s collector before creating the token", key => {
+    const fee = key === "fractionalFee" ? { numerator: 1, denominator: 100 } : { amountHbar: "1" };
+    const step = {
+      ...createToken,
+      params: { ...createToken.params, [key]: { ...fee, collectorAccountId: "0.0.999" } },
+    };
+    const flow = registry.validateFlow(flowOf([step]));
+    expect(checkPublicFlow(flow)).toContainEqual(expect.objectContaining({ path: `steps[0].params.${key}` }));
+    expect(() => publicStepGuard(flow)(flow.steps[0]!, step.params, {})).toThrow(/treasury collector/);
+    const safe = flowOf([{ ...step, params: { ...step.params, [key]: fee } }]);
+    expect(checkPublicFlow(safe)).toEqual([]);
+    expect(() => publicStepGuard(safe)(safe.steps[0]!, safe.steps[0]!.params, {})).not.toThrow();
   });
 });
