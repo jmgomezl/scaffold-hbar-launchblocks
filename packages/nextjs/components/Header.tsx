@@ -3,13 +3,7 @@
 import React, { useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Bars3Icon,
-  BugAntIcon,
-  MagnifyingGlassIcon,
-  QueueListIcon,
-  RocketLaunchIcon,
-} from "@heroicons/react/24/outline";
+import { Bars3Icon, BugAntIcon, QueueListIcon, RocketLaunchIcon } from "@heroicons/react/24/outline";
 import { LaunchBlocksMark } from "~~/components/LaunchBlocksMark";
 import { RainbowKitCustomConnectButton } from "~~/components/scaffold-hbar";
 import { useOutsideClick } from "~~/hooks/scaffold-hbar";
@@ -39,11 +33,6 @@ export const menuLinks: HeaderMenuLink[] = [
     label: "Debug Contracts",
     href: "/debug",
     icon: <BugAntIcon className="h-4 w-4" />,
-  },
-  {
-    label: "Block Explorer",
-    href: "/blockexplorer",
-    icon: <MagnifyingGlassIcon className="h-4 w-4" />,
   },
 ];
 
@@ -81,7 +70,7 @@ export const HeaderMenuLinks = () => {
 export const Header = () => {
   const burgerMenuRef = useRef<HTMLDetailsElement>(null);
   // Launches sign with the operator or a Hedera wallet picked in the studio, and launch pages only read;
-  // Scaffold's EVM wallet is for Debug Contracts and the block explorer, and would only confuse them.
+  // Scaffold's EVM wallet is for Debug Contracts, and would only confuse them.
   const pathname = usePathname();
   const inStudio = pathname === "/launch" || pathname.startsWith("/launches");
   useOutsideClick(burgerMenuRef, () => {
