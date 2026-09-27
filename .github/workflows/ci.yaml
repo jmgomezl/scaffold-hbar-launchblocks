@@ -131,11 +131,13 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
+      # The tests start their own Hedera forwarder on port 10001. Finish them before
+      # the persistent deployment node starts another forwarder on the same port.
+      - name: Hardhat tests
+        run: yarn hardhat:test
+
       - name: Run Hardhat node and deploy contracts
         run: |
           yarn hardhat:chain &
           timeout 60s bash -c 'until curl -s -X POST http://127.0.0.1:8545 -H "Content-Type: application/json" --data "{\"jsonrpc\":\"2.0\",\"method\":\"web3_clientVersion\",\"params\":[],\"id\":1}" >/dev/null; do sleep 2; done'
           yarn workspace @sh/hardhat deploy --network localhost
-
-      - name: Hardhat tests
-        run: yarn hardhat:test
