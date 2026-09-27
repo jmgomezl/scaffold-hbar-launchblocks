@@ -9,10 +9,9 @@ import {
   ExclamationTriangleIcon,
   ListBulletIcon,
   PlayIcon,
-  XMarkIcon,
 } from "@heroicons/react/24/outline";
 
-export type PanelMode = "open" | "collapsed" | "closed";
+export type PanelMode = "open" | "collapsed";
 export type PanelTab = "run" | "problems" | "outputs";
 export type RunSummary = { tone: "info" | "success" | "error"; text: string } | null;
 
@@ -36,16 +35,16 @@ const TONE_TEXT = { info: "text-info", success: "text-success", error: "text-err
 const TONE_DOT = { info: "bg-info", success: "bg-success", error: "bg-error" } as const;
 
 /**
- * The Run / Problems / Outputs panel, in one of three modes:
+ * The Run / Problems / Outputs panel, open or collapsed:
  *
- * - open: the full panel, with collapse and close controls
+ * - open: the full panel, with a control to collapse it
  * - collapsed: a slim rail (side by side) or strip (stacked) that stays put,
  *   shows run status and problem count, and reopens on any click
- * - closed: gone until "Show panel" in the toolbar brings it back
+ *
+ * It cannot be closed: the problems and the run log are where a person finds
+ * out what is wrong, and a closed panel was easy to lose for good.
  */
 export function StudioPanel({ mode, onModeChange, tab, onTabChange, problemCount, runSummary, children }: Props) {
-  if (mode === "closed") return null;
-
   const openOn = (next: PanelTab) => {
     onTabChange(next);
     onModeChange("open");
@@ -93,14 +92,6 @@ export function StudioPanel({ mode, onModeChange, tab, onTabChange, problemCount
         {runSummary && (
           <span className={`ml-1 truncate text-xs lg:hidden ${TONE_TEXT[runSummary.tone]}`}>{runSummary.text}</span>
         )}
-        <button
-          className="btn btn-ghost btn-sm btn-square ml-auto lg:ml-0 lg:mt-auto"
-          onClick={() => onModeChange("closed")}
-          title="Close panel (bring it back with Show panel in the toolbar)"
-          aria-label="Close panel"
-        >
-          <XMarkIcon className="h-4 w-4" />
-        </button>
       </aside>
     );
   }
@@ -137,14 +128,6 @@ export function StudioPanel({ mode, onModeChange, tab, onTabChange, problemCount
           >
             <ChevronDoubleRightIcon className="hidden h-4 w-4 lg:block" />
             <ChevronDoubleDownIcon className="h-4 w-4 lg:hidden" />
-          </button>
-          <button
-            className="btn btn-ghost btn-xs btn-square"
-            onClick={() => onModeChange("closed")}
-            title="Close panel (bring it back with Show panel in the toolbar)"
-            aria-label="Close panel"
-          >
-            <XMarkIcon className="h-4 w-4" />
           </button>
         </div>
       </div>

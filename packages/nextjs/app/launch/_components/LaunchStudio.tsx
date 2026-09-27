@@ -24,7 +24,7 @@ import { StudioPanel } from "./StudioPanel";
 import type { Catalog, EditorDocument, FeeEstimate, FlowInput, StepCatalogEntry } from "@sh/launchblocks/editor";
 import { editorToFlow, flowIdFromName, flowToEditor, indexCatalog, outputsOf } from "@sh/launchblocks/editor";
 import { useTheme } from "next-themes";
-import { EyeIcon, LinkIcon, SparklesIcon } from "@heroicons/react/24/outline";
+import { LinkIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import { notification } from "~~/utils/scaffold-hbar";
 
 const BlockEditor = dynamic(() => import("./BlockEditor"), {
@@ -36,13 +36,12 @@ const STORAGE_KEY = "launchblocks.flow.v1";
 
 /**
  * Editor height when the panel stacks below it (under lg). Open leaves room
- * for the panel; collapsed and closed account for the header, a toolbar that
- * can wrap to two lines, the collapsed strip, and the footer's fixed controls.
+ * for the panel; collapsed accounts for the header, a toolbar that can wrap
+ * to two lines, the collapsed strip, and the footer's fixed controls.
  */
 const EDITOR_HEIGHT: Record<PanelMode, string> = {
   open: "h-[65dvh]",
   collapsed: "h-[calc(100dvh-17rem)]",
-  closed: "h-[calc(100dvh-14rem)]",
 };
 const TOKEN_KEY = "launchblocks.runToken";
 const PANEL_KEY = "launchblocks.panel";
@@ -57,10 +56,13 @@ type Focus = { stepId?: string; type?: string };
 const withLast = (chat: ChatMessage[], change: (last: ChatMessage) => ChatMessage) =>
   chat.length ? [...chat.slice(0, -1), change(chat[chat.length - 1] as ChatMessage)] : chat;
 
-/** Earlier builds stored "shown" / "hidden"; read them as open / closed. */
+/**
+ * The panel can no longer be closed, so a browser that remembered it closed
+ * (or, in older builds, "hidden") gets it collapsed: still there, one click away.
+ */
 function parsePanelMode(value: string | null): PanelMode {
-  if (value === "collapsed" || value === "closed" || value === "open") return value;
-  if (value === "hidden") return "closed";
+  if (value === "open") return "open";
+  if (value === "collapsed" || value === "closed" || value === "hidden") return "collapsed";
   return "open";
 }
 
@@ -140,7 +142,7 @@ export function LaunchStudio() {
   const [exportOpen, setExportOpen] = useState(false);
   // Remounts the run log per run so collapsed/expanded choices start fresh.
   const [runKey, setRunKey] = useState(0);
-  // The Run / Problems / Outputs panel: open, collapsed to a slim bar, or closed.
+  // The Run / Problems / Outputs panel: open, or collapsed to a slim bar. It cannot be closed.
   const [panelMode, setPanelMode] = useState<PanelMode>("open");
   // Who signs runs: the app's operator account unless the visitor picks their wallet.
   const [signerMode, setSignerMode] = useState<SignerMode>("operator");
@@ -652,16 +654,6 @@ export function LaunchStudio() {
         ) : flow?.steps.length ? (
           <span className="badge badge-success">valid</span>
         ) : null}
-        {panelMode === "closed" && (
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => changePanelMode("open")}
-            title="Show the Run, Problems and Outputs panel"
-          >
-            <EyeIcon className="h-4 w-4" />
-            Show panel
-          </button>
-        )}
         <button
           className="btn btn-ghost btn-sm"
           disabled={!flow?.steps.length}

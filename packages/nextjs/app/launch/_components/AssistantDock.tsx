@@ -26,7 +26,6 @@ const LAYER = "z-[90]";
 const RIGHT_OF_PANEL: Record<PanelMode, string> = {
   open: "lg:right-[416px]",
   collapsed: "lg:right-[60px]",
-  closed: "lg:right-4",
 };
 
 /**

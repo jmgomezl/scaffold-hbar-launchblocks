@@ -326,3 +326,16 @@ test("warns when a launch accepts a Pyth price of any age", async ({ page }) => 
   await expectValid(page, 5);
   await expect(page.getByText("Pyth freshness check is off.")).toHaveCount(0);
 });
+
+test("the side panel collapses but never closes, even for a browser that remembered it closed", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("launchblocks.panel", "closed"));
+  await page.goto("/launch?example=hts-launch-basic");
+  // Remembered as closed from an earlier version: it comes back collapsed, one click from open.
+  await expect(page.getByRole("complementary", { name: "Studio panel, collapsed" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Close panel" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Expand panel" }).click();
+  await expectValid(page, 5);
+  await expect(page.getByRole("button", { name: "Close panel" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Collapse panel" }).click();
+  await expect(page.getByRole("button", { name: "Expand panel" })).toBeVisible();
+});
