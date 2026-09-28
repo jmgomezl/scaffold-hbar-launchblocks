@@ -298,7 +298,8 @@ function specYaml({ flow, pm, agent, maxAttempts, estimate, fundingHbar, paths }
       ...(estimate.unknownAmounts.length
         ? [`  # Not counted, set by references: the hbarAmount of ${estimate.unknownAmounts.join(", ")}.`]
         : []),
-      `  # This covers ${maxAttempts} attempts with 25% headroom; sweepBack returns the rest.`,
+      `  # This covers ${maxAttempts} attempts with 25% headroom. Budget all of it: a launch that creates a token`,
+      "  # makes this account its treasury, which Hedera will not close, so the sweep-back fails and the rest stays.",
       `  fundingHbar: ${fundingHbar}`,
       "  sweepBack: true",
       "  deploy:",
@@ -400,7 +401,7 @@ function readme({ flow, estimate, fundingHbar, maxAttempts, paths, commands }: R
       ? [
           "## Funding",
           "",
-          `One run costs about **${estimate.perRunHbar} ℏ** (network fees plus HBAR the flow hands over). The spec funds the throwaway account with **${fundingHbar} ℏ** from your operator, enough for ${maxAttempts} attempts with 25% headroom, and sweeps back what is left. Fees are priced in USD, so the HBAR figures move with the exchange rate; edit \`fundingHbar\` if needed.`,
+          `One run costs about **${estimate.perRunHbar} ℏ** (network fees plus HBAR the flow hands over). The spec funds the throwaway account with **${fundingHbar} ℏ** from your operator, enough for ${maxAttempts} attempts with 25% headroom. Budget all of it: a launch that creates a token makes that account its treasury, which Hedera will not close, so the harness's sweep-back fails and the rest stays on testnet. Fees are priced in USD, so the HBAR figures move with the exchange rate; edit \`fundingHbar\` if needed.`,
           "",
           "| Step | Type | Fee ℏ | Handed over ℏ |",
           "| --- | --- | --- | --- |",

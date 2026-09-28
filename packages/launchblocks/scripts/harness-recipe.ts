@@ -61,7 +61,9 @@ function main(): void {
 
   console.log(`\nOne run costs about ${recipe.estimate.perRunHbar} ℏ.`);
   if (recipe.fundingHbar !== undefined) {
-    console.log(`The harness funds its throwaway account with ${recipe.fundingHbar} ℏ and sweeps back the rest.`);
+    console.log(
+      `The harness funds its throwaway account with ${recipe.fundingHbar} ℏ. Budget all of it: a launch that creates a token makes that account its treasury, which Hedera will not close, so the rest stays on testnet.`,
+    );
   }
   console.log(`\nCommit the recipe, then:\n  ${recipe.commands.validate}\n  ${recipe.commands.run}`);
 }

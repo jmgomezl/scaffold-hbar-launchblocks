@@ -215,7 +215,7 @@ function RecipeSummary({
       <p>
         One run costs about <strong>{recipe.estimate.perRunHbar} ℏ</strong>.{" "}
         {recipe.fundingHbar !== undefined
-          ? `The harness funds its own throwaway account with ${recipe.fundingHbar} ℏ from your operator and sweeps back the rest.`
+          ? `The harness funds its own throwaway account with ${recipe.fundingHbar} ℏ from your operator. Budget all of it: a launch that creates a token makes that account its treasury, which Hedera will not close, so the harness cannot sweep the rest back.`
           : "The launch is not on testnet, so the recipe stops before the on-chain tier."}
       </p>
       <p>
