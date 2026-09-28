@@ -15,7 +15,7 @@ A [Scaffold-HBAR](https://docs.hedera.com/solutions/tools/scaffold-hbar/index) t
 
 **[Try it live at launchblocks.aivylabs.xyz](https://launchblocks.aivylabs.xyz/launch?example=hts-launch-saucerswap)**, on Hedera testnet. The app's funded account signs every run, so there is nothing to install, connect or fund; you can also connect your own testnet wallet in the Run panel.
 
-**[Watch the 3-minute demo](https://youtu.be/l4Ha8lhH94k)**: a real launch on testnet, from snapping the blocks together to a live SaucerSwap market and its public launch page.
+**[Watch the 4-minute demo](https://www.youtube.com/watch?v=KUrypkOQAOI)**: a real launch on testnet, from snapping the blocks together to a live SaucerSwap market and its public launch page.
 
 ```bash
 npx create-scaffold-hbar@latest --template jmgomezl/scaffold-hbar-launchblocks
