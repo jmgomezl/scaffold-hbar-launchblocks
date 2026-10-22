@@ -13,7 +13,8 @@ import { IHederaScheduleService } from "../interfaces/IHederaScheduleService.sol
 /// run failed), but nobody can trigger it early or book extra calls that spend the contract's HBAR.
 ///
 /// The contract pays for each scheduled run from its own HBAR balance, so it must hold enough when
-/// the call runs (the gas limit times the network gas price, with Hedera charging at least 80% of it).
+/// the call runs: the gas the run uses times the network gas price. A run that books the next one
+/// spends about 1.41M gas on the booking, whatever `scheduledGas` is (measured on testnet).
 abstract contract SelfScheduling {
     IHederaScheduleService internal constant HSS = IHederaScheduleService(address(0x16b));
     int64 internal constant SUCCESS = 22;

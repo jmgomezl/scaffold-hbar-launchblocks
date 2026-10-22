@@ -10,7 +10,7 @@ Use the package manager this project was created with — see `packageManager` i
 
 - `packages/launchblocks` (`@sh/launchblocks`) — framework-agnostic core: flow schema, step registry, runner, codegen, Hedera client factory. No React, no Next. Unit-tested with vitest.
 - `packages/nextjs` — the frontend (App Router, RainbowKit, Wagmi, Viem, DaisyUI) plus the API routes that run flows. `test/api/` covers the routes and `services/launchblocks/server.ts` (run guards, public-demo policy, error statuses, streaming) with vitest, calling the handlers directly; `e2e/` drives the Launch Studio in Chromium with Playwright. `services/launchblocks/assistant.ts` is the studio's AI companion (`app/api/launchblocks/assistant`, the floating `AssistantDock` in the studio): it only advises, and what it knows about blocks comes from the step registry, so a new step needs nothing there; product-level changes (a new signer, a new policy) belong in its `GUIDE`.
-- `packages/hardhat` — Hardhat (`hardhat-deploy`): the starter's contracts plus `TokenLock` and the self-scheduling `SelfReleasingLock` and `VestingSchedule` (HIP-1215), which the Deploy contract block deploys from the compiled artifacts.
+- `packages/hardhat` — Hardhat (`hardhat-deploy`): the starter's contracts plus `TokenLock` and the self-scheduling `SelfReleasingLock` and `VestingSchedule` (HIP-1215), which the Deploy contract block deploys from the compiled artifacts (the Lock and Vest blocks in `src/steps/hss/` deploy, arm and fund the two self-scheduling ones through `src/hedera/ops/self-scheduling.ts`).
 
 Product rules that shape every change:
 
@@ -85,6 +85,8 @@ src/
   hedera/     context.ts (HederaContext, hashscanUrl), client.ts (createHederaContext, hederaContextFromEnv),
               wallet.ts (walletHederaContext: a connected wallet signs), mirror.ts (mirror node reads),
               ops/submit.ts (send, submit, sendContract: operator or wallet; sendWithRecord: operator), errors.ts (translate statuses and wallet refusals)
+              ops/contracts.ts (deployContract: an Ethereum transaction for an ECDSA alias operator, else ContractCreate; callContract),
+              ops/self-scheduling.ts (createSelfReleasingLock, createVestingSchedule: deploy, arm, fund; run-HBAR estimates)
   saucerswap/ config.ts (deployments), pool.ts, swap.ts: the SaucerSwap V1 operations
   chainlink/  config.ts (Chainlink's HBAR/USD feed on Hedera: proxy, heartbeat), price.ts (readChainlinkRound)
   oracle/     price-in-usd.ts (oraclePriceInUsd: Chainlink first, Pyth cross-check and fallback), decimal.ts (exact decimals)

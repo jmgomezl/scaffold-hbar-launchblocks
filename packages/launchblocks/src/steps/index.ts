@@ -7,6 +7,8 @@ import { hcsCreateTopic } from "./hcs/create-topic";
 import { hcsSubmitMessage } from "./hcs/submit-message";
 import { hssScheduleMint } from "./hss/schedule-mint";
 import { hssScheduleTransfer } from "./hss/schedule-transfer";
+import { hssSelfReleasingLock } from "./hss/self-releasing-lock";
+import { hssVesting } from "./hss/vesting";
 import { htsAirdrop } from "./hts/airdrop";
 import { htsAssociate } from "./hts/associate";
 import { htsCreateToken } from "./hts/create-token";
@@ -28,6 +30,8 @@ export const BUILT_IN_STEPS: readonly AnyStepDefinition[] = [
   hcsSubmitMessage,
   hssScheduleTransfer,
   hssScheduleMint,
+  hssSelfReleasingLock,
+  hssVesting,
   oraclePriceInUsdStep,
   pythPriceInUsd,
   saucerswapCreatePool,
@@ -47,6 +51,8 @@ export {
   hcsSubmitMessage,
   hssScheduleMint,
   hssScheduleTransfer,
+  hssSelfReleasingLock,
+  hssVesting,
   htsAirdrop,
   htsAssociate,
   htsCreateToken,

@@ -37,8 +37,16 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
   refund, failed scheduling.
 - [x] **T3 `VestingSchedule`.** Tranches paid to a beneficiary; each payment books the next.
   Same scheduling helper as T2 (extract a shared base contract).
-- [ ] **T4 Testnet proof.** Deploy both with minute-scale intervals, watch the network run them,
-  record HashScan links in the README.
+- [~] **T4 Testnet proof.** Deploy both with minute-scale intervals, watch the network run them,
+  record HashScan links in the README. First run (lock 0.0.11130385): the network ran schedule
+  0.0.11130407 at its expiry second, paid by the contract, so HIP-1215 works; the release reverted
+  with `INVALID_ALIAS_KEY` because the script passed the long-zero address of an ECDSA alias account
+  (fixed: ids now go through the core's `toEvmAddress`). `arm()` needs ~1.5M gas. Deploying through
+  ContractCreateFlow cost ~23 ℏ per contract (ContractCreate's base fee plus file storage), so the
+  core now deploys as an Ethereum transaction (gas only; mirror estimates 0.92M / 0.97M gas, about
+  1 ℏ each). Booking through `0x16b` costs 1,409,649 gas whether the booked run has 750k or 3M
+  (two testnet schedules), so a 2M-gas run can book the next one. Rerun with
+  `scripts/prove-self-scheduling.ts`, which goes through the T7 operations.
 
 ## M2 · A price that works
 
@@ -52,8 +60,16 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
 
 ## M3 · Studio and launch pages
 
-- [ ] **T7 Steps.** `lock.selfRelease` and `vesting.schedule` blocks (deploy, fund, arm), codegen,
-  public-run policy, wallet path, tests.
+- [x] **T7 Steps.** `hss.selfReleasingLock` ("Lock tokens, released by the network") and `hss.vesting`
+  ("Vest tokens, paid by the network"): deploy, arm, fund through `hedera/ops/self-scheduling.ts`;
+  HBAR for the runs defaults to what the schedule needs (0.2 per payout, 1.7 per booking); codegen,
+  fee estimate, public-run policy (treasury beneficiary, launch's own token, at most 5 ℏ parked),
+  README step table, tests. Wallet runs work but deploy through ContractCreate (several approvals,
+  ~23 ℏ); T13 decides the wallet path.
+- [x] **Cheaper deploy.** `deployContract` sends an Ethereum transaction signed with the operator's
+  ECDSA key when the account is its alias (no ContractCreate fee, no file storage), sized from the
+  mirror's gas estimate, one at a time per operator, retrying a taken nonce once, and checking the
+  contract's token slots. Admin key, memo or initcode over 5 KB keep ContractCreate.
 - [ ] **T8 Gallery flow.** "Token launch that runs itself": token, HCS log, SaucerSwap pool at a
   Chainlink USD price, LP into a self-releasing lock, team tokens into vesting, all logged.
 - [ ] **T9 Launch page.** Show the upcoming scheduled calls with countdowns, and the ones the network

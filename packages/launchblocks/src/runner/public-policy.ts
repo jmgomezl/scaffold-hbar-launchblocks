@@ -5,7 +5,9 @@ import { parseRef } from "../flow/refs";
 import type { Flow } from "../flow/schema";
 import { estimateFlowFees } from "../harness/recipe";
 import { DEFAULT_CALL_GAS, DEFAULT_DEPLOY_GAS, isReadOnly, parseFunctionSignature } from "../hedera/ops/contracts";
+import { SCHEDULED_RUN_GAS } from "../hedera/ops/self-scheduling";
 import { ADD_LIQUIDITY_GAS, CREATE_PAIR_GAS, DEFAULT_FEE_BUFFER_BPS, SWAP_GAS } from "../saucerswap/config";
+import { SELF_SCHEDULING_STEPS, plannedRunHbar } from "../steps/hss/self-scheduling";
 import type { BeforeStep } from "./runner";
 
 /**
@@ -42,6 +44,8 @@ const TARGETS: Readonly<Record<string, readonly string[]>> = {
   "hts.airdrop": ["tokenId"],
   "hss.scheduleTransfer": ["tokenId"],
   "hcs.submitMessage": ["topicId"],
+  "hss.selfReleasingLock": ["tokenId"],
+  "hss.vesting": ["tokenId"],
 };
 
 /**
@@ -59,6 +63,8 @@ const CREATES: Readonly<Record<string, readonly string[]>> = {
   "hts.createToken": ["tokenId"],
   "hcs.createTopic": ["topicId"],
   "contract.deploy": ["contractId", "accountId"],
+  "hss.selfReleasingLock": ["contractId", "accountId"],
+  "hss.vesting": ["contractId", "accountId"],
   "saucerswap.createPool": ["lpTokenId", "pairId"],
 };
 
@@ -75,6 +81,8 @@ const GAS_CAPS: Readonly<Record<string, readonly { key: string; max: number }[]>
     { key: "createPairGasLimit", max: CREATE_PAIR_GAS },
   ],
   "saucerswap.swap": [{ key: "gasLimit", max: SWAP_GAS }],
+  "hss.selfReleasingLock": [{ key: "scheduledGas", max: SCHEDULED_RUN_GAS }],
+  "hss.vesting": [{ key: "scheduledGas", max: SCHEDULED_RUN_GAS }],
 };
 
 // New step types require an explicit review before they can spend the demo's funds.
@@ -86,6 +94,33 @@ const PUBLIC_STEPS = new Set([
   "oracle.priceInUsd",
   "pyth.priceInUsd",
 ]);
+
+/** HBAR a public run may park in one self-scheduling contract; it comes back after the last run. */
+export const PUBLIC_MAX_RUN_HBAR = 5;
+
+/** A public self-scheduling contract pays only this launch's treasury and parks a bounded amount of HBAR. */
+function selfSchedulingIssues(flow: Flow, index: number): FlowIssue[] {
+  const step = flow.steps[index]!;
+  const issues: FlowIssue[] = [];
+  const beneficiary = parseRef(step.params.beneficiary);
+  const producer = beneficiary && flow.steps.slice(0, index).find(candidate => candidate.id === beneficiary.stepId);
+  if (producer?.type !== "hts.createToken" || beneficiary?.key !== "treasuryAccountId") {
+    issues.push({
+      path: `steps[${index}].params.beneficiary`,
+      stepId: step.id,
+      message: "wire the beneficiary from this launch's token treasury; public funds cannot go to another account",
+    });
+  }
+  const runHbar = plannedRunHbar(step.type, step.params);
+  if (runHbar === null || runHbar > PUBLIC_MAX_RUN_HBAR) {
+    issues.push({
+      path: `steps[${index}].params.runHbar`,
+      stepId: step.id,
+      message: `a public run parks at most ${PUBLIC_MAX_RUN_HBAR} HBAR for the network's runs; write the durations out and keep the schedule shorter`,
+    });
+  }
+  return issues;
+}
 
 /** The public deployment only deploys the reviewed lock, never arbitrary constructors with onward payouts. */
 function lockIssues(flow: Flow, index: number): FlowIssue[] {
@@ -171,6 +206,7 @@ export function checkPublicFlow(flow: Flow, limits: PublicRunLimits = DEFAULT_PU
         message: "this step has not been approved for public runs",
       });
     if (step.type === "contract.deploy") issues.push(...lockIssues(flow, index));
+    if (SELF_SCHEDULING_STEPS.has(step.type)) issues.push(...selfSchedulingIssues(flow, index));
     if (step.type === "hts.createToken") {
       for (const key of ["fractionalFee", "fixedHbarFee"]) {
         const fee = step.params[key];
@@ -290,6 +326,26 @@ export function publicStepGuard(flow: Flow, limits: PublicRunLimits = DEFAULT_PU
         throw new LaunchBlocksError(
           "PUBLIC_RUN_REFUSED",
           issue?.message ?? "A public lock must pay the launch's treasury",
+          { hint: HINT },
+        );
+      }
+    }
+    if (SELF_SCHEDULING_STEPS.has(step.type)) {
+      const issue = policyIssues.find(candidate => candidate.stepId === step.id);
+      const treasury = parseRef(step.params.beneficiary);
+      const beneficiary = treasury && earlier[treasury.stepId]?.[treasury.key];
+      const runHbar = plannedRunHbar(step.type, params);
+      if (issue || !beneficiary || params.beneficiary !== beneficiary) {
+        throw new LaunchBlocksError(
+          "PUBLIC_RUN_REFUSED",
+          issue?.message ?? "A public lock or vesting must pay the launch's treasury",
+          { hint: HINT },
+        );
+      }
+      if (runHbar === null || runHbar > PUBLIC_MAX_RUN_HBAR) {
+        throw new LaunchBlocksError(
+          "PUBLIC_RUN_REFUSED",
+          `This schedule would park ${runHbar ?? "an unknown amount of"} HBAR; a public run parks at most ${PUBLIC_MAX_RUN_HBAR}`,
           { hint: HINT },
         );
       }
