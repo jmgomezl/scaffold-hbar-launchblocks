@@ -25,7 +25,9 @@ contract MockHederaScheduleService {
     }
 
     ScheduledCall[] internal calls;
-    mapping(uint256 => bool) public busy;
+    // Busy seconds per epoch, so `reset` clears them all at once.
+    mapping(uint256 => mapping(uint256 => bool)) internal busyIn;
+    uint256 internal epoch;
     int64 public failNextWith;
 
     event Fired(uint256 indexed index, bool success, bytes returnData);
@@ -44,7 +46,7 @@ contract MockHederaScheduleService {
         }
         if (expirySecond <= block.timestamp) return (NOT_IN_FUTURE, address(0));
         if (expirySecond > block.timestamp + MAX_FUTURE) return (TOO_FAR, address(0));
-        if (busy[expirySecond]) return (BUSY, address(0));
+        if (busyIn[epoch][expirySecond]) return (BUSY, address(0));
         calls.push(ScheduledCall(to, msg.sender, expirySecond, gasLimit, value, callData, false, false));
         return (SUCCESS, scheduleAddressOf(calls.length - 1));
     }
@@ -56,13 +58,25 @@ contract MockHederaScheduleService {
     }
 
     function hasScheduleCapacity(uint256 expirySecond, uint256) external view returns (bool hasCapacity) {
-        return !busy[expirySecond];
+        return !busyIn[epoch][expirySecond];
     }
 
     // ---- test controls ----
 
+    /// @notice Forget every booking, busy second and pending failure. `hardhat_setCode` keeps the
+    /// storage already at 0x16b, so installing the double calls this.
+    function reset() external {
+        delete calls;
+        failNextWith = 0;
+        epoch += 1;
+    }
+
+    function busy(uint256 second) external view returns (bool) {
+        return busyIn[epoch][second];
+    }
+
     function setBusy(uint256 second, bool isBusy) external {
-        busy[second] = isBusy;
+        busyIn[epoch][second] = isBusy;
     }
 
     function failNext(int64 responseCode) external {

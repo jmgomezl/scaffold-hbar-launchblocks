@@ -1,20 +1,10 @@
 import { expect } from "chai";
-import { ethers, network } from "hardhat";
+import { ethers } from "hardhat";
 import { loadFixture, time } from "@nomicfoundation/hardhat-network-helpers";
+import { installScheduleService } from "./helpers/scheduleService";
 
-const HSS_ADDRESS = "0x000000000000000000000000000000000000016b";
 const DAY = 24 * 60 * 60;
 const GAS = 400_000;
-
-/** Put the Schedule Service test double where Hedera's system contract lives. */
-async function installScheduleService() {
-  const Mock = await ethers.getContractFactory("MockHederaScheduleService");
-  const mock = await Mock.deploy();
-  await mock.waitForDeployment();
-  const code = await ethers.provider.getCode(await mock.getAddress());
-  await network.provider.send("hardhat_setCode", [HSS_ADDRESS, code]);
-  return ethers.getContractAt("MockHederaScheduleService", HSS_ADDRESS);
-}
 
 describe("SelfReleasingLock", function () {
   async function deployWith(lockSeconds: number) {

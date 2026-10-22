@@ -35,7 +35,7 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
   execution; whatever is left goes back to the funder after release. No owner, nothing changes after
   deployment. Tests: short lock, long lock (hops), busy second, early call refused, fallback,
   refund, failed scheduling.
-- [ ] **T3 `VestingSchedule`.** Tranches paid to a beneficiary; each payment books the next.
+- [x] **T3 `VestingSchedule`.** Tranches paid to a beneficiary; each payment books the next.
   Same scheduling helper as T2 (extract a shared base contract).
 - [ ] **T4 Testnet proof.** Deploy both with minute-scale intervals, watch the network run them,
   record HashScan links in the README.
