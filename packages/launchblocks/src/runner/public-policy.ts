@@ -83,6 +83,7 @@ const PUBLIC_STEPS = new Set([
   "hts.createToken",
   "hcs.createTopic",
   "contract.deploy",
+  "oracle.priceInUsd",
   "pyth.priceInUsd",
 ]);
 

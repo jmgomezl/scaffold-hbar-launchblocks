@@ -64,6 +64,8 @@ export type HarnessRecipe = {
 export const STEP_FEE_HBAR: Readonly<Record<string, number>> = {
   "hts.createToken": 13,
   "hts.mint": 0.1,
+  // Reads Chainlink (and Pyth) through the mirror node: free.
+  "oracle.priceInUsd": 0,
   // With PYTH_API_KEY the step posts a price update (1 tinybar plus gas); without one it only reads.
   "pyth.priceInUsd": 0.5,
   // 0.66 measured when the transfer uses up a recipient's automatic association slot.

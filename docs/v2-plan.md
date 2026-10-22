@@ -42,10 +42,13 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
 
 ## M2 · A price that works
 
-- [ ] **T5 `PriceGuard`.** Chainlink `AggregatorV3` as the source, Pyth as fallback; refuses a stale
-  price and one where the two disagree by more than a set percentage. Tests with mock feeds.
-- [ ] **T6 Price step.** Replace `pyth.priceInUsd` with a Chainlink-first `price.hbarUsd` step
-  (same outputs, so `hts-launch-usd-price` keeps working); keep Pyth as the fallback path.
+- [x] **T6 Price step.** `oracle.priceInUsd`, "Price in USD (Chainlink)": Chainlink's HBAR/USD feed on
+  Hedera first (push oracle, free read; default Max age = the 24 h heartbeat plus an hour), Pyth's
+  on-chain price as cross-check (must agree within 1%) and as fallback when Chainlink is stale. Same
+  Tokens/HBAR outputs; `hts-launch-usd-price` uses it; `pyth.priceInUsd` stays for older flows. Read
+  live on testnet: $0.07975153, 426 s old. Studio, home page, assistant, README and AGENTS updated.
+- [ ] **T5 On-chain `PriceGuard`** (later: only when a contract needs a price itself, such as a
+  scheduled buyback). Chainlink `AggregatorV3` with the same staleness and deviation rules, in Solidity.
 
 ## M3 · Studio and launch pages
 

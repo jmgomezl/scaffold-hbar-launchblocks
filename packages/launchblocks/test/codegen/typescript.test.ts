@@ -69,7 +69,30 @@ describe("generateLaunchScript() naming and comments", () => {
   const registry = createDefaultRegistry();
 
   it("renames a step whose id matches an imported operation, and every reference to it", () => {
-    const source = generateLaunchScript(GALLERY.find(entry => entry.id === "hts-launch-usd-price")!.flow, registry);
+    const flow = registry.validateFlow({
+      schemaVersion: 1,
+      id: "clash",
+      name: "Clash",
+      network: "testnet",
+      steps: [
+        { id: "priceInUsd", type: "pyth.priceInUsd", params: { tokenAmount: "50000", tokenPriceUsd: "0.00002" } },
+        {
+          id: "createToken",
+          type: "hts.createToken",
+          params: { name: "Clash", symbol: "CLS", initialSupply: "1000000" },
+        },
+        {
+          id: "seedPool",
+          type: "saucerswap.createPool",
+          params: {
+            tokenId: "{{steps.createToken.tokenId}}",
+            tokenAmount: "{{steps.priceInUsd.tokenAmount}}",
+            hbarAmount: "{{steps.priceInUsd.hbarAmount}}",
+          },
+        },
+      ],
+    });
+    const source = generateLaunchScript(flow, registry);
     expect(source).toContain('const priceInUsdResult = await step("priceInUsd", async () => {');
     expect(source).toContain("return await priceInUsd(ctx, {");
     expect(source).toContain("hbarAmount: priceInUsdResult.hbarAmount");

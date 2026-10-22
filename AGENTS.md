@@ -10,7 +10,7 @@ Use the package manager this project was created with — see `packageManager` i
 
 - `packages/launchblocks` (`@sh/launchblocks`) — framework-agnostic core: flow schema, step registry, runner, codegen, Hedera client factory. No React, no Next. Unit-tested with vitest.
 - `packages/nextjs` — the frontend (App Router, RainbowKit, Wagmi, Viem, DaisyUI) plus the API routes that run flows. `test/api/` covers the routes and `services/launchblocks/server.ts` (run guards, public-demo policy, error statuses, streaming) with vitest, calling the handlers directly; `e2e/` drives the Launch Studio in Chromium with Playwright. `services/launchblocks/assistant.ts` is the studio's AI companion (`app/api/launchblocks/assistant`, the floating `AssistantDock` in the studio): it only advises, and what it knows about blocks comes from the step registry, so a new step needs nothing there; product-level changes (a new signer, a new policy) belong in its `GUIDE`.
-- `packages/hardhat` — Hardhat (`hardhat-deploy`): the starter's contracts plus `TokenLock`, which the Deploy contract block deploys from the compiled artifacts.
+- `packages/hardhat` — Hardhat (`hardhat-deploy`): the starter's contracts plus `TokenLock` and the self-scheduling `SelfReleasingLock` and `VestingSchedule` (HIP-1215), which the Deploy contract block deploys from the compiled artifacts.
 
 Product rules that shape every change:
 
@@ -86,8 +86,10 @@ src/
               wallet.ts (walletHederaContext: a connected wallet signs), mirror.ts (mirror node reads),
               ops/submit.ts (send, submit, sendContract: operator or wallet; sendWithRecord: operator), errors.ts (translate statuses and wallet refusals)
   saucerswap/ config.ts (deployments), pool.ts, swap.ts: the SaucerSwap V1 operations
+  chainlink/  config.ts (Chainlink's HBAR/USD feed on Hedera: proxy, heartbeat), price.ts (readChainlinkRound)
+  oracle/     price-in-usd.ts (oraclePriceInUsd: Chainlink first, Pyth cross-check and fallback), decimal.ts (exact decimals)
   pyth/       config.ts (Pyth's Hedera contract, feed ids), hermes.ts (signed updates, API key), price.ts (priceInUsd)
-  steps/      one folder per namespace (hts/, hcs/, hss/, pyth/, saucerswap/, contract/), one file per step type
+  steps/      one folder per namespace (hts/, hcs/, hss/, oracle/, pyth/, saucerswap/, contract/), one file per step type
   launches/   read.ts (readLaunch: a launch rebuilt from its HCS log, plus its token, pool, lock and schedules now)
   mcp/        server.ts (createLaunchBlocksMcpServer: the MCP tools); scripts/mcp.ts runs it on stdio, bin/mcp.cjs starts it
   docs/       steps-table.ts (the README's step table, generated from the registry)
@@ -156,7 +158,7 @@ The editor and API discover steps through the registry; there is nothing to regi
 
 The **Deploy contract** block does not use either file: it deploys from the compiled artifacts in `packages/hardhat/artifacts`. To make a new contract deployable from a flow, add its `.sol` file to `packages/hardhat/contracts/`, run `yarn hardhat:compile`, and put its name in the block.
 
-Contracts on this starter: `HederaToken` (ERC-20), `HtsTokenCreator` (HTS precompile at `0x167`) and `TokenLock` (holds a token, such as a pool's LP tokens, until a release time).
+Contracts on this starter: `HederaToken` (ERC-20), `HtsTokenCreator` (HTS precompile at `0x167`) and `TokenLock` (holds a token, such as a pool's LP tokens, until a release time). `SelfReleasingLock` and `VestingSchedule` book their own future calls with the Hedera Schedule Service (system contract `0x16b`, HIP-1215) through `contracts/schedule/SelfScheduling.sol`, so the network releases the lock and pays each tranche with no keeper; tests install `contracts/mocks/MockHederaScheduleService.sol` at `0x16b` (`test/helpers/scheduleService.ts`).
 
 ## Frontend contract interaction
 

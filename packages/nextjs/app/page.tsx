@@ -66,8 +66,8 @@ const UNDER_THE_HOOD = [
     body: "The token's first pool with an exact opening price, then a first trade quoted by the router itself.",
   },
   {
-    name: "Pyth",
-    body: "USD pricing from Pyth's HBAR/USD feed. Historical demo only: fresh updates were rejected on Hedera in our September 24 check. The recorded example accepts a price published August 23, 2026 at 22:59:15 UTC.",
+    name: "Chainlink",
+    body: "Open the pool at a US dollar price from Chainlink's HBAR/USD feed on Hedera, cross-checked with Pyth. A stale or disputed price stops the launch before anything is spent.",
   },
   {
     name: "Schedule Service",

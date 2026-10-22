@@ -2,18 +2,16 @@
   "schemaVersion": 1,
   "id": "hts-launch-usd-price",
   "name": "Token launch priced in USD",
-  "description": "Open a SaucerSwap market at a US dollar price: Pyth's HBAR/USD feed on Hedera sets how much HBAR goes next to the tokens, then the token, its launch log and the pool follow. Historical demo: fresh updates were rejected on Hedera in our 2026-09-24 check. This example disables freshness (Max age 0); the verified run used a price published 2026-08-23 at 22:59:15 UTC. Each run records the price's actual publish time on the log.",
+  "description": "Open a SaucerSwap market at a US dollar price: Chainlink's HBAR/USD feed on Hedera sets how much HBAR goes next to the tokens, cross-checked with Pyth when Pyth's price is fresh, then the token, its launch log and the pool follow. The log records which feed priced the pool, its round and when it was written.",
   "network": "testnet",
   "steps": [
     {
       "id": "priceInUsd",
-      "type": "pyth.priceInUsd",
+      "type": "oracle.priceInUsd",
       "label": "Price the pool in USD",
       "params": {
         "tokenAmount": "50000",
-        "tokenPriceUsd": "0.00002",
-        "maxAgeSeconds": 0,
-        "maxConfidenceBps": 100
+        "tokenPriceUsd": "0.00002"
       }
     },
     {
@@ -75,9 +73,10 @@
           "openingPriceUsd": "{{steps.priceInUsd.tokenPriceUsd}}",
           "openingPriceHbar": "{{steps.seedPool.openingPriceHbar}}",
           "hbarUsd": "{{steps.priceInUsd.hbarUsd}}",
-          "priceSource": "Pyth {{steps.priceInUsd.source}}",
-          "pricePublishTime": "{{steps.priceInUsd.publishTime}}",
-          "priceUpdateTx": "{{steps.priceInUsd.updateTransactionId}}",
+          "priceSource": "{{steps.priceInUsd.source}}",
+          "priceUpdatedAt": "{{steps.priceInUsd.updatedAt}}",
+          "priceRound": "{{steps.priceInUsd.roundId}}",
+          "priceFeed": "{{steps.priceInUsd.feedContractId}}",
           "poolTx": "{{steps.seedPool.transactionId}}"
         }
       }
