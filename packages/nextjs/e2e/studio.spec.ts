@@ -319,15 +319,23 @@ test("shows the server's warning under an answer that names an account the launc
   await expect(assistant.getByRole("alert")).toContainText("0.0.666, which your launch does not use");
 });
 
-test("warns when a launch accepts a Pyth price of any age", async ({ page }) => {
+test("warns only when a launch accepts a price of any age", async ({ page }) => {
   await page.goto("/launch?example=hts-launch-usd-price");
   await expectValid(page, 5);
-  await expect(page.getByRole("alert").filter({ hasText: "Pyth freshness check is off." })).toContainText(
-    "2026-08-23 at 22:59:15 UTC",
+  // The example reads Chainlink with its default age limit: no warning.
+  await expect(page.getByText("Price freshness check is off.")).toHaveCount(0);
+
+  const canvas = page.locator(".blocklyBlockCanvas");
+  await canvas
+    .locator(".blocklyLabelField", { hasText: "more settings (2)" })
+    .locator("xpath=preceding-sibling::*[1]")
+    .click();
+  await page.locator(".blocklyEditableField", { hasText: "90000" }).first().click();
+  await page.locator(".blocklyHtmlInput").fill("0");
+  await page.locator(".blocklyHtmlInput").press("Enter");
+  await expect(page.getByRole("alert").filter({ hasText: "Price freshness check is off." })).toContainText(
+    "Set Max age above 0",
   );
-  await page.getByLabel("Load an example flow").selectOption("hts-launch-basic");
-  await expectValid(page, 5);
-  await expect(page.getByText("Pyth freshness check is off.")).toHaveCount(0);
 });
 
 test("the side panel collapses but never closes, even for a browser that remembered it closed", async ({ page }) => {

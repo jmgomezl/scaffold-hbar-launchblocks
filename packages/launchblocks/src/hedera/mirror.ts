@@ -19,6 +19,10 @@ export type MirrorAccount = {
   keyType: string | null;
   /** Hex-encoded public key on the account, for verifying an operator key. */
   publicKey: string | null;
+  /** How many Ethereum transactions the account has sent: the nonce its next one must carry. */
+  ethereumNonce: number;
+  /** Tokens it can receive without associating first; -1 is unlimited. */
+  maxAutoAssociations: number;
   deleted: boolean;
 };
 
@@ -33,6 +37,8 @@ export async function fetchAccount(
   const data = response as {
     account?: string;
     evm_address?: string | null;
+    ethereum_nonce?: number | null;
+    max_automatic_token_associations?: number | null;
     deleted?: boolean;
     balance?: { balance?: number | string };
     key?: { _type?: string; key?: string } | null;
@@ -43,6 +49,8 @@ export async function fetchAccount(
     balanceTinybar: BigInt(data.balance?.balance ?? 0),
     keyType: data.key?._type ?? null,
     publicKey: data.key?.key ?? null,
+    ethereumNonce: Number(data.ethereum_nonce ?? 0),
+    maxAutoAssociations: Number(data.max_automatic_token_associations ?? 0),
     deleted: data.deleted === true,
   };
 }
@@ -264,6 +272,66 @@ export async function readContract(
     throw new LaunchBlocksError("CONTRACT_READ_FAILED", `Contract read on ${args.to} returned no result`);
   }
   return body.result;
+}
+
+/**
+ * The network's gas price for Ethereum transactions, in tinybars per unit of gas, as the mirror node
+ * reports it from the fee schedule.
+ */
+export async function fetchGasPriceTinybar(
+  hedera: Pick<HederaContext, "mirrorBaseUrl">,
+  signal?: AbortSignal,
+): Promise<number> {
+  const response = (await mirrorFetch(`${hedera.mirrorBaseUrl}/api/v1/network/fees`, signal)) as {
+    fees?: { gas?: number; transaction_type?: string }[];
+  } | null;
+  const gas = response?.fees?.find(fee => fee.transaction_type === "EthereumTransaction")?.gas;
+  if (!gas || gas <= 0) {
+    throw new LaunchBlocksError("GAS_PRICE_UNAVAILABLE", "Mirror node did not return the network's gas price");
+  }
+  return gas;
+}
+
+/**
+ * The gas a call or deployment would use, simulated for free by the mirror node. Leave `to` out for a
+ * deployment, with the initcode as `data`. `value` is in tinybars. Calls into Hedera's system contracts
+ * (HTS, the Schedule Service) are estimated far below what consensus charges, so this is only for
+ * plain EVM work.
+ */
+export async function estimateGas(
+  hedera: Pick<HederaContext, "mirrorBaseUrl">,
+  args: { to?: string; data: string; from: string; value?: bigint },
+  signal?: AbortSignal,
+): Promise<number> {
+  const url = `${hedera.mirrorBaseUrl}/api/v1/contracts/call`;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      ...(signal ? { signal } : {}),
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({
+        ...(args.to ? { to: args.to } : {}),
+        data: args.data,
+        from: args.from,
+        estimate: true,
+        ...(args.value ? { value: Number(args.value) } : {}),
+      }),
+    });
+  } catch (cause) {
+    throw new LaunchBlocksError("MIRROR_UNREACHABLE", `Could not reach the mirror node at ${hostOf(url)}`, { cause });
+  }
+  const body = (await response.json().catch(() => ({}))) as {
+    result?: string;
+    _status?: { messages?: { message?: string }[] };
+  };
+  if (!response.ok || !body.result) {
+    const why = body._status?.messages?.[0]?.message ?? `HTTP ${response.status}`;
+    throw new LaunchBlocksError("GAS_ESTIMATE_FAILED", `The mirror node could not estimate the gas: ${why}`, {
+      hint: "A constructor that reverts cannot be estimated; check its arguments.",
+    });
+  }
+  return Number(BigInt(body.result));
 }
 
 export type SimulatedCall =

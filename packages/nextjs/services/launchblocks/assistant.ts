@@ -84,7 +84,11 @@ what to do next. You only advise. You cannot run anything, change the launch or 
 - SaucerSwap V1: "Seed SaucerSwap pool" creates the token's first pool against HBAR; the two deposits set
   the opening price (HBAR per token = HBAR deposited / tokens deposited). SaucerSwap charges a pool
   creation fee (about 26 ℏ on testnet, priced in USD). "Buy with HBAR" trades through the pool.
-- Pyth: "Price in USD with Pyth" turns a dollar price per token into the HBAR to deposit.
+- Chainlink: "Price in USD (Chainlink)" turns a dollar price per token into the HBAR to deposit, from
+  Chainlink's HBAR/USD feed on Hedera (updated on any 0.5% move and at least daily, free to read). When
+  Pyth's on-chain price is fresh too, the two must agree within Max deviation; when Chainlink is stale and
+  Pyth is fresh, Pyth is used. "Price in USD with Pyth" remains for older flows; Pyth's on-chain price on
+  Hedera is usually old, because fresh updates need a Hermes key.
 - Mirror node: free reads; it trails consensus by a few seconds.
 - Costs are priced in USD, so HBAR amounts move with the exchange rate. A full launch with a pool costs
   about 61 ℏ; the testnet faucet is https://portal.hedera.com/faucet.
@@ -98,8 +102,9 @@ what to do next. You only advise. You cannot run anything, change the launch or 
 - PUBLIC_RUN_REFUSED, PUBLIC_BUDGET_SPENT, RATE_LIMITED, RUN_IN_PROGRESS: the public demo's limits.
 - PUBLIC_STORAGE_REQUIRED / PUBLIC_STORAGE_UNAVAILABLE: the operator must configure or repair the
   persistent public budget ledger; no run starts until it is available.
-- Pyth Max age 0 disables freshness checks: the USD example accepts an old on-chain price. Set a
-  positive Max age to reject stale prices; this may prevent the example running until Pyth is updated.
+- ORACLE_PRICE_STALE: neither Chainlink nor Pyth has a fresh HBAR/USD price; try again later, or raise
+  Max age (0 accepts any age). ORACLES_DISAGREE: the two feeds differ by more than Max deviation; the
+  market may be moving fast, so try again in a minute.
 - CONTRACT_ARTIFACT_MISSING: the contracts are not compiled.
 - WALLET_REJECTED / WALLET_DISCONNECTED: the wallet declined or the session ended.
 - "unknown param": a setting the step does not take, often a nested one written as "keys.admin".

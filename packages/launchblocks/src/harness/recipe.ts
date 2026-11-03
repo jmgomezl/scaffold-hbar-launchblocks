@@ -2,6 +2,7 @@ import { LaunchBlocksError } from "../errors";
 import type { Flow } from "../flow/schema";
 import { GALLERY } from "../gallery";
 import type { StepRegistry } from "../registry/registry";
+import { SELF_SCHEDULING_STEPS, plannedRunHbar } from "../steps/hss/self-scheduling";
 
 /**
  * Export a flow as a Hedera Harness recipe. The recipe asks a coding agent to
@@ -64,6 +65,8 @@ export type HarnessRecipe = {
 export const STEP_FEE_HBAR: Readonly<Record<string, number>> = {
   "hts.createToken": 13,
   "hts.mint": 0.1,
+  // Reads Chainlink (and Pyth) through the mirror node: free.
+  "oracle.priceInUsd": 0,
   // With PYTH_API_KEY the step posts a price update (1 tinybar plus gas); without one it only reads.
   "pyth.priceInUsd": 0.5,
   // 0.66 measured when the transfer uses up a recipient's automatic association slot.
@@ -79,6 +82,10 @@ export const STEP_FEE_HBAR: Readonly<Record<string, number>> = {
   "saucerswap.swap": 0.5,
   // FileCreate, FileAppend, ContractCreate and FileDelete: 15.97 measured for TokenLock.
   "contract.deploy": 16,
+  // Deploy as an Ethereum transaction (about 1; ContractCreate would add about 22 for an operator
+  // without an ECDSA alias), arm() 1.57 measured, and the token transfer into the contract.
+  "hss.selfReleasingLock": 4,
+  "hss.vesting": 4,
   // Reads are free; a TokenLock release() cost 0.05.
   "contract.call": 0.1,
 };
@@ -102,8 +109,11 @@ export function estimateFlowFees(flow: Flow): FeeEstimate {
       feeHbar += CUSTOM_FEE_SURCHARGE_HBAR;
     }
     let spentHbar = 0;
-    // What the step hands over: a pool deposit or swap (hbarAmount), a contract's initial balance, or HBAR sent with a call.
-    const amount = step.params.hbarAmount ?? step.params.initialHbar ?? step.params.payableHbar;
+    // What the step hands over: a pool deposit or swap (hbarAmount), a contract's initial balance, HBAR sent
+    // with a call, or HBAR parked in a self-scheduling contract for its runs (returned after the last one).
+    const amount = SELF_SCHEDULING_STEPS.has(step.type)
+      ? (plannedRunHbar(step.type, step.params) ?? NaN)
+      : (step.params.hbarAmount ?? step.params.initialHbar ?? step.params.payableHbar);
     if (amount !== undefined) {
       const value = Number(amount);
       if (Number.isFinite(value) && value >= 0) spentHbar = value;

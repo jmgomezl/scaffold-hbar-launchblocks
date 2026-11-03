@@ -711,14 +711,15 @@ export function LaunchStudio() {
           {tab === "run" && (
             <>
               {flow?.steps.some(
-                step => step.type === "pyth.priceInUsd" && Number(step.params?.maxAgeSeconds) === 0,
+                step =>
+                  (step.type === "oracle.priceInUsd" || step.type === "pyth.priceInUsd") &&
+                  Number(step.params?.maxAgeSeconds) === 0,
               ) && (
                 <div role="alert" className="alert alert-warning mb-3 text-sm">
                   <span>
-                    <strong>Pyth freshness check is off.</strong> This launch accepts the last on-chain price regardless
-                    of its age, so its USD price may be outdated. Set Max age above 0 in Price in USD with Pyth to
-                    reject stale prices. Our verified USD demo used a price published 2026-08-23 at 22:59:15 UTC; fresh
-                    updates were rejected in our September 24 check. Each run logs the actual publish time.
+                    <strong>Price freshness check is off.</strong> This launch accepts the last on-chain HBAR/USD price
+                    whatever its age, so its USD price may be outdated. Set Max age above 0 in the price block to refuse
+                    stale prices; each run logs when the price it used was written.
                   </span>
                 </div>
               )}
