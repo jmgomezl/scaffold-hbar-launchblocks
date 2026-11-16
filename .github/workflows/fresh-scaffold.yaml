@@ -41,7 +41,9 @@ jobs:
       - name: Checkout the check script
         uses: actions/checkout@v7
         with:
-          sparse-checkout: .github/scripts
+          sparse-checkout: |
+            .github/scripts
+            .yarn/releases
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -58,8 +60,17 @@ jobs:
           # A pull request scaffolds its own branch; every other run scaffolds main, as the gate does.
           TEMPLATE: ${{ github.repository }}${{ github.event_name == 'pull_request' && format('#{0}', github.head_ref) || '' }}
           PACKAGE_MANAGER: ${{ matrix.package-manager }}
+          LOG_DIR: ${{ runner.temp }}/logs
         working-directory: ${{ runner.temp }}
-        run: npx --yes create-scaffold-hbar@latest app --template "$TEMPLATE" --package-manager "$PACKAGE_MANAGER" --yes --skip-hedera-skills --ci
+        shell: bash
+        run: |
+          mkdir -p "$LOG_DIR"
+          # Community-manifest lookup can fall back to the CLI's Foundry default.
+          # This template supports only Hardhat; do not install an unrelated toolchain.
+          npx --yes create-scaffold-hbar@latest app --template "$TEMPLATE" \
+            --frontend nextjs-app --solidity-framework hardhat \
+            --package-manager "$PACKAGE_MANAGER" --yes --skip-hedera-skills --ci \
+            2>&1 | tee "$LOG_DIR/scaffold.log"
 
       - name: Check the project
         env:
