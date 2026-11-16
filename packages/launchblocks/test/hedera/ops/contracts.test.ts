@@ -1,9 +1,22 @@
-import { ContractCreateFlow, ContractExecuteTransaction } from "@hiero-ledger/sdk";
-import { encodeAbiParameters, encodeFunctionData, hexToBytes, parseAbiItem, toFunctionSelector, toHex } from "viem";
+import { ContractCreateFlow, ContractExecuteTransaction, EthereumTransaction, PrivateKey } from "@hiero-ledger/sdk";
+import {
+  encodeAbiParameters,
+  encodeFunctionData,
+  getAddress,
+  getContractAddress,
+  hexToBytes,
+  parseAbiItem,
+  parseTransaction,
+  recoverTransactionAddress,
+  toFunctionSelector,
+  toHex,
+} from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ContractArtifact } from "../../../src/contracts/types";
 import { LaunchBlocksError } from "../../../src/errors";
+import { createHederaContext } from "../../../src/hedera/client";
+import { HederaError } from "../../../src/hedera/errors";
 import {
   callContract,
   deployContract,
@@ -212,5 +225,149 @@ describe("deployContract", () => {
     expect(flow.adminKey).toBeNull();
     // The flow uploads the bytecode as hex text; raw bytes fail with ERROR_DECODING_BYTESTRING.
     expect(new TextDecoder().decode(flow.bytecode as Uint8Array)).toBe("6080604052");
+  });
+});
+
+describe("deployContract as an Ethereum transaction", () => {
+  const artifact: ContractArtifact = {
+    contractName: "TokenLock",
+    sourceName: "contracts/TokenLock.sol",
+    abi: [
+      {
+        type: "constructor",
+        stateMutability: "nonpayable",
+        inputs: [{ name: "lockSeconds", type: "uint256", internalType: "uint256" }],
+      },
+    ],
+    bytecode: "0x6080604052",
+  };
+  const initcode = `0x6080604052${encodeAbiParameters([{ type: "uint256" }], [60n]).slice(2)}`;
+
+  /** An operator whose account was created from its ECDSA alias, as the portal creates them. */
+  function ecdsaOperator() {
+    const key = PrivateKey.generateECDSA();
+    const hedera = createHederaContext({ network: "testnet", operatorId: "0.0.4242", operatorKey: key.toStringDer() });
+    return { hedera, address: `0x${key.publicKey.toEvmAddress()}` as `0x${string}` };
+  }
+
+  type Mirror = { address: string | null; nonces: number[]; estimate: number; slots: number };
+  function mockEthereumMirror(mirror: Mirror) {
+    return vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+      const url = String(input);
+      const json = (body: unknown, status = 200) =>
+        new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+      if (url.includes("/accounts/0.0.4242")) {
+        const nonce = mirror.nonces.length > 1 ? mirror.nonces.shift() : mirror.nonces[0];
+        return json({ account: "0.0.4242", evm_address: mirror.address, ethereum_nonce: nonce });
+      }
+      if (url.includes("/accounts/0.0.6512601")) {
+        return json({ account: "0.0.6512601", max_automatic_token_associations: mirror.slots });
+      }
+      if (url.endsWith("/network/fees")) return json({ fees: [{ gas: 106, transaction_type: "EthereumTransaction" }] });
+      if (url.endsWith("/contracts/call")) return json({ result: toHex(mirror.estimate) });
+      if (url.includes("/contracts/results/")) return json({ call_result: "0x", gas_used: 297662 });
+      throw new Error(`unexpected fetch ${url}`);
+    });
+  }
+
+  /** Captures what each EthereumTransaction carried; `fail` makes the first ones fail with that status. */
+  function mockEthereumExecute(fail: string[] = []) {
+    const sent: Uint8Array[] = [];
+    vi.spyOn(EthereumTransaction.prototype, "execute").mockImplementation(async function (this: EthereumTransaction) {
+      sent.push(this.ethereumData as Uint8Array);
+      const status = fail.shift();
+      return {
+        transactionId: { toString: () => "0.0.4242@5.6" },
+        getReceipt: async () => {
+          if (status) throw new HederaError({ message: status, status });
+          return { contractId: { toString: () => "0.0.6512601" } };
+        },
+      } as never;
+    });
+    return sent;
+  }
+
+  it("signs one Ethereum transaction with the operator key, sized from the gas estimate", async () => {
+    const { hedera, address } = ecdsaOperator();
+    mockEthereumMirror({ address, nonces: [7], estimate: 300_000, slots: -1 });
+    const sent = mockEthereumExecute();
+    const flow = vi.spyOn(ContractCreateFlow.prototype, "execute");
+
+    const result = await deployContract(hedera, { artifact, args: [60], autoAssociations: 1 });
+
+    expect(flow).not.toHaveBeenCalled();
+    const serialized = toHex(sent[0] as Uint8Array);
+    expect(await recoverTransactionAddress({ serializedTransaction: serialized as never })).toBe(getAddress(address));
+    const tx = parseTransaction(serialized as never);
+    expect(tx).toMatchObject({
+      chainId: 296,
+      nonce: 7,
+      gas: 360_000n,
+      maxFeePerGas: 128n * 10n ** 10n,
+      data: initcode,
+    });
+    expect(tx.to).toBeUndefined();
+    expect(result).toEqual({
+      contract: "TokenLock",
+      contractId: "0.0.6512601",
+      accountId: "0.0.6512601",
+      evmAddress: getContractAddress({ from: address, nonce: 7n }).toLowerCase(),
+      transactionId: "0.0.4242@5.6",
+      gasUsed: 297662,
+    });
+  });
+
+  it("keeps the gas limit under the step's limit, and refuses a deploy that needs more", async () => {
+    const { hedera, address } = ecdsaOperator();
+    mockEthereumMirror({ address, nonces: [0], estimate: 950_000, slots: -1 });
+    const sent = mockEthereumExecute();
+    await deployContract(hedera, { artifact, args: [60], gas: 1_000_000 });
+    expect(parseTransaction(toHex(sent[0] as Uint8Array) as never).gas).toBe(1_000_000n);
+
+    await expect(deployContract(hedera, { artifact, args: [60], gas: 900_000 })).rejects.toMatchObject({
+      code: "CONTRACT_GAS_TOO_LOW",
+    });
+    expect(sent).toHaveLength(1);
+  });
+
+  it("reads the nonce again when another sender used it first", async () => {
+    const { hedera, address } = ecdsaOperator();
+    // Read once to check the sender, then once per attempt.
+    mockEthereumMirror({ address, nonces: [3, 3, 4], estimate: 300_000, slots: -1 });
+    const sent = mockEthereumExecute(["WRONG_NONCE"]);
+    const result = await deployContract(hedera, { artifact, args: [60] });
+    expect(sent.map(bytes => parseTransaction(toHex(bytes) as never).nonce)).toEqual([3, 4]);
+    expect(result.evmAddress).toBe(getContractAddress({ from: address, nonce: 4n }).toLowerCase());
+  });
+
+  it("refuses to hand back a contract without the token slots asked for", async () => {
+    const { hedera, address } = ecdsaOperator();
+    mockEthereumMirror({ address, nonces: [0], estimate: 300_000, slots: 0 });
+    mockEthereumExecute();
+    await expect(deployContract(hedera, { artifact, args: [60], autoAssociations: 1 })).rejects.toMatchObject({
+      code: "CONTRACT_NO_TOKEN_SLOTS",
+    });
+  });
+
+  it("uses ContractCreate for a memo, and for an ECDSA key the account was not created from", async () => {
+    for (const [memo, matchingAlias] of [
+      ["LaunchBlocks lock", true],
+      [undefined, false],
+    ] as const) {
+      vi.restoreAllMocks();
+      const { hedera, address } = ecdsaOperator();
+      mockEthereumMirror({ address: matchingAlias ? address : null, nonces: [0], estimate: 300_000, slots: -1 });
+      const sent = mockEthereumExecute();
+      vi.spyOn(ContractCreateFlow.prototype, "execute").mockResolvedValue({
+        transactionId: { toString: () => "0.0.4242@3.4" },
+        getRecord: async () => ({
+          receipt: { contractId: { toString: () => "0.0.6512600" } },
+          contractFunctionResult: { gasUsed: 297662 },
+        }),
+      } as never);
+      const result = await deployContract(hedera, { artifact, args: [60], ...(memo ? { memo } : {}) });
+      expect(result.contractId).toBe("0.0.6512600");
+      expect(sent).toHaveLength(0);
+    }
   });
 });

@@ -293,7 +293,7 @@ const CATEGORY_NAMES: Record<StepCategory, string> = {
   hcs: "Consensus · HCS",
   hss: "Schedules · HSS",
   saucerswap: "SaucerSwap",
-  oracle: "Prices · Pyth",
+  oracle: "Prices · Chainlink",
   contract: "Contracts · EVM",
   util: "Utilities",
 };

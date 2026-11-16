@@ -30,6 +30,8 @@ describe("fetchAccount()", () => {
       balanceTinybar: 1234500000n,
       keyType: "ECDSA_SECP256K1",
       publicKey: "02aabb",
+      ethereumNonce: 0,
+      maxAutoAssociations: 0,
       deleted: false,
     });
   });

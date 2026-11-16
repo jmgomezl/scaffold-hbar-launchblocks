@@ -3,10 +3,11 @@ import { decodeFunctionResult, encodeFunctionData, hexToBytes, parseAbi } from "
 
 import { LaunchBlocksError } from "../errors";
 import type { DecimalAmount } from "../hedera/amounts";
-import { fromUnits, numberToDecimalString, toLong } from "../hedera/amounts";
+import { toLong } from "../hedera/amounts";
 import type { HederaContext } from "../hedera/context";
 import { readContract, resolveEvmAddress, simulateContractCall, waitForMirror } from "../hedera/mirror";
 import { sendContract } from "../hedera/ops/submit";
+import { describeAge, formatDecimal, hbarForUsd, parseDecimal, scaled } from "../oracle/decimal";
 import { PYTH_FEEDS, PYTH_UPDATE_GAS, pythFor } from "./config";
 
 const PYTH_ABI = parseAbi([
@@ -208,51 +209,18 @@ export async function priceInUsd(
 
   const hbarUsd = scaled(price.price, price.expo);
   const usdValue = { value: tokens.value * unitPrice.value, scale: tokens.scale + unitPrice.scale };
-  // tinybar = usdValue / hbarUsd × 10^8, rounded down to a whole tinybar.
-  const tinybar =
-    (usdValue.value * 10n ** BigInt(hbarUsd.scale) * 10n ** 8n) / (hbarUsd.value * 10n ** BigInt(usdValue.scale));
 
   return {
-    tokenAmount: format(tokens),
-    tokenPriceUsd: format(unitPrice),
-    hbarAmount: fromUnits(tinybar, 8),
-    usdValue: format(usdValue),
-    hbarUsd: format(hbarUsd),
-    confidenceUsd: format(scaled(price.conf, price.expo)),
+    tokenAmount: formatDecimal(tokens),
+    tokenPriceUsd: formatDecimal(unitPrice),
+    hbarAmount: hbarForUsd(usdValue, hbarUsd),
+    usdValue: formatDecimal(usdValue),
+    hbarUsd: formatDecimal(hbarUsd),
+    confidenceUsd: formatDecimal(scaled(price.conf, price.expo)),
     publishTime: new Date(price.publishTime * 1000).toISOString(),
     priceAgeSeconds: age,
     source: updateTransactionId ? "posted" : "on-chain",
     pythContractId: contractId,
     updateTransactionId: updateTransactionId ?? "",
   };
-}
-
-type Scaled = { value: bigint; scale: number };
-
-/** An exact decimal, without the HTS 64-bit cap that token amounts have. */
-function parseDecimal(amount: DecimalAmount, label: string): Scaled {
-  const text = typeof amount === "number" ? numberToDecimalString(amount) : amount.trim();
-  const match = /^(\d+)(?:\.(\d+))?$/.exec(text);
-  if (!match) throw new LaunchBlocksError("AMOUNT_INVALID", `${label} "${amount}" must be a non-negative decimal`);
-  const fraction = (match[2] ?? "").replace(/0+$/, "");
-  return { value: BigInt(`${match[1]}${fraction}`), scale: fraction.length };
-}
-
-function scaled(value: bigint, expo: number): Scaled {
-  return expo >= 0 ? { value: value * 10n ** BigInt(expo), scale: 0 } : { value, scale: -expo };
-}
-
-function format({ value, scale }: Scaled): string {
-  if (scale === 0) return value.toString();
-  const text = value.toString().padStart(scale + 1, "0");
-  const whole = text.slice(0, -scale);
-  const fraction = text.slice(-scale).replace(/0+$/, "");
-  return fraction ? `${whole}.${fraction}` : whole;
-}
-
-function describeAge(seconds: number): string {
-  if (seconds < 120) return `${seconds} s`;
-  if (seconds < 7200) return `${Math.round(seconds / 60)} minutes`;
-  if (seconds < 172_800) return `${Math.round(seconds / 3600)} hours`;
-  return `${Math.round(seconds / 86_400)} days`;
 }
